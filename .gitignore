@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment secrets — NEVER commit .env
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data — large datasets stay outside Git
+data/*
+!data/.gitkeep
+
+# Model weights and training artifacts
+models/
+weights/
+runs/
+wandb/
+*.pt
+*.onnx
+*.pkl
+*.joblib
+
+# Video files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+
+# Image files — samples belong in data/, not root
+*.jpg
+*.jpeg
+*.png
+*.tif
+*.tiff
+*.bmp
+*.gif
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Build / distribution
+dist/
+build/
+*.egg-info/

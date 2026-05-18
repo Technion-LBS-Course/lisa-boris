@@ -9,7 +9,7 @@
 
 ## One-Liner
 
-Private property owners in fire-prone areas suffer from delayed fire awareness, we will build PyroFinder — a real-time fire monitoring system that uses existing cameras, YOLO11 model for fire/smoke detection, and approximate map-based alerts.
+Private property owners in fire-prone areas suffer from delayed fire awareness, we will build PyroFinder — a real-time fire monitoring system that uses existing cameras, YOLO11s model for fire/smoke detection, and approximate map-based alerts.
 
 ---
 
