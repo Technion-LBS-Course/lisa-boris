@@ -4,15 +4,78 @@ Verifies that the src package imports cleanly and that core helpers
 return expected values. No ML models or datasets required.
 """
 
+import io
+import tempfile
+from pathlib import Path
+
+import pandas as pd
 import pytest
 
 import src
-from src.data import get_primary_dataset_info, list_expected_dataset_columns
+from src.data import (
+    get_primary_dataset_info,
+    list_expected_dataset_columns,
+    load_dfire_metadata,
+    clean_dfire_metadata,
+    get_dfire_summary,
+)
+from src.eda import (
+    compute_summary_metrics,
+    compute_category_counts,
+    compute_split_counts,
+    compute_bbox_stats,
+    filter_metadata,
+    get_primary_eda_insight,
+)
 from src.model import get_model_plan, get_metrics_plan
 from src.detection import DetectionResult, validate_detection_class
 from src.tracking import is_confirmed_detection, estimate_apparent_direction
 from src.mapping import get_mapping_modes, format_approximate_location, point_in_polygon
 from src.alerts import create_alert_record, validate_alert_status
+
+
+# ── Minimal test DataFrame factory ────────────────────────────────────────────
+
+def _make_test_df() -> pd.DataFrame:
+    """Return a small DataFrame that mimics dfire_metadata.csv structure."""
+    return pd.DataFrame([
+        {
+            "image_id": "img_001", "split": "train", "image_path": "/d/img_001.jpg",
+            "label_path": "/d/img_001.txt", "has_label": True,
+            "has_fire": True, "has_smoke": False, "image_category": "fire_only",
+            "num_fire_boxes": 2, "num_smoke_boxes": 0, "total_boxes": 2,
+            "mean_bbox_area": 0.05, "median_bbox_area": 0.05, "max_bbox_area": 0.07,
+            "mean_bbox_aspect_ratio": 1.2, "image_width": 640, "image_height": 480,
+            "source_dataset": "D-Fire",
+        },
+        {
+            "image_id": "img_002", "split": "train", "image_path": "/d/img_002.jpg",
+            "label_path": "/d/img_002.txt", "has_label": True,
+            "has_fire": False, "has_smoke": True, "image_category": "smoke_only",
+            "num_fire_boxes": 0, "num_smoke_boxes": 3, "total_boxes": 3,
+            "mean_bbox_area": 0.03, "median_bbox_area": 0.03, "max_bbox_area": 0.04,
+            "mean_bbox_aspect_ratio": 0.9, "image_width": 640, "image_height": 480,
+            "source_dataset": "D-Fire",
+        },
+        {
+            "image_id": "img_003", "split": "test", "image_path": "/d/img_003.jpg",
+            "label_path": "/d/img_003.txt", "has_label": True,
+            "has_fire": True, "has_smoke": True, "image_category": "fire_and_smoke",
+            "num_fire_boxes": 1, "num_smoke_boxes": 1, "total_boxes": 2,
+            "mean_bbox_area": 0.06, "median_bbox_area": 0.06, "max_bbox_area": 0.08,
+            "mean_bbox_aspect_ratio": 1.0, "image_width": 640, "image_height": 480,
+            "source_dataset": "D-Fire",
+        },
+        {
+            "image_id": "img_004", "split": "train", "image_path": "/d/img_004.jpg",
+            "label_path": "", "has_label": False,
+            "has_fire": False, "has_smoke": False, "image_category": "background",
+            "num_fire_boxes": 0, "num_smoke_boxes": 0, "total_boxes": 0,
+            "mean_bbox_area": 0.0, "median_bbox_area": 0.0, "max_bbox_area": 0.0,
+            "mean_bbox_aspect_ratio": 0.0, "image_width": 640, "image_height": 480,
+            "source_dataset": "D-Fire",
+        },
+    ])
 
 
 # ── Package ────────────────────────────────────────────────────────────────────
@@ -210,3 +273,116 @@ def test_create_alert_record_rejects_bad_status():
             apparent_direction="right",
             status="pending",
         )
+
+
+# ── src.data — new metadata helpers ───────────────────────────────────────────
+
+def test_load_dfire_metadata_from_temp_csv():
+    df_orig = _make_test_df()
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+        df_orig.to_csv(f, index=False)
+        tmp_path = f.name
+    df = load_dfire_metadata(tmp_path)
+    assert len(df) == 4
+    assert "image_category" in df.columns
+    assert "has_fire" in df.columns
+
+
+def test_load_dfire_metadata_raises_if_missing():
+    with pytest.raises(FileNotFoundError):
+        load_dfire_metadata("/nonexistent/path/metadata.csv")
+
+
+def test_clean_dfire_metadata_dtypes():
+    df = _make_test_df()
+    # Make has_fire a string to simulate CSV round-trip
+    df["has_fire"] = df["has_fire"].astype(str)
+    df["total_boxes"] = df["total_boxes"].astype(str)
+    df["mean_bbox_area"] = df["mean_bbox_area"].astype(str)
+
+    cleaned = clean_dfire_metadata(df)
+    assert cleaned["has_fire"].dtype == bool
+    assert cleaned["total_boxes"].dtype == int
+    assert cleaned["mean_bbox_area"].dtype == float
+
+
+def test_clean_dfire_metadata_removes_duplicates():
+    df = _make_test_df()
+    dup = pd.concat([df, df.iloc[[0]]], ignore_index=True)
+    assert len(dup) == 5
+    cleaned = clean_dfire_metadata(dup)
+    assert len(cleaned) == 4
+
+
+def test_get_dfire_summary_keys():
+    df = clean_dfire_metadata(_make_test_df())
+    summary = get_dfire_summary(df)
+    assert "total_images" in summary
+    assert "splits" in summary
+    assert "categories" in summary
+    assert summary["total_images"] == 4
+
+
+# ── src.eda ────────────────────────────────────────────────────────────────────
+
+def test_compute_category_counts():
+    df = clean_dfire_metadata(_make_test_df())
+    cat_df = compute_category_counts(df)
+    assert set(cat_df.columns) == {"category", "count"}
+    assert cat_df["count"].sum() == 4
+
+
+def test_compute_split_counts():
+    df = clean_dfire_metadata(_make_test_df())
+    split_df = compute_split_counts(df)
+    assert "split" in split_df.columns
+    assert "count" in split_df.columns
+    assert split_df["count"].sum() == 4
+
+
+def test_filter_metadata_by_category():
+    df = clean_dfire_metadata(_make_test_df())
+    filtered = filter_metadata(df, categories=["fire_only"])
+    assert len(filtered) == 1
+    assert filtered.iloc[0]["image_category"] == "fire_only"
+
+
+def test_filter_metadata_by_split():
+    df = clean_dfire_metadata(_make_test_df())
+    filtered = filter_metadata(df, splits=["test"])
+    assert len(filtered) == 1
+    assert filtered.iloc[0]["split"] == "test"
+
+
+def test_filter_metadata_by_has_fire():
+    df = clean_dfire_metadata(_make_test_df())
+    filtered = filter_metadata(df, has_fire=True)
+    assert all(filtered["has_fire"])
+    assert len(filtered) == 2
+
+
+def test_filter_metadata_no_filters_returns_all():
+    df = clean_dfire_metadata(_make_test_df())
+    filtered = filter_metadata(df)
+    assert len(filtered) == len(df)
+
+
+def test_compute_summary_metrics():
+    df = clean_dfire_metadata(_make_test_df())
+    metrics = compute_summary_metrics(df)
+    assert metrics["total_images"] == 4
+    assert metrics["background_images"] == 1
+    assert metrics["fire_images"] == 2  # fire_only + fire_and_smoke
+
+
+def test_get_primary_eda_insight_returns_string():
+    df = clean_dfire_metadata(_make_test_df())
+    insight = get_primary_eda_insight(df)
+    assert isinstance(insight, str)
+    assert len(insight) > 10
+
+
+def test_get_primary_eda_insight_empty_df():
+    df = pd.DataFrame(columns=_make_test_df().columns)
+    insight = get_primary_eda_insight(df)
+    assert "No data" in insight

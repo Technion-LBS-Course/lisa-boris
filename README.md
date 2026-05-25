@@ -274,4 +274,91 @@ streamlit run app.py
 
 ---
 
-*PyroFinder · Technion Course 160833 · Location-Based Services: Data Science · 2026*
+## M2 Data / EDA Progress (26/05/2026 checkpoint)
+
+### Data location
+
+Raw D-Fire images and labels are stored **outside Git** at:
+```
+C:\Users\boris.azarov\OneDrive - Technion\Desktop\PyroFinder\RAW_DATA\D-Fire
+```
+
+The generated metadata CSV is committed to Git at:
+```
+data/dfire_metadata.csv
+```
+
+Raw images and labels are never committed.
+
+### Generate metadata CSV
+
+```bash
+python scripts/build_dfire_metadata.py \
+  --raw-root "C:\Users\boris.azarov\OneDrive - Technion\Desktop\PyroFinder\RAW_DATA\D-Fire" \
+  --output data/dfire_metadata.csv
+```
+
+To also generate annotated sample images:
+```bash
+python scripts/build_dfire_metadata.py \
+  --raw-root "C:\Users\boris.azarov\OneDrive - Technion\Desktop\PyroFinder\RAW_DATA\D-Fire" \
+  --output data/dfire_metadata.csv \
+  --copy-samples data/samples/dfire \
+  --sample-count 20
+```
+
+The script always overwrites the output CSV — safe to rerun.
+
+### Run the Streamlit dashboard
+
+```bash
+streamlit run app.py
+```
+
+### What the Dataset & EDA tab currently shows
+
+- **6 metrics:** total images, fire images, smoke images, background images, mean boxes/image, median boxes/image.
+- **Filters:** image category, split, has_fire, has_smoke (all in sidebar).
+- **Chart 1:** Bar chart — image count by category.
+- **Chart 2:** Histogram — bounding box count per image.
+- **Chart 3:** Bar chart — split distribution.
+- **Table preview:** 20 rows with key columns.
+- **EDA insight:** written, data-driven observation.
+- **Sample images expander:** annotated thumbnails if generated locally.
+
+### Actual metadata counts (full dataset — 21,527 images)
+
+| Split | Images |
+|---|---|
+| train | 17,221 |
+| test | 4,306 |
+
+| Category | Images |
+|---|---|
+| background | 9,838 |
+| smoke_only | 5,867 |
+| fire_and_smoke | 4,658 |
+| fire_only | 1,164 |
+
+Fire boxes: 14,692 · Smoke boxes: 11,865
+
+### Current EDA insight
+
+D-Fire (21,527 images) is class-imbalanced: 45.7% background, 27.3% smoke-only, 21.6% fire+smoke, 5.4% fire-only. Fire recall must be the primary evaluation metric — a "predict background always" model would score ~46% accuracy but detect nothing. Weighted loss or oversampling of fire categories is recommended for YOLO11s fine-tuning.
+
+### Run tests
+
+```bash
+python -m pytest
+```
+
+### Notes
+
+- No YOLO11s training has been done yet. No mAP results are available at M2.
+- YOLO11n baseline run is planned for M3.
+- The complete D-Fire dataset documentation is in `docs/M2_DATA_EDA.md`.
+- Class mapping verified: D-Fire class 0 = smoke, class 1 = fire (confirmed against official category counts).
+
+---
+
+*PyroFinder · Technion Course 016833 · Location-Based Services: Data Science · 2026*

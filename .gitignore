@@ -26,9 +26,10 @@ htmlcov/
 # Jupyter
 .ipynb_checkpoints/
 
-# Data — large datasets stay outside Git
+# Data — large datasets stay outside Git; generated CSV is allowed
 data/*
 !data/.gitkeep
+!data/dfire_metadata.csv
 
 # Model weights and training artifacts
 models/

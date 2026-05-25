@@ -72,6 +72,26 @@ tests/test_smoke.py — import smoke tests, unit tests for core helpers
 8. Camera metadata table
 9. Manual image polygon and map linking placeholders
 
+## Data — M2 Status
+
+- D-Fire raw data is local and outside Git: `C:\Users\boris.azarov\OneDrive - Technion\Desktop\PyroFinder\RAW_DATA\D-Fire`
+- Full dataset: 21,527 images (train: 17,221 + test: 4,306), all with matching label files.
+- `data/dfire_metadata.csv` is the committed working dataset for M2. Generate with `scripts/build_dfire_metadata.py`.
+- `docs/M2_DATA_EDA.md` documents the data workflow, class mapping, cleaning decisions, and actual counts.
+- **D-Fire class mapping (verified):** class 0 = smoke, class 1 = fire. Confirmed by comparing scan results against official category counts.
+- M2 focuses on descriptive EDA only — no YOLO11s training, no YOLO11n baseline run, no deployment.
+
+## Future Model Layer — SAM 3.1
+
+- SAM 3.1 (Meta / Facebook Research, March 2026) is a segmentation model, not a detector.
+- Intended role: second stage after YOLO11s detection.
+  - Pipeline: YOLO11s bbox → SAM 3.1 mask refinement → polygon for mapping / tracking.
+- Object Multiplex (SAM 3.1 feature) enables multi-object video tracking — relevant future upgrade for `src/tracking.py`.
+- SAM 3.1 text-prompt video segmentation is a candidate for `src/mapping.py` polygon auto-suggestion.
+- SAM 3.1 does NOT replace YOLO11s for fire/smoke classification — it has no built-in class labels.
+- Not part of M2 or the basic M3 scope. Document here for planning; do not add implementation yet.
+- Checkpoint: `facebook/sam3.1` on Hugging Face.
+
 ## Forbidden / Out of Scope
 
 - No emergency dispatch integration
