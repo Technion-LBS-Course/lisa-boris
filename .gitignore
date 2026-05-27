@@ -13,6 +13,7 @@ ENV/
 
 # Environment secrets — NEVER commit .env
 .env
+.env.*
 
 # OS
 .DS_Store
@@ -27,6 +28,7 @@ htmlcov/
 .ipynb_checkpoints/
 
 # Data — large datasets stay outside Git; generated CSV is allowed
+RAW_DATA/
 data/*
 !data/.gitkeep
 !data/dfire_metadata.csv
@@ -35,9 +37,12 @@ data/*
 models/
 weights/
 runs/
+mlruns/
 wandb/
 *.pt
+*.pth
 *.onnx
+*.weights
 *.pkl
 *.joblib
 
@@ -59,6 +64,9 @@ wandb/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Logs and temp
+*.log
 
 # Build / distribution
 dist/

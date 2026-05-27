@@ -253,6 +253,8 @@ It does **not** redefine the product, data strategy, ML problem, or architecture
 - Recommend a practical Streamlit color and font approach (CSS overrides, metric cards, chart themes).
 - Produce reusable UI helper snippets that can live in `src/ui.py` or inline.
 - Keep styling practical and not over-engineered for an MVP.
+- Define and enforce Plotly chart theme via `apply_chart_theme()` in `src/ui.py`. All new charts must call `apply_chart_theme()` before `st.plotly_chart()`.
+- `src/ui.py` must be importable without loading any ML or geo libraries.
 
 **Must not do:**
 - Recommend replacing Streamlit with a React or Vue frontend.
@@ -284,6 +286,9 @@ It does **not** redefine the product, data strategy, ML problem, or architecture
 - Ensure charts and text are readable at classroom projector resolution.
 - Keep sidebar filters logically organized.
 - Reduce visual clutter in each tab.
+- Use `src/ui.py` for all color values — no raw hex strings in `app.py`.
+- Call `apply_chart_theme(fig)` before every `st.plotly_chart()` call.
+- For `px.bar()` charts, also set `bargap=0.25` and `bargroupgap=0.1`.
 
 **Must not do:**
 - Change data logic, EDA functions, or model code while implementing layout changes.
@@ -611,6 +616,7 @@ Skills are reusable prompt fragments or helper patterns. These are the minimal s
 | 6 | `metric-card-layout` | Reusable metric card pattern for the KPI section | M3 |
 | 7 | `approximate-location-formatter` | Format location output using allowed wording | M3 |
 | 8 | `experiment-record-builder` | Build a complete experiment record dict | M3 |
+| 9 | `plotly-chart-theme` | Apply PyroFinder visual theme to any Plotly figure via `apply_chart_theme()` in `src/ui.py`. Call before every `st.plotly_chart()`. | M2+ |
 
 ---
 
@@ -960,4 +966,62 @@ Agents that will need more structure by M3:
 
 ---
 
-*PyroFinder · AI Agent System · Technion Course 016833 · Last updated: 2026-05-26*
+---
+
+## 20. Cross-Cutting Code Rules
+
+These rules apply to every agent that writes or reviews code for PyroFinder.
+
+1. **No raw hex strings in `app.py`.** All colors come from `src/ui.py` — use `PYRO_COLORS`, `CAT_COLORS`, `CLASS_COLORS`, or `SPLIT_COLORS`.
+2. **`apply_chart_theme()` is mandatory.** Every Plotly figure must call `apply_chart_theme(fig)` immediately before `st.plotly_chart()`.
+3. **Bar charts get bargap.** All `px.bar()` figures must also call `fig.update_layout(bargap=0.25, bargroupgap=0.1)`.
+4. **`src/` is import-safe.** Every module under `src/` must be importable without loading ML models, datasets, or geo libraries.
+5. **Two classes only.** No module may reference classes other than `fire` and `smoke`.
+6. **Location is always approximate.** No code may claim precise geolocation.
+
+---
+
+## 21. Repository Structure
+
+```text
+project-root/
+├── README.md
+├── CLAUDE.md                   ← Claude Code working context
+├── PROJECT_CONTEXT.md          ← product scope, ML problem, datasets
+├── requirements.txt
+├── .gitignore
+├── app.py                      ← Streamlit entry point (multi-tab shell)
+├── src/
+│   ├── __init__.py
+│   ├── data.py                 ← dataset loading, metadata helpers
+│   ├── eda.py                  ← EDA helper functions
+│   ├── viz.py                  ← on-the-fly YOLO box annotation
+│   ├── ui.py                   ← PyroFinder color palette and Plotly chart theme
+│   ├── model.py                ← model metadata, metrics plan
+│   ├── detection.py            ← DetectionResult dataclass, class validation
+│   ├── tracking.py             ← multi-frame confirmation, direction estimation
+│   ├── mapping.py              ← mapping modes, polygon helpers, location formatting
+│   └── alerts.py               ← alert record creation, status validation
+├── scripts/
+│   └── build_dfire_metadata.py ← generates data/dfire_metadata.csv
+├── data/
+│   ├── .gitkeep
+│   └── dfire_metadata.csv      ← 36-column generated CSV (committed)
+├── docs/
+│   ├── AI_AGENT_SYSTEM.md      ← agent roles, skill catalogue (this file)
+│   └── M2_DATA_EDA.md          ← data workflow and EDA documentation
+├── SprintPlan/
+│   └── SPRINT_PLAN.md
+├── notebooks/
+│   └── 01_eda.ipynb
+└── tests/
+    └── test_smoke.py
+```
+
+Future additions expected for M3:
+- `src/evaluation.py` — model evaluation utilities
+- `pages/` — Streamlit multi-page app pages
+
+---
+
+*PyroFinder · AI Agent System · Technion Course 016833 · Last updated: 2026-05-27*

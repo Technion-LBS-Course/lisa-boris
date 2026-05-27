@@ -43,6 +43,9 @@ PyroFinder is a real-time fire outbreak detection and monitoring system using ca
 ```
 app.py              — Streamlit entry point (multi-tab shell)
 src/data.py         — dataset loading, inspection, Data Card utilities
+src/eda.py          — EDA helpers: summary metrics, category/split counts, bbox stats, pixel stats, spatial analysis
+src/viz.py          — on-the-fly YOLO box annotation (D-Fire class map: 0=smoke, 1=fire)
+src/ui.py           — shared UI palette, CAT_COLORS, CLASS_COLORS, apply_chart_theme()
 src/model.py        — model metadata, metrics plan, evaluation helpers
 src/detection.py    — DetectionResult dataclass, class validation
 src/tracking.py     — multi-frame confirmation, apparent direction estimation
