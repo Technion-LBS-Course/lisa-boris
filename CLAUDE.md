@@ -77,12 +77,14 @@ tests/test_smoke.py — import smoke tests, unit tests for core helpers
 
 ## Data — M2 Status
 
-- D-Fire raw data is local and outside Git: `C:\Users\boris.azarov\OneDrive - Technion\Desktop\PyroFinder\RAW_DATA\D-Fire`
+- D-Fire raw data is local and outside Git (path varies per machine).
 - Full dataset: 21,527 images (train: 17,221 + test: 4,306), all with matching label files.
-- `data/dfire_metadata.csv` is the committed working dataset for M2. Generate with `scripts/build_dfire_metadata.py`.
+- `data/dfire_metadata.csv` is committed to Git. The app runs fully on a fresh clone using only this CSV — no local raw dataset required.
+- `data/samples/dfire/images/` — 20 committed sample images (~1.1 MB); `data/samples/dfire/labels/` — matching YOLO label files. These are used as the fallback when local raw D-Fire paths are unavailable.
 - `docs/M2_DATA_EDA.md` documents the data workflow, class mapping, cleaning decisions, and actual counts.
 - **D-Fire class mapping (verified):** class 0 = smoke, class 1 = fire. Confirmed by comparing scan results against official category counts.
 - M2 focuses on descriptive EDA only — no YOLO11s training, no YOLO11n baseline run, no deployment.
+- To re-generate `data/dfire_metadata.csv` from raw D-Fire: `python scripts/build_dfire_metadata.py --raw-root "<path-to-D-Fire-root>" --output data/dfire_metadata.csv`
 
 ## Future Model Layer — SAM 3.1
 
