@@ -30,8 +30,8 @@ st.set_page_config(page_title="PyroFinder", layout="wide")
 METADATA_PATH = "data/dfire_metadata.csv"
 SAMPLES_DIR = Path("data/samples/dfire/images")
 GENERATE_CMD = (
-    'python scripts/build_dfire_metadata.py '
-    '--raw-root "C:\\Users\\boris.azarov\\OneDrive - Technion\\Desktop\\PyroFinder\\RAW_DATA\\D-Fire" '
+    "python scripts/build_dfire_metadata.py "
+    '--raw-root "<path-to-D-Fire-root>" '
     "--output data/dfire_metadata.csv"
 )
 
@@ -662,7 +662,28 @@ if mode == "Operations & Learning Dashboard":
                     except Exception:
                         pass
             else:
-                st.info("Raw image paths from the CSV are not accessible on this machine.")
+                # Fall back to committed sample images when local raw paths are unavailable
+                _sample_imgs = sorted(SAMPLES_DIR.glob("*.jpg")) + sorted(SAMPLES_DIR.glob("*.png"))
+                if _sample_imgs:
+                    _sample_labels = SAMPLES_DIR.parent / "labels"
+                    st.caption(
+                        f"Showing {min(len(_sample_imgs), 20)} committed sample images "
+                        "(local raw D-Fire paths not available on this machine)"
+                    )
+                    img_cols = st.columns(4)
+                    for i, img_p in enumerate(_sample_imgs[:20]):
+                        lp = _sample_labels / (img_p.stem + ".txt")
+                        try:
+                            png = draw_yolo_boxes(img_p, lp if lp.exists() else None)
+                            img_cols[i % 4].image(
+                                png,
+                                caption=img_p.stem,
+                                use_container_width=True,
+                            )
+                        except Exception:
+                            pass
+                else:
+                    st.info("Raw image paths from the CSV are not accessible on this machine.")
 
     # ── Inference Demo ───────────────────────────────────────────────────────
     with tab_inference:

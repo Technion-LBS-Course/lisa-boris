@@ -46,7 +46,7 @@ def load_dfire_metadata(path: str | Path = "data/dfire_metadata.csv") -> pd.Data
             f"Metadata CSV not found: {path}\n"
             "Generate it with:\n"
             "  python scripts/build_dfire_metadata.py "
-            '--raw-root "C:\\Users\\boris.azarov\\OneDrive - Technion\\Desktop\\PyroFinder\\RAW_DATA\\D-Fire" '
+            '--raw-root "<path-to-D-Fire-root>" '
             "--output data/dfire_metadata.csv"
         )
     df = pd.read_csv(path, low_memory=False)

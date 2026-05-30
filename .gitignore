@@ -62,6 +62,10 @@ wandb/
 *.bmp
 *.gif
 
+# Exception: committed sample images + labels for fresh-clone demo
+!data/samples/
+!data/samples/**
+
 # Streamlit
 .streamlit/secrets.toml
 

@@ -278,17 +278,19 @@ streamlit run app.py
 
 ### Data location
 
-Raw D-Fire images and labels are stored **outside Git** at:
+`data/dfire_metadata.csv` is committed to Git and is the primary data source for all EDA
+charts and metrics. The app runs fully on a fresh clone using only this CSV.
+
+Raw D-Fire images and labels are **never committed** and must be stored locally if you
+need to re-generate the CSV or view sample images from the full dataset.
+
+Sample annotated images (20 images + YOLO labels) are committed to Git at:
 ```
-C:\Users\boris.azarov\OneDrive - Technion\Desktop\PyroFinder\RAW_DATA\D-Fire
+data/samples/dfire/images/   ← raw sample images
+data/samples/dfire/labels/   ← YOLO label files for annotation overlay
 ```
 
-The generated metadata CSV is committed to Git at:
-```
-data/dfire_metadata.csv
-```
-
-Raw images and labels are never committed.
+The EDA tab shows these committed samples when local raw paths are unavailable.
 
 ### Generate metadata CSV
 
@@ -314,6 +316,10 @@ The script always overwrites the output CSV — safe to rerun.
 ```bash
 streamlit run app.py
 ```
+
+After a fresh clone (`git clone` + `pip install -r requirements.txt`), the app runs
+without any local dataset installation. `data/dfire_metadata.csv` and
+`data/samples/dfire/` are committed and provide all data the dashboard needs.
 
 ### What the Dataset & EDA tab currently shows
 
