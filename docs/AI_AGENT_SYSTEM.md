@@ -1025,3 +1025,68 @@ Future additions expected for M3:
 ---
 
 *PyroFinder · AI Agent System · Technion Course 016833 · Last updated: 2026-05-27*
+
+---
+
+## PyroFinder M2 UI / Visual Design System
+
+**Style name:** Röki-inspired Nordic low-poly wildfire dashboard
+
+**Description:**
+Stylized low-poly Nordic folklore aesthetic. Matte 3D / flat-shaded feeling. Twilight forest atmosphere. Deep evergreen shadows. Misty icy-blue valley. Pink-purple Scandinavian dusk sky. Small warm ember/fire accents. Cinematic, serious, classroom-ready. Glassmorphism dashboard cards over animated background.
+
+**Background video:** `design_images/Nordic_Forest_LowPolymp_.mp4`
+If the video is missing, the theme falls back to a gradient using twilight_sky, deep_fjord, and pine_shadow. Never crashes.
+
+**Official color palette:**
+```python
+PYRO_UI_COLORS = {
+    "twilight_sky":  "#1E2336",
+    "deep_fjord":    "#2B3248",
+    "stone_surface": "#3E445E",
+    "dusk_rose":     "#E07A8A",
+    "nordic_lilac":  "#8F8CC7",
+    "pine_shadow":   "#264036",
+    "morning_mist":  "#D6D7E6",
+    "frost_white":   "#F3F4F8",
+    "raven_gray":    "#A5A8B8",
+    "ember_glow":    "#E4573D",
+    "hud_cyan":      "#8CE9FF",
+}
+```
+
+**Official glass constants:**
+```python
+PYRO_GLASS = {
+    "main_panel":         "rgba(30, 35, 54, 0.58)",
+    "sidebar":            "rgba(30, 35, 54, 0.88)",
+    "card":               "rgba(62, 68, 94, 0.64)",
+    "card_hover":         "rgba(62, 68, 94, 0.78)",
+    "soft_border":        "rgba(214, 215, 230, 0.16)",
+    "strong_border":      "rgba(214, 215, 230, 0.30)",
+    "background_overlay": "rgba(14, 18, 34, 0.64)",
+}
+```
+
+**Chart color assignments:**
+- fire: #E4573D
+- smoke: #A5A8B8
+- background/negative: #3E445E
+- train: #8F8CC7
+- val: #D6D7E6
+- test: #E07A8A
+
+**Agent rules for visual tasks:**
+- All visual changes go through src/ui.py. Do not inline CSS in tab files.
+- Do not change dashboard content, text, charts, or data when doing visual-only tasks.
+- inject_pyrofinder_theme() must be called once, immediately after st.set_page_config().
+- apply_chart_theme() must be called on every Plotly figure before st.plotly_chart().
+
+**Reusable image-generation prompt for background frames:**
+A wide cinematic 16:9 background illustration for PyroFinder, in a stylized low-poly Nordic folklore minimalist style inspired by Röki. Clean flat-shaded 3D geometric shapes, soft matte surfaces, minimal vector-like textures, muted Scandinavian twilight palette, deep evergreen forest shadows, icy blue mist, pastel pink-purple sky, and small warm ember accents.
+Scene: a quiet private farm at the edge of a forested mountain valley. Rolling hills, dark pine trees, a winding dirt path, a small rustic Nordic farmhouse and barn, a simple wooden fence marking the farm border, distant snow-capped mountains, soft fog in the valley, and a carved rune stone in the foreground. Serene but slightly tense fairytale atmosphere, cinematic composition, high artistic detail, no people, no text, no logos.
+For fire frames: fire starts near the farm border fence, continuous connected burning patch, no disconnected flames. Optional subtle wildfire-detection HUD corner brackets around active fire area.
+For no-fire frames: no fire, no smoke, no embers, no scorch marks, no HUD brackets.
+
+**Animation rule for Streamlit:**
+Use a short MP4/WebM background video with a dark overlay. Keep it muted, looped, and fixed behind app content. Do not animate Streamlit content unless explicitly requested.

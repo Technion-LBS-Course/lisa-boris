@@ -32,8 +32,6 @@ RAW_DATA/
 data/*
 !data/.gitkeep
 !data/dfire_metadata.csv
-!data/market-survey/
-!data/market-survey/**
 
 # Model weights and training artifacts
 models/
@@ -67,6 +65,10 @@ wandb/
 # Exception: committed sample images + labels for fresh-clone demo
 !data/samples/
 !data/samples/**
+
+# Exception: market-survey competitor screenshots (after the *.png rule so it wins)
+!data/market-survey/
+!data/market-survey/**
 
 # Streamlit
 .streamlit/secrets.toml

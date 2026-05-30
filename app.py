@@ -24,9 +24,13 @@ from src.eda import (
     compute_grid_distribution,
 )
 from src.viz import draw_yolo_boxes
-from src.ui import apply_chart_theme, CAT_COLORS, PYRO_COLORS, SPLIT_COLORS, CLASS_COLORS
+from src.ui import inject_pyrofinder_theme, apply_chart_theme, CAT_COLORS, PYRO_COLORS, SPLIT_COLORS, CLASS_COLORS
 
 st.set_page_config(page_title="PyroFinder", layout="wide")
+inject_pyrofinder_theme(
+    background_video_path=Path("design_images") / "Nordic_Forest_LowPolymp_.mp4",
+    use_video_background=True,
+)
 
 METADATA_PATH = "data/dfire_metadata.csv"
 SAMPLES_DIR = Path("data/samples/dfire/images")
@@ -47,9 +51,9 @@ with st.sidebar:
     mode = st.selectbox(
         "Dashboard mode",
         [
+            "M2 Course Dashboard",
             "Operations & Learning Dashboard",
             "Central Control Dashboard",
-            "M2 Course Dashboard",
         ],
     )
 
@@ -793,7 +797,7 @@ elif mode == "M2 Course Dashboard":
         st.header("Problem Understanding")
 
         # One-sentence problem + value proposition
-        with st.container(border=True):
+        with st.container():
             st.markdown(
                 "**Problem:** Property owners in fire-prone areas cannot monitor every camera "
                 "feed at once — a small fire becomes a crisis before anyone notices."
@@ -807,21 +811,34 @@ elif mode == "M2 Course Dashboard":
 
         # Stakeholder map
         st.subheader("Stakeholder Map")
-        st.graphviz_chart("""
-            digraph stakeholders {
-                rankdir=LR
-                node [shape=box style=rounded fontsize=11]
-                PyroFinder [shape=oval style=filled fillcolor="#d4691e" fontcolor=white label="PyroFinder"]
-                Owner [label="Property Owner\n(Dani)"]
-                Emergency [label="Emergency Services"]
-                Team [label="PyroFinder Team\n(Operations)"]
+        st.components.v1.html("""
+<!DOCTYPE html><html><head>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  body { margin:0; background:transparent; }
+  .mermaid { background:transparent; }
+  .mermaid svg { width:100% !important; max-width:100%; height:auto; }
+</style>
+</head><body>
+<div class="mermaid">
+%%{init:{"theme":"base","themeVariables":{"primaryColor":"#E4573D","primaryTextColor":"#F3F4F8","primaryBorderColor":"#F3F4F8","lineColor":"#D6D7E6","secondaryColor":"#3E445E","tertiaryColor":"#264036","edgeLabelBackground":"#2B3248","fontFamily":"sans-serif","fontSize":"13px"}}}%%
+flowchart LR
+    Team["PyroFinder Team<br/>(Operations)"] -->|"monitors & improves"| Pyro["🔥 PyroFinder"]
+    Pyro -->|"fire / smoke alert"| Owner["Property Owner<br/>(Dani)"]
+    Owner -->|"existing cameras"| Pyro
+    Owner -->|"calls if needed"| Emergency["🚒 Emergency Services"]
 
-                Owner -> PyroFinder [label="existing cameras"]
-                PyroFinder -> Owner [label="fire / smoke alert"]
-                Owner -> Emergency [label="calls if needed"]
-                Team -> PyroFinder [label="monitors & improves"]
-            }
-        """)
+    classDef system fill:#E4573D,stroke:#F3F4F8,color:#F3F4F8,stroke-width:2px;
+    classDef actor fill:#3E445E,stroke:#D6D7E6,color:#F3F4F8,stroke-width:1.5px;
+    classDef external fill:#264036,stroke:#8CE9FF,color:#F3F4F8,stroke-width:1.5px;
+
+    class Pyro system;
+    class Team,Owner actor;
+    class Emergency external;
+</div>
+<script>mermaid.initialize({startOnLoad:true,securityLevel:"loose"});</script>
+</body></html>
+""", height=200)
 
         st.divider()
 
@@ -829,17 +846,27 @@ elif mode == "M2 Course Dashboard":
         st.subheader("Primary Persona")
         col_img, col_bio = st.columns([1, 3])
         with col_img:
-            st.markdown(
-                "<div style='background:linear-gradient(135deg,#d4691e,#8b4513);"
-                "width:110px;height:110px;border-radius:50%;"
-                "display:flex;align-items:center;justify-content:center;"
-                "font-size:52px;margin:0 auto;'>🧑‍🌾</div>"
-                "<p style='text-align:center;font-size:11px;color:#888;margin-top:6px;'>"
-                "AI-generated persona</p>",
-                unsafe_allow_html=True,
-            )
+            _persona_path = Path("design_images") / "DANI_PERSONA.png"
+            if _persona_path.exists():
+                import base64 as _b64mod
+                _persona_b64 = _b64mod.b64encode(_persona_path.read_bytes()).decode()
+                st.markdown(
+                    f"<div style='width:110px;height:110px;border-radius:50%;overflow:hidden;"
+                    f"margin:0 auto;box-shadow:0 0 0 3px rgba(228,87,61,0.5);'>"
+                    f"<img src='data:image/png;base64,{_persona_b64}' "
+                    f"style='width:100%;height:100%;object-fit:cover;display:block;' /></div>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown(
+                    "<div style='background:linear-gradient(135deg,#d4691e,#8b4513);"
+                    "width:110px;height:110px;border-radius:50%;"
+                    "display:flex;align-items:center;justify-content:center;"
+                    "font-size:52px;margin:0 auto;'>🧑‍🌾</div>",
+                    unsafe_allow_html=True,
+                )
         with col_bio:
-            with st.container(border=True):
+            with st.container():
                 st.markdown("**Dani Cohen** — Farm Owner, central Israel")
                 st.markdown("- 120-dunam agricultural farm with fixed outdoor cameras at boundary points")
                 st.markdown("- Cannot continuously watch every feed during the dry summer months")
@@ -859,7 +886,7 @@ elif mode == "M2 Course Dashboard":
                 ("Late discovery", "Dani notices smoke from a window or gets a call from a neighbour — 15–30 minutes later."),
                 ("Crisis", "By the time emergency services arrive, the fire has already spread."),
             ]:
-                with st.container(border=True):
+                with st.container():
                     st.markdown(f"**{_step_title}**")
                     st.write(_step_body)
 
@@ -871,7 +898,7 @@ elif mode == "M2 Course Dashboard":
                 ("Alert sent", "Dani receives an alert: camera ID, timestamp, approximate location, direction."),
                 ("Fast response", "Dani contacts emergency services within minutes. Fire is contained early."),
             ]:
-                with st.container(border=True):
+                with st.container():
                     st.markdown(f"**{_step_title}**")
                     st.write(_step_body)
 
@@ -879,25 +906,37 @@ elif mode == "M2 Course Dashboard":
 
         # Detection flow
         st.subheader("Detection Flow")
-        st.graphviz_chart("""
-            digraph detection {
-                rankdir=LR
-                node [shape=box style=rounded fontsize=11]
-                edge [fontsize=10]
-                Camera [shape=cylinder label="Camera\nFeed"]
-                Detect [label="YOLO11s\nDetection"]
-                Confirm [label="Multi-frame\nConfirmation (N)"]
-                Alert [label="Alert\n(owner)"]
-                Log [label="Alert Log\n(dashboard)"]
-                Noise [label="Ignored\n(< N frames)" style=dashed]
+        st.components.v1.html("""
+<!DOCTYPE html><html><head>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  body { margin:0; background:transparent; }
+  .mermaid { background:transparent; }
+  .mermaid svg { width:100% !important; max-width:100%; height:auto; }
+</style>
+</head><body>
+<div class="mermaid">
+%%{init:{"theme":"base","themeVariables":{"primaryColor":"#E4573D","primaryTextColor":"#F3F4F8","primaryBorderColor":"#F3F4F8","lineColor":"#D6D7E6","secondaryColor":"#3E445E","tertiaryColor":"#264036","edgeLabelBackground":"#2B3248","fontFamily":"sans-serif","fontSize":"13px"}}}%%
+flowchart LR
+    Camera["📷 Camera Feed"] -->|"sampled frame"| Detect["YOLO11s<br/>Detection"]
+    Detect -->|"fire or smoke"| Confirm["Multi-frame<br/>Confirmation (N)"]
+    Detect -->|"nothing / single frame"| Noise["🔕 Ignored<br/>(< N frames)"]
+    Confirm -->|"N frames met"| Alert["🔔 Alert<br/>(owner)"]
+    Alert --> Log["📋 Alert Log<br/>(dashboard)"]
 
-                Camera -> Detect [label="sampled frame"]
-                Detect -> Confirm [label="fire or smoke"]
-                Detect -> Noise [label="nothing / single frame"]
-                Confirm -> Alert [label="N frames met"]
-                Alert -> Log
-            }
-        """)
+    classDef system fill:#E4573D,stroke:#F3F4F8,color:#F3F4F8,stroke-width:2px;
+    classDef step fill:#3E445E,stroke:#D6D7E6,color:#F3F4F8,stroke-width:1.5px;
+    classDef muted fill:#2B3248,stroke:#8F8CC7,color:#A5A8B8,stroke-width:1px,stroke-dasharray:4 3;
+    classDef output fill:#264036,stroke:#8CE9FF,color:#F3F4F8,stroke-width:1.5px;
+
+    class Detect,Confirm system;
+    class Camera step;
+    class Noise muted;
+    class Alert,Log output;
+</div>
+<script>mermaid.initialize({startOnLoad:true,securityLevel:"loose"});</script>
+</body></html>
+""", height=200)
 
 
     # ── Tab 2: Literature Review ──────────────────────────────────────────────
@@ -1203,38 +1242,36 @@ video and images?"</em></div>""",
                 "summary": "Automated wildfire suppression for high-value assets, combining visual/thermal detection with a mechanical launcher that deploys fire-retardant capsules.",
             },
         ]
-        for c in competitors:
-            st.markdown(f"- **[{c['name']}]({c['url']})** — {c['summary']}")
-            if c["name"] == "Pano AI":
-                _gap1, _col1, _col2, _gap2 = st.columns([1, 2, 2, 1])
-                with _col1:
-                    st.image("data/market-survey/pano-ai-tower.png", width=220, caption="Pano AI — dedicated camera station")
-                with _col2:
-                    st.image("data/market-survey/pano-ai-alert.png", width=220, caption="Pano AI — alert & map workflow")
-            if c["name"] == "FIREWAVE":
-                _gap1, _col1, _col2, _gap2 = st.columns([1, 2, 2, 1])
-                with _col1:
-                    st.image("data/market-survey/firewave-sensor.png", width=220, caption="FIREWAVE — acoustic sensor")
-                with _col2:
-                    st.image("data/market-survey/firewave - map.png", width=220, caption="FIREWAVE — sensor map")
-            if c["name"] == "CANDO":
-                _gap1, _col1, _col2, _gap2 = st.columns([1, 2, 2, 1])
-                with _col1:
-                    st.image("data/market-survey/CANDO - sensor.png", width=220, caption="CANDO — drone station")
-                with _col2:
-                    st.image("data/market-survey/CANDO-map.png", width=220, caption="CANDO — operational map")
-            if c["name"] == "OroraTech":
-                _gap1, _col1, _col2, _gap2 = st.columns([1, 2, 2, 1])
-                with _col1:
-                    st.image("data/market-survey/ororaTech - sensor.png", width=220, caption="OroraTech — satellite sensor")
-                with _col2:
-                    st.image("data/market-survey/ororaTech - map.png", width=220, caption="OroraTech — wildfire map")
-            if c["name"] == "FireDome":
-                _gap1, _col1, _col2, _gap2 = st.columns([1, 2, 2, 1])
-                with _col1:
-                    st.image("data/market-survey/FireDome - Launcher.png", width=220, caption="FireDome — suppression launcher")
-                with _col2:
-                    st.image("data/market-survey/firedome - map.png", width=220, caption="FireDome — deployment map")
+        _MS = Path("data/market-survey")
+        _img_map = {
+            "Pano AI":    [("pano-ai-tower.png",       "Pano AI — dedicated camera station"),
+                           ("pano-ai-alert.png",        "Pano AI — alert & map workflow")],
+            "FIREWAVE":   [("firewave-sensor.png",      "FIREWAVE — acoustic sensor"),
+                           ("firewave - map.png",        "FIREWAVE — sensor map")],
+            "CANDO":      [("CANDO - sensor.png",       "CANDO — drone station"),
+                           ("CANDO-map.png",             "CANDO — operational map")],
+            "OroraTech":  [("ororaTech - sensor.png",   "OroraTech — satellite sensor"),
+                           ("ororaTech - map.png",       "OroraTech — wildfire map")],
+            "FireDome":   [("FireDome - Launcher.png",  "FireDome — suppression launcher"),
+                           ("firedome - map.png",        "FireDome — deployment map")],
+        }
+        for i in range(0, len(competitors), 2):
+            _pair = competitors[i:i + 2]
+            _comp_cols = st.columns(2)
+            for _ccol, c in zip(_comp_cols, _pair):
+                with _ccol:
+                    st.markdown(f"**[{c['name']}]({c['url']})**")
+                    st.caption(c["summary"])
+                    _imgs = _img_map.get(c["name"], [])
+                    if _imgs:
+                        _ic1, _ic2 = st.columns(2)
+                        for _ic, (fn, cap) in zip([_ic1, _ic2], _imgs):
+                            _p = _MS / fn
+                            if _p.exists():
+                                with _ic:
+                                    st.image(str(_p), caption=cap, width=160)
+            if i + 2 < len(competitors):
+                st.divider()
 
         # ── 2. Comparison table ───────────────────────────────────────────────
         st.subheader("2. Comparison Table")
@@ -1357,8 +1394,8 @@ video and images?"</em></div>""",
                        range=[0, 1], showgrid=False, zeroline=False, showticklabels=False),
             yaxis=dict(title="Detection / monitoring  ↕  Response / suppression",
                        range=[0, 1], showgrid=False, zeroline=False, showticklabels=False),
-            plot_bgcolor="#1a1a1a",
-            paper_bgcolor="#1a1a1a",
+            plot_bgcolor="rgba(14, 18, 34, 0.15)",
+            paper_bgcolor="rgba(14, 18, 34, 0.15)",
             font=dict(color="#cccccc"),
             height=420,
             margin=dict(l=60, r=20, t=20, b=60),
@@ -1374,7 +1411,7 @@ video and images?"</em></div>""",
         # ── 4. Design insights ────────────────────────────────────────────────
         st.subheader("4. Design Insights")
 
-        with st.container(border=True):
+        with st.container():
             st.markdown("**What to adopt**")
             st.markdown(
                 "- **Map-first interface** — show every camera, detection, confidence score, and nearby assets\n"
@@ -1408,7 +1445,7 @@ video and images?"</em></div>""",
     with tab_eda_story:
         st.header("Dataset & EDA — D-Fire")
 
-        with st.container(border=True):
+        with st.container():
             st.markdown(
                 "**Name:** D-Fire Dataset &nbsp;·&nbsp; "
                 "**License:** CC0 1.0 Universal &nbsp;·&nbsp; "
