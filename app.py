@@ -1166,9 +1166,9 @@ video and images?"</em></div>""",
 
     # ── Tab 3: Market Review ──────────────────────────────────────────────────
     with tab_market:
-        st.header("Market Review — Wildfire Detection Solutions")
+        st.header("Market Review — Fire Detection Solutions")
         st.markdown(
-            "Wildfire detection is an active market with several competing approaches. "
+            "Fire detection is an active market with several competing approaches. "
             "Most current solutions depend on **dedicated infrastructure** — new towers, sensors, drones, or satellites. "
             "PyroFinder's market gap is using the customer's **existing security cameras** as the primary sensor, "
             "adding AI detection, alerting, and location estimation as a software layer."
