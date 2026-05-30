@@ -1072,7 +1072,7 @@ video and images?"</em></div>""",
             st.markdown("#### Deep Learning Wildfire Detection to Increase Fire Safety with YOLOv8 (2024)")
             st.markdown(
                 "**Citation:** Wicaksono, P., Yunanda, R., Arisaputra, P., & Izdihar, Z. N. (2024). "
-                "*Deep Learning Wildfire Detection to Increase Fire Safety with YOLOv8*. "
+                "[*Deep Learning Wildfire Detection to Increase Fire Safety with YOLOv8*](https://www.ijisae.org/index.php/IJISAE/article/view/6190). "
                 "International Journal of Intelligent Systems and Applications in Engineering, "
                 "12(3), 4383–4387."
             )
