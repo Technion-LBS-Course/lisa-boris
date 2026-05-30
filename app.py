@@ -781,156 +781,124 @@ elif mode == "M2 Course Dashboard":
     st.subheader("M2 Course Dashboard — Story Tabs")
     st.caption("Five narrative tabs covering the M2 deliverable requirements.")
 
-    tab_problem, tab_lit, tab_market, tab_eda_story, tab_kpi = st.tabs([
+    tab_problem, tab_lit, tab_market, tab_eda_story = st.tabs([
         "1. Problem Understanding",
         "2. Literature Review",
         "3. Market Review",
         "4. Dataset & EDA",
-        "5. KPI & Metrics",
     ])
 
     # ── Tab 1: Problem Understanding ─────────────────────────────────────────
     with tab_problem:
         st.header("Problem Understanding")
-        st.caption(
-            "The problem space, affected users, core use case, scope boundaries, "
-            "and competitive differentiation."
-        )
 
-        # ── Problem statement ───────────────────────────────────────────────
-        st.subheader("The Problem")
-        st.markdown("""
-Private property owners in fire-prone areas rely on existing security cameras, but these cameras
-are **passive**: someone must actively watch them to notice smoke or fire.
-
-During dry seasons, fires can start at property edges, agricultural fields, forest borders,
-parking areas, or neighbouring land. **Delayed awareness can turn a small incident into a
-dangerous event.**
-
-Existing wildfire monitoring solutions typically require dedicated towers, acoustic sensors,
-drones, or public-sector infrastructure. **None of them are built for the private landowner who
-already has cameras installed.**
-        """)
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Root cause", "Cameras are passive")
-        m2.metric("Trigger", "Dry-season fire risk")
-        m3.metric("Gap", "No private-property solution")
-
-        st.divider()
-
-        # ── Primary persona ─────────────────────────────────────────────────
-        st.subheader("Primary Persona — Dani")
-        col_a, col_b = st.columns([2, 3])
-        with col_a:
-            st.markdown("""
-**Role:** Farm owner, central Israel
-**Property:** 120-dunam agricultural farm
-**Cameras:** Fixed outdoor cameras at boundary points
-**Season of concern:** Dry summer months
-**Risk sources:** Neighbouring fields, agricultural equipment
-**Current behaviour:** Cannot continuously watch every camera feed
-            """)
-        with col_b:
-            st.info(
-                "Dani needs PyroFinder to monitor camera feeds automatically and send an alert "
-                "the moment fire or smoke is confirmed — without requiring Dani to watch screens "
-                "all day. Time from ignition to awareness is the critical metric."
+        # One-sentence problem + value proposition
+        with st.container(border=True):
+            st.markdown(
+                "**Problem:** Property owners in fire-prone areas cannot monitor every camera "
+                "feed at once — a small fire becomes a crisis before anyone notices."
+            )
+            st.markdown(
+                "**Value proposition:** PyroFinder watches your existing cameras automatically "
+                "and sends a confirmed alert within seconds of detecting fire or smoke."
             )
 
         st.divider()
 
-        # ── Use-case flow ───────────────────────────────────────────────────
-        st.subheader("Main Use Case — Step by Step")
-        steps = [
-            ("1. Ignition", "Fire starts at a property edge or neighbouring field."),
-            ("2. Detection", "PyroFinder detects smoke or fire in the camera frame using YOLO11s."),
-            ("3. Confirmation", "Detection is confirmed across N consecutive frames (configurable) to filter single-frame noise."),
-            ("4. Alert", "Owner receives an alert within seconds — camera ID, timestamp, approximate location, and apparent direction."),
-            ("5. Response", "Owner can act immediately: evacuate, call emergency services, or mark as false alarm from the dashboard."),
-        ]
-        for title, body in steps:
-            with st.expander(title, expanded=True):
-                st.write(body)
+        # Stakeholder map
+        st.subheader("Stakeholder Map")
+        st.graphviz_chart("""
+            digraph stakeholders {
+                rankdir=LR
+                node [shape=box style=rounded fontsize=11]
+                PyroFinder [shape=oval style=filled fillcolor="#d4691e" fontcolor=white label="PyroFinder"]
+                Owner [label="Property Owner\n(Dani)"]
+                Emergency [label="Emergency Services"]
+                Team [label="PyroFinder Team\n(Operations)"]
+
+                Owner -> PyroFinder [label="existing cameras"]
+                PyroFinder -> Owner [label="fire / smoke alert"]
+                Owner -> Emergency [label="calls if needed"]
+                Team -> PyroFinder [label="monitors & improves"]
+            }
+        """)
 
         st.divider()
 
-        # ── Target audience ─────────────────────────────────────────────────
-        st.subheader("Target Audience")
-        col_p, col_s = st.columns(2)
-        with col_p:
-            st.markdown("**Primary — paying customers**")
-            for seg in [
-                "Homeowners in fire-prone areas",
-                "Farm and ranch owners",
-                "Agricultural facility managers",
-                "Private landowners near wildland-urban interface",
+        # Persona card
+        st.subheader("Primary Persona")
+        col_img, col_bio = st.columns([1, 3])
+        with col_img:
+            st.markdown(
+                "<div style='background:linear-gradient(135deg,#d4691e,#8b4513);"
+                "width:110px;height:110px;border-radius:50%;"
+                "display:flex;align-items:center;justify-content:center;"
+                "font-size:52px;margin:0 auto;'>🧑‍🌾</div>"
+                "<p style='text-align:center;font-size:11px;color:#888;margin-top:6px;'>"
+                "AI-generated persona</p>",
+                unsafe_allow_html=True,
+            )
+        with col_bio:
+            with st.container(border=True):
+                st.markdown("**Dani Cohen** — Farm Owner, central Israel")
+                st.markdown("- 120-dunam agricultural farm with fixed outdoor cameras at boundary points")
+                st.markdown("- Cannot continuously watch every feed during the dry summer months")
+                st.markdown("- Risk: fires from neighbouring fields or agricultural machinery")
+                st.markdown("- Goal: be alerted within minutes of any confirmed fire or smoke")
+
+        st.divider()
+
+        # Before / After journey
+        st.subheader("User Journey")
+        journey_before, journey_after = st.tabs(["Before PyroFinder", "After PyroFinder"])
+
+        with journey_before:
+            for _step_title, _step_body in [
+                ("Fire starts", "A spark from neighbouring machinery ignites dry brush at the property edge."),
+                ("No alert", "Dani's cameras capture smoke — but nobody is watching the screens."),
+                ("Late discovery", "Dani notices smoke from a window or gets a call from a neighbour — 15–30 minutes later."),
+                ("Crisis", "By the time emergency services arrive, the fire has already spread."),
             ]:
-                st.markdown(f"- {seg}")
-        with col_s:
-            st.markdown("**Secondary — alert recipients**")
-            for seg in [
-                "Municipalities",
-                "Emergency response teams",
-                "Forest and park authorities",
-                "PyroFinder internal team (Operations & Learning Dashboard)",
+                with st.container(border=True):
+                    st.markdown(f"**{_step_title}**")
+                    st.write(_step_body)
+
+        with journey_after:
+            for _step_title, _step_body in [
+                ("Fire starts", "Same spark at the property edge."),
+                ("Detected", "YOLO11s detects smoke in the camera frame within seconds."),
+                ("Confirmed", "Detection confirmed across N consecutive frames — single-frame noise filtered out."),
+                ("Alert sent", "Dani receives an alert: camera ID, timestamp, approximate location, direction."),
+                ("Fast response", "Dani contacts emergency services within minutes. Fire is contained early."),
             ]:
-                st.markdown(f"- {seg}")
+                with st.container(border=True):
+                    st.markdown(f"**{_step_title}**")
+                    st.write(_step_body)
 
         st.divider()
 
-        # ── Scope boundaries ────────────────────────────────────────────────
-        st.subheader("Scope Boundaries — What PyroFinder Is Not")
-        not_list = [
-            ("Early warning system", "PyroFinder does not predict fire spread; it detects and alerts on confirmed events."),
-            ("Fire spread predictor", "No true physical fire-spread simulation or prediction in the MVP."),
-            ("New hardware product", "No dedicated towers, acoustic sensors, or drones required."),
-            ("Emergency dispatch integration", "Alerts reach the property owner; integration with rescue services is a future feature."),
-            ("Precise GPS tracker", "Location outputs are approximate, based on camera metadata. Never claimed as precise."),
-            ("Pure YOLO demo", "PyroFinder is a full monitoring system built on top of detection results, not a model showcase."),
-        ]
-        for label, explanation in not_list:
-            st.markdown(f"**{label}:** {explanation}")
+        # Detection flow
+        st.subheader("Detection Flow")
+        st.graphviz_chart("""
+            digraph detection {
+                rankdir=LR
+                node [shape=box style=rounded fontsize=11]
+                edge [fontsize=10]
+                Camera [shape=cylinder label="Camera\nFeed"]
+                Detect [label="YOLO11s\nDetection"]
+                Confirm [label="Multi-frame\nConfirmation (N)"]
+                Alert [label="Alert\n(owner)"]
+                Log [label="Alert Log\n(dashboard)"]
+                Noise [label="Ignored\n(< N frames)" style=dashed]
 
-        st.divider()
+                Camera -> Detect [label="sampled frame"]
+                Detect -> Confirm [label="fire or smoke"]
+                Detect -> Noise [label="nothing / single frame"]
+                Confirm -> Alert [label="N frames met"]
+                Alert -> Log
+            }
+        """)
 
-        # ── Competitive landscape ────────────────────────────────────────────
-        st.subheader("Competitive Landscape")
-
-        comp_data = {
-            "Solution": ["PyroFinder", "Pano AI", "FIREWAVE", "CANDO"],
-            "Targets private landowners": ["Yes", "No", "No", "No"],
-            "Uses existing cameras": ["Yes", "No", "No", "No"],
-            "Requires new dedicated hardware": ["No", "Yes (towers)", "Yes (acoustic sensors)", "Yes (drones)"],
-            "Fire/smoke detection": ["Yes — YOLO11s", "Yes — panoramic AI", "No (acoustic)", "Yes — aerial"],
-            "Approximate GPS alerting": ["Yes", "Yes", "No", "Yes"],
-            "Operates without public-sector infra": ["Yes", "No", "No", "Partial"],
-        }
-        comp_df = pd.DataFrame(comp_data).set_index("Solution")
-        st.dataframe(comp_df, use_container_width=True)
-
-        st.caption(
-            "Sources: Pano AI (panoramic camera towers for public land), "
-            "FIREWAVE (acoustic forest-fire detection), "
-            "CANDO (autonomous drone security and monitoring)."
-        )
-
-        st.divider()
-
-        # ── Key risks ───────────────────────────────────────────────────────
-        st.subheader("Main Risks")
-        risks = [
-            ("Dataset domain gap", "D-Fire and supplementary datasets may not match real private-property camera angles, lighting, or fire scenarios."),
-            ("False alarms", "Reflections, sunsets, headlights, fog, or dust may trigger false detections."),
-            ("Inference speed", "YOLO11s may be too slow for near-real-time sampled-frame inference on available MVP hardware."),
-            ("Poor camera calibration", "Missing or incorrect camera height/azimuth leads to inaccurate location estimates."),
-            ("Manual mapping errors", "Operators may draw incorrect polygons or enter wrong GPS coordinates during setup."),
-            ("Adverse conditions", "Detection accuracy degrades at night, under heavy smoke, or in rain and fog."),
-        ]
-        risk_df = pd.DataFrame(risks, columns=["Risk", "Description"])
-        risk_df.index = risk_df.index + 1
-        st.table(risk_df)
-        st.caption("Source: PROJECT_CONTEXT.md §2, §4, §5, §16")
 
     # ── Tab 2: Literature Review ──────────────────────────────────────────────
     with tab_lit:
@@ -1305,10 +1273,9 @@ video and images?"</em></div>""",
                     apply_chart_theme(_m2_fig_bbox_cat)
                     st.plotly_chart(_m2_fig_bbox_cat, use_container_width=True)
                     st.info(
-                        "Background images dominate the 0-box bin — they carry no annotations "
-                        "by definition. Fire-and-smoke images account for most high-box-count "
-                        "images; the right tail represents complex multi-object scenes valuable "
-                        "for training YOLO11s multi-object handling."
+                        "Background images (46% of dataset) fill the 0-box bin by definition. "
+                        "Fire-and-smoke images drive the right tail — complex multi-object scenes "
+                        "that are most valuable for training YOLO11s."
                     )
                 else:
                     st.warning("Required columns for stacked histogram not found in metadata.")
@@ -1332,10 +1299,10 @@ video and images?"</em></div>""",
                     apply_chart_theme(_m2_fig_dk)
                     st.plotly_chart(_m2_fig_dk, use_container_width=True)
                     st.info(
-                        "Fire-only images average ~67% dark pixels (night scenes) while "
-                        "smoke-only images average ~17% (bright daytime). This lighting gap "
-                        "means YOLO11s may under-perform on fire in daylight and smoke at "
-                        "night; augmentation targeting both extremes is a priority for M3."
+                        "Fire-only images average ~64% dark pixels (predominantly night scenes) "
+                        "while smoke-only images average only ~9% (bright daytime). "
+                        "Augmentation across both lighting extremes is required for M3 "
+                        "to avoid a model that misses fire in daylight or smoke at night."
                     )
                 else:
                     st.info("Pixel stat columns not found. Re-run scripts/build_dfire_metadata.py.")
@@ -1463,10 +1430,10 @@ video and images?"</em></div>""",
                     apply_chart_theme(_m2_fig_spatial)
                     st.plotly_chart(_m2_fig_spatial, use_container_width=True)
                     st.info(
-                        "Fire centroids cluster in the lower-centre of the frame — consistent "
-                        "with ground-level fires captured by outdoor cameras. Smoke centroids "
-                        "drift toward the upper frame as smoke rises, confirmed by the "
-                        "thirds-grid bottom-centre concentration for fire."
+                        "Fire concentrates in the **middle-centre** (75% of fire boxes in "
+                        "the middle row, 70% in the centre column). Smoke sits higher — "
+                        "mean y=0.36 vs fire y=0.51 — as smoke plumes rise above the fire "
+                        "source and bias toward the upper half of the frame."
                     )
 
             st.divider()
@@ -1510,10 +1477,11 @@ video and images?"</em></div>""",
                     apply_chart_theme(_m2_fig_corr)
                     st.plotly_chart(_m2_fig_corr, use_container_width=True)
                     st.info(
-                        "Strongest non-trivial correlation: dark_pixel_ratio ↔ fire_bbox_coverage "
-                        "(fire-only images are predominantly dark night scenes). Near-zero "
-                        "correlation between fire and smoke coverage supports separate confidence "
-                        "threshold calibration for YOLO11s fire and smoke heads."
+                        "Pixel features are strongly intercorrelated (dark_pixel_ratio ↔ "
+                        "mean_brightness, r=0.90) — they capture the same scene lighting "
+                        "and can be treated as one feature group. Fire and smoke spatial "
+                        "positions correlate moderately (r≈0.55): both classes tend to "
+                        "appear on the same horizontal side of the frame."
                     )
 
             with _eda_r3c2:
@@ -1541,9 +1509,9 @@ video and images?"</em></div>""",
                     apply_chart_theme(_m2_fig_ct)
                     st.plotly_chart(_m2_fig_ct, use_container_width=True)
                     st.info(
-                        "This chart verifies that target-image categories are represented across "
-                        "the train/test split. It helps detect split imbalance before YOLO11s "
-                        "training and evaluation."
+                        "The 80/20 train/test split (17,221 vs 4,306 images) maintains "
+                        "proportional category representation across both partitions — "
+                        "evaluation results on the held-out test set should be representative."
                     )
                 else:
                     st.warning("Split/category balance data is not available.")
@@ -1610,99 +1578,22 @@ video and images?"</em></div>""",
                     },
                 ]))
 
-    # ── Tab 5: KPI & Metrics ──────────────────────────────────────────────────
-    with tab_kpi:
-        st.caption(
-            "Formal ML metrics defined in the problem specification. "
-            "Values will be populated after M3 model training on D-Fire."
-        )
-
-        _KPI_METRICS = [
-            {
-                "name": "mAP@0.5",
-                "interpretation": (
-                    "Mean Average Precision at IoU threshold 0.5 — "
-                    "primary detection quality metric; measures how well the model "
-                    "localises and classifies fire/smoke boxes at a lenient overlap threshold."
-                ),
-            },
-            {
-                "name": "mAP@0.5:0.95",
-                "interpretation": (
-                    "Mean Average Precision averaged over IoU thresholds 0.5–0.95 — "
-                    "stricter localisation quality; penalises imprecise bounding boxes "
-                    "even when the class is correctly identified."
-                ),
-            },
-            {
-                "name": "Precision",
-                "interpretation": (
-                    "Fraction of fire/smoke detections that are correct — "
-                    "high precision means fewer false alarms reaching the operator."
-                ),
-            },
-            {
-                "name": "Recall",
-                "interpretation": (
-                    "Fraction of actual fire/smoke events that are detected — "
-                    "the critical safety metric; a missed fire is more dangerous "
-                    "than a false alarm."
-                ),
-            },
-            {
-                "name": "F1-Score",
-                "interpretation": (
-                    "Harmonic mean of Precision and Recall — "
-                    "balances the trade-off between missing fires and raising false alarms."
-                ),
-            },
-            {
-                "name": "False Alarm Rate",
-                "interpretation": (
-                    "False positives per hour (or per 1 000 sampled frames) — "
-                    "operational KPI; excessive false alarms erode operator trust "
-                    "and cause alert fatigue."
-                ),
-            },
-            {
-                "name": "Inference Speed",
-                "interpretation": (
-                    "Frames per second (FPS) or milliseconds per frame — "
-                    "determines whether YOLO11s meets near-real-time requirements "
-                    "on available MVP hardware; YOLO11n is the speed baseline."
-                ),
-            },
-        ]
-
-        # Two-column grid — pairs of cards, last card centred if count is odd
-        for row_start in range(0, len(_KPI_METRICS), 2):
-            pair = _KPI_METRICS[row_start : row_start + 2]
-            cols = st.columns(2)
-            for col, kpi in zip(cols, pair):
-                with col:
-                    with st.container(border=True):
-                        st.metric(
-                            label=kpi["name"],
-                            value="N/A — awaits M3 training",
-                        )
-                        st.caption(kpi["interpretation"])
-
-        st.divider()
-        st.subheader("Metric definitions (from formal ML problem)")
-        st.markdown("""
-| Metric | Type | Goal |
-|--------|------|------|
-| mAP@0.5 | Detection quality | Higher is better |
-| mAP@0.5:0.95 | Detection quality (strict) | Higher is better |
-| Precision | Per-class | Higher → fewer false alarms |
-| Recall | Per-class | Higher → fewer missed fires |
-| F1-Score | Per-class | Higher → balanced detector |
-| False Alarm Rate | Operational | Lower is better |
-| Inference Speed | Operational | Higher FPS → more real-time |
-        """)
-        st.caption(
-            "Split strategy: D-Fire train/val/test split if provided by the dataset, "
-            "otherwise a reproducible 70 / 15 / 15 stratified split by image category. "
-            "Primary model: YOLO11s. Speed baseline: YOLO11n."
-        )
-        st.caption("Source: PROJECT_CONTEXT.md §8")
+            # ── EDA Summary ───────────────────────────────────────────────────
+            st.divider()
+            st.subheader("EDA Summary")
+            st.info(
+                "**D-Fire in brief:** 21,527 images across four categories — background (46%), "
+                "smoke-only (27%), fire+smoke (22%), fire-only (5%). The large background class "
+                "means a naive model can score high accuracy by predicting 'no fire' for every "
+                "frame; recall must be the primary training objective.\n\n"
+                "**Key challenges for YOLO11s training:**\n"
+                "- Fire-only scenes are predominantly dark/night (~64% dark pixels); smoke-only "
+                "scenes are bright daytime (~9%). Augmentation across both lighting conditions is "
+                "essential.\n"
+                "- Smoke bboxes are ~7× larger than fire bboxes — the model must handle two very "
+                "different object scales. Small-object recall for fire should be verified in M3.\n"
+                "- Fire concentrates in the middle-centre of the frame; smoke biases toward the "
+                "upper portion. Anchor tuning for YOLO11s should reflect this asymmetry.\n"
+                "- The 80/20 train/test split maintains proportional category representation, so "
+                "held-out test results should be representative."
+            )
