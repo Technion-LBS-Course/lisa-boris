@@ -70,6 +70,11 @@ wandb/
 !data/market-survey/
 !data/market-survey/**
 
+# Exception: UI design assets used by the Streamlit app
+!design_images/
+!design_images/DANI_PERSONA.png
+!design_images/Nordic_Forest_LowPolymp_.mp4
+
 # Streamlit
 .streamlit/secrets.toml
 
