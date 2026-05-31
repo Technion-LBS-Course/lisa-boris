@@ -694,7 +694,7 @@ if mode == "Operations & Learning Dashboard":
     with tab_inference:
         st.info(
             "**Coming in Lecture 6–7 (M3):** "
-            "Upload an image or video, run YOLO11s inference, "
+            "Upload an image or video, run NN object detection model inference, "
             "and display bounding-box overlays with fire/smoke class labels and confidence scores."
         )
         st.progress(0, text="M3 progress: 0%")
@@ -783,7 +783,6 @@ elif mode == "Central Control Dashboard":
 # ── M2 Course Dashboard ────────────────────────────────────────────────────────
 elif mode == "M2 Course Dashboard":
     st.subheader("M2 Course Dashboard — Story Tabs")
-    st.caption("Five narrative tabs covering the M2 deliverable requirements.")
 
     tab_problem, tab_lit, tab_market, tab_eda_story = st.tabs([
         "1. Problem Understanding",
@@ -809,36 +808,65 @@ elif mode == "M2 Course Dashboard":
 
         st.divider()
 
+        # KPI
+        st.subheader("KPI")
+        st.markdown(
+            "The model is object detection, the metric is **recall**, "
+            "because missing a real fire is far more costly than a false alarm."
+        )
+
+        st.divider()
+
         # Stakeholder map
         st.subheader("Stakeholder Map")
-        st.components.v1.html("""
+        _sh_gap1, _sh_mid, _sh_gap2 = st.columns([1, 3, 1])
+        with _sh_mid:
+            st.components.v1.html("""
 <!DOCTYPE html><html><head>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <style>
   body { margin:0; background:transparent; }
-  .mermaid { background:transparent; }
+  .mermaid { background:transparent; opacity:0.7; }
   .mermaid svg { width:100% !important; max-width:100%; height:auto; }
 </style>
 </head><body>
 <div class="mermaid">
-%%{init:{"theme":"base","themeVariables":{"primaryColor":"#E4573D","primaryTextColor":"#F3F4F8","primaryBorderColor":"#F3F4F8","lineColor":"#D6D7E6","secondaryColor":"#3E445E","tertiaryColor":"#264036","edgeLabelBackground":"#2B3248","fontFamily":"sans-serif","fontSize":"13px"}}}%%
-flowchart LR
-    Team["PyroFinder Team<br/>(Operations)"] -->|"monitors & improves"| Pyro["🔥 PyroFinder"]
-    Pyro -->|"fire / smoke alert"| Owner["Property Owner<br/>(Dani)"]
-    Owner -->|"existing cameras"| Pyro
-    Owner -->|"calls if needed"| Emergency["🚒 Emergency Services"]
-
-    classDef system fill:#E4573D,stroke:#F3F4F8,color:#F3F4F8,stroke-width:2px;
-    classDef actor fill:#3E445E,stroke:#D6D7E6,color:#F3F4F8,stroke-width:1.5px;
-    classDef external fill:#264036,stroke:#8CE9FF,color:#F3F4F8,stroke-width:1.5px;
-
-    class Pyro system;
-    class Team,Owner actor;
-    class Emergency external;
+%%{init:{"theme":"base","themeVariables":{"primaryColor":"#E4573D","primaryTextColor":"#F3F4F8","primaryBorderColor":"#F3F4F8","lineColor":"#D6D7E6","secondaryColor":"#3E445E","tertiaryColor":"#264036","edgeLabelBackground":"#2B3248","fontFamily":"Inter, Source Sans Pro, sans-serif","fontSize":"15px"}}}%%
+quadrantChart
+    title Stakeholder Map — Interest vs Influence
+    x-axis Low Influence --> High Influence
+    y-axis Low Interest --> High Interest
+    quadrant-1 Manage Closely
+    quadrant-2 Keep Informed
+    quadrant-3 Monitor
+    quadrant-4 Keep Satisfied
+    Property Owner / Dani: [0.80, 0.88]
+    Dev / ML Team: [0.72, 0.78]
+    Operator / Admin: [0.88, 0.70]
+    Farm Workers / Residents: [0.22, 0.72]
+    Emergency Services: [0.78, 0.32]
+    Camera Vendor / Integrator: [0.65, 0.18]
+    Dataset / Research Sources: [0.20, 0.14]
 </div>
 <script>mermaid.initialize({startOnLoad:true,securityLevel:"loose"});</script>
 </body></html>
-""", height=200)
+""", height=500)
+
+        _sh_data = [
+            ("Property Owner / Dani",     "Manage Closely",  "Primary user — directly affected by alerts and fire risk",                "Weekly demos, usability feedback, alert UX review"),
+            ("Dev / ML Team",             "Manage Closely",  "Builds and improves the detection model and dashboard",                   "Sprint planning, model performance reviews"),
+            ("Operator / Admin",          "Manage Closely",  "Runs the system, manages cameras and alert configuration",                "Ops documentation, alert tuning, incident log review"),
+            ("Farm Workers / Residents",  "Keep Informed",   "Affected by fire risk but do not control the system",                     "Clear alert language, evacuation guidance"),
+            ("Emergency Services",        "Keep Satisfied",  "High authority in fire response; PyroFinder does not auto-dispatch",      "Share detection reports on request; future viewer dashboard"),
+            ("Camera Vendor / Integrator","Keep Satisfied",  "Provides hardware PyroFinder depends on; limited day-to-day interest",    "Integration specs, compatibility requirements"),
+            ("Dataset / Research Sources","Monitor",         "Enables model training; no active role in operations",                    "Citation, license compliance, periodic dataset updates"),
+        ]
+        _sh_tabs = st.tabs([row[0] for row in _sh_data])
+        for _tab, (_name, _quadrant, _reason, _strategy) in zip(_sh_tabs, _sh_data):
+            with _tab:
+                st.markdown(f"**Quadrant:** {_quadrant}")
+                st.markdown(f"**Reason:** {_reason}")
+                st.markdown(f"**Communication strategy:** {_strategy}")
 
         st.divider()
 
@@ -851,7 +879,7 @@ flowchart LR
                 import base64 as _b64mod
                 _persona_b64 = _b64mod.b64encode(_persona_path.read_bytes()).decode()
                 st.markdown(
-                    f"<div style='width:110px;height:110px;border-radius:50%;overflow:hidden;"
+                    f"<div style='width:150px;height:150px;border-radius:50%;overflow:hidden;"
                     f"margin:0 auto;box-shadow:0 0 0 3px rgba(228,87,61,0.5);'>"
                     f"<img src='data:image/png;base64,{_persona_b64}' "
                     f"style='width:100%;height:100%;object-fit:cover;display:block;' /></div>",
@@ -860,14 +888,14 @@ flowchart LR
             else:
                 st.markdown(
                     "<div style='background:linear-gradient(135deg,#d4691e,#8b4513);"
-                    "width:110px;height:110px;border-radius:50%;"
+                    "width:150px;height:150px;border-radius:50%;"
                     "display:flex;align-items:center;justify-content:center;"
                     "font-size:52px;margin:0 auto;'>🧑‍🌾</div>",
                     unsafe_allow_html=True,
                 )
         with col_bio:
             with st.container():
-                st.markdown("**Dani Cohen** — Farm Owner, central Israel")
+                st.markdown("**Dani Cohen** — Farm Owner, Avivim, Israel")
                 st.markdown("- 120-dunam agricultural farm with fixed outdoor cameras at boundary points")
                 st.markdown("- Cannot continuously watch every feed during the dry summer months")
                 st.markdown("- Risk: fires from neighbouring fields or agricultural machinery")
@@ -880,27 +908,35 @@ flowchart LR
         journey_before, journey_after = st.tabs(["Before PyroFinder", "After PyroFinder"])
 
         with journey_before:
-            for _step_title, _step_body in [
-                ("Fire starts", "A spark from neighbouring machinery ignites dry brush at the property edge."),
-                ("No alert", "Dani's cameras capture smoke — but nobody is watching the screens."),
-                ("Late discovery", "Dani notices smoke from a window or gets a call from a neighbour — 15–30 minutes later."),
-                ("Crisis", "By the time emergency services arrive, the fire has already spread."),
-            ]:
-                with st.container():
-                    st.markdown(f"**{_step_title}**")
-                    st.write(_step_body)
+            _jb_text, _jb_img = st.columns([1, 1], gap="small")
+            with _jb_text:
+                for _step_title, _step_body in [
+                    ("Fire starts", "A spark from neighbouring machinery ignites dry brush at the property edge."),
+                    ("No alert", "Dani's cameras capture smoke — but nobody is watching the screens."),
+                    ("Late discovery", "Dani notices smoke from a window or gets a call from a neighbour — 15–30 minutes later."),
+                    ("Crisis", "By the time emergency services arrive, the fire has already spread."),
+                ]:
+                    with st.container():
+                        st.markdown(f"**{_step_title}**")
+                        st.write(_step_body)
+            with _jb_img:
+                st.image("design_images/User_Journey_before.png", use_container_width=True)
 
         with journey_after:
-            for _step_title, _step_body in [
-                ("Fire starts", "Same spark at the property edge."),
-                ("Detected", "YOLO11s detects smoke in the camera frame within seconds."),
-                ("Confirmed", "Detection confirmed across N consecutive frames — single-frame noise filtered out."),
-                ("Alert sent", "Dani receives an alert: camera ID, timestamp, approximate location, direction."),
-                ("Fast response", "Dani contacts emergency services within minutes. Fire is contained early."),
-            ]:
-                with st.container():
-                    st.markdown(f"**{_step_title}**")
-                    st.write(_step_body)
+            _ja_text, _ja_img = st.columns([1, 1], gap="small")
+            with _ja_text:
+                for _step_title, _step_body in [
+                    ("Fire starts", "Same spark at the property edge."),
+                    ("Detected", "NN object detection model detects smoke in the camera frame within seconds."),
+                    ("Confirmed", "Detection confirmed across N consecutive frames — single-frame noise filtered out."),
+                    ("Alert sent", "Dani receives an alert: camera ID, timestamp, approximate location, direction."),
+                    ("Fast response", "Dani contacts emergency services within minutes. Fire is contained early."),
+                ]:
+                    with st.container():
+                        st.markdown(f"**{_step_title}**")
+                        st.write(_step_body)
+            with _ja_img:
+                st.image("design_images/User_Journey_after.png", use_container_width=True)
 
         st.divider()
 
@@ -916,9 +952,9 @@ flowchart LR
 </style>
 </head><body>
 <div class="mermaid">
-%%{init:{"theme":"base","themeVariables":{"primaryColor":"#E4573D","primaryTextColor":"#F3F4F8","primaryBorderColor":"#F3F4F8","lineColor":"#D6D7E6","secondaryColor":"#3E445E","tertiaryColor":"#264036","edgeLabelBackground":"#2B3248","fontFamily":"sans-serif","fontSize":"13px"}}}%%
+%%{init:{"theme":"base","themeVariables":{"primaryColor":"#E4573D","primaryTextColor":"#F3F4F8","primaryBorderColor":"#F3F4F8","lineColor":"#D6D7E6","secondaryColor":"#3E445E","tertiaryColor":"#264036","edgeLabelBackground":"#2B3248","fontFamily":"Inter, Source Sans Pro, sans-serif","fontSize":"26px"}}}%%
 flowchart LR
-    Camera["📷 Camera Feed"] -->|"sampled frame"| Detect["YOLO11s<br/>Detection"]
+    Camera["📷 Camera Feed"] -->|"sampled frame"| Detect["NN Detection<br/>Model"]
     Detect -->|"fire or smoke"| Confirm["Multi-frame<br/>Confirmation (N)"]
     Detect -->|"nothing / single frame"| Noise["🔕 Ignored<br/>(< N frames)"]
     Confirm -->|"N frames met"| Alert["🔔 Alert<br/>(owner)"]
@@ -936,8 +972,7 @@ flowchart LR
 </div>
 <script>mermaid.initialize({startOnLoad:true,securityLevel:"loose"});</script>
 </body></html>
-""", height=200)
-
+""", height=400)
 
     # ── Tab 2: Literature Review ──────────────────────────────────────────────
     with tab_lit:
@@ -956,7 +991,7 @@ video and images?"</em></div>""",
             unsafe_allow_html=True,
         )
         st.markdown(
-            "PyroFinder addresses this question directly by applying YOLO11s fire/smoke object "
+            "PyroFinder addresses this question directly by applying NN object detection model fire/smoke object "
             "detection to cameras already installed at the customer site, combining real-time "
             "inference with multi-frame confirmation and approximate map-based alerting — the "
             "product approach that the literature identifies as most suitable for ordinary RGB "
@@ -1038,7 +1073,7 @@ video and images?"</em></div>""",
                     "deployability part of model selection, not only detection accuracy."
                 ),
                 "Lesson for PyroFinder": (
-                    "Benchmark YOLO11s against YOLO11n and document whether the main model is "
+                    "Benchmark NN object detection model against YOLO11n and document whether the main model is "
                     "fast enough for near-real-time sampled-frame monitoring."
                 ),
             },
@@ -1169,7 +1204,7 @@ video and images?"</em></div>""",
                 "for civilian surveillance systems."
             )
             st.markdown(
-                "**Lesson for PyroFinder:** Benchmark YOLO11s against YOLO11n and document "
+                "**Lesson for PyroFinder:** Benchmark NN object detection model against YOLO11n and document "
                 "whether the main model is fast enough for near-real-time sampled-frame monitoring."
             )
 
@@ -1177,31 +1212,15 @@ video and images?"</em></div>""",
 
         # ── Section 4: Research Gap ───────────────────────────────────────────
         st.subheader("Research Gap")
-        st.info(
-            "**Research Gap**\n\n"
-            "Across these five papers, the key unresolved issue is transfer from benchmark "
-            "datasets to real civilian or security-camera environments. Although deep learning "
-            "and YOLO-based object detection have significantly improved fire and wildfire "
-            "detection, the literature still shows limited real-world testing, dataset bias, "
-            "weak generalization across scenes, and insufficient evaluation of false alarms in "
-            "ordinary camera settings.\n\n"
-            "This leaves room for PyroFinder: a surveillance-focused system trained and "
-            "evaluated for ordinary RGB camera feeds, with explicit model metrics, multi-frame "
-            "confirmation, false-alarm review, and approximate location output."
+        st.markdown(
+            f"""<div style="border-left: 4px solid {PYRO_COLORS['primary']}; \
+padding: 12px 20px; background-color: {PYRO_COLORS['card_bg']}; \
+border-radius: 4px; margin-bottom: 12px;">
+<strong>Existing models are benchmark-trained, not camera-ready.</strong><br/>
+The literature shows strong detection on curated datasets but limited real-world testing. PyroFinder turns fire/smoke detection from a lab model into a practical alerting system using ordinary surveillance camera feeds.</div>""",
+            unsafe_allow_html=True,
         )
 
-        st.divider()
-
-        # ── Section 5: Practical Implications ────────────────────────────────
-        st.subheader("Practical Implications for PyroFinder")
-        st.markdown("""
-1. **Use object detection, not classification only.** PyroFinder needs bounding boxes because alerts require both detection and approximate location context.
-2. **Keep the class schema simple.** The project should detect only `fire` and `smoke`; other objects can be used as background negatives but not as detection targets in the MVP.
-3. **Measure both accuracy and operational performance.** The dashboard should report mAP@0.5, precision, recall, F1-score, false alarm rate, and inference speed.
-4. **Handle false alarms explicitly.** Multi-frame confirmation, threshold tuning, and false-positive review are required because clouds, haze, glare, fog, dust, and lighting changes can resemble smoke or fire.
-5. **Validate domain transfer.** D-Fire and supplementary datasets may not fully represent private-property cameras; PyroFinder should validate on additional images/videos and document known gaps.
-6. **Compare YOLO11s and YOLO11n.** YOLO11s is the main model, but YOLO11n should be used as a speed baseline/fallback to understand the accuracy/speed tradeoff.
-        """)
 
     # ── Tab 3: Market Review ──────────────────────────────────────────────────
     with tab_market:
@@ -1394,8 +1413,8 @@ video and images?"</em></div>""",
                        range=[0, 1], showgrid=False, zeroline=False, showticklabels=False),
             yaxis=dict(title="Detection / monitoring  ↕  Response / suppression",
                        range=[0, 1], showgrid=False, zeroline=False, showticklabels=False),
-            plot_bgcolor="rgba(14, 18, 34, 0.15)",
-            paper_bgcolor="rgba(14, 18, 34, 0.15)",
+            plot_bgcolor="rgba(14, 18, 34, 0.50)",
+            paper_bgcolor="rgba(14, 18, 34, 0.50)",
             font=dict(color="#cccccc"),
             height=420,
             margin=dict(l=60, r=20, t=20, b=60),
@@ -1427,14 +1446,12 @@ video and images?"</em></div>""",
             "Common competitor pattern": [
                 "Buy and install new detection towers",
                 "Deploy a new acoustic sensor network",
-                "Operate drones for routine detection",
                 "Depend only on satellite refresh cycles",
                 "Offer detection without customer workflow",
             ],
             "PyroFinder approach": [
                 "Connect existing security cameras",
                 "Use already available visual streams first",
-                "Use drones only as optional verification after an alert",
                 "Use continuous local camera streams",
                 "Provide alert review, escalation, history, and exportable incident reports",
             ],
@@ -1477,7 +1494,7 @@ video and images?"</em></div>""",
 
         st.caption(
             "Key EDA charts from the processed D-Fire metadata, "
-            "with findings and implications for YOLO11s training and evaluation."
+            "with findings and implications for NN object detection model training and evaluation."
         )
 
         try:
@@ -1545,11 +1562,7 @@ video and images?"</em></div>""",
                     )
                     apply_chart_theme(_m2_fig_bbox_cat)
                     st.plotly_chart(_m2_fig_bbox_cat, use_container_width=True)
-                    st.info(
-                        "Background images (46% of dataset) fill the 0-box bin by definition. "
-                        "Fire-and-smoke images drive the right tail — complex multi-object scenes "
-                        "that are most valuable for training YOLO11s."
-                    )
+                    st.markdown("<div style='background:rgba(15,25,50,0.7);border-left:4px solid rgba(28,131,164,0.9);border-radius:4px;padding:10px 16px;margin:6px 0;'>Nearly half the dataset is background — fire+smoke scenes are rare but the most training-valuable.</div>", unsafe_allow_html=True)
                 else:
                     st.warning("Required columns for stacked histogram not found in metadata.")
 
@@ -1571,12 +1584,7 @@ video and images?"</em></div>""",
                     _m2_fig_dk.update_layout(showlegend=False, height=420)
                     apply_chart_theme(_m2_fig_dk)
                     st.plotly_chart(_m2_fig_dk, use_container_width=True)
-                    st.info(
-                        "Fire-only images average ~64% dark pixels (predominantly night scenes) "
-                        "while smoke-only images average only ~9% (bright daytime). "
-                        "Augmentation across both lighting extremes is required for M3 "
-                        "to avoid a model that misses fire in daylight or smoke at night."
-                    )
+                    st.markdown("<div style='background:rgba(15,25,50,0.7);border-left:4px solid rgba(28,131,164,0.9);border-radius:4px;padding:10px 16px;margin:6px 0;'>Lighting differs sharply by class — fire is mainly night, smoke is mainly daytime. The model must handle both to avoid missing one class under the wrong lighting.</div>", unsafe_allow_html=True)
                 else:
                     st.info("Pixel stat columns not found. Re-run scripts/build_dfire_metadata.py.")
 
@@ -1603,12 +1611,7 @@ video and images?"</em></div>""",
                     _m2_fig_area.update_layout(height=420)
                     apply_chart_theme(_m2_fig_area)
                     st.plotly_chart(_m2_fig_area, use_container_width=True)
-                    st.info(
-                        "Smoke bounding boxes are ~7× larger than fire boxes in normalised "
-                        "area — plumes cover far more of the frame than visible flame. "
-                        "YOLO11s must handle both large smoke blobs and small fire targets; "
-                        "small-object recall for fire should be verified in M3 evaluation."
-                    )
+                    st.markdown("<div style='background:rgba(15,25,50,0.7);border-left:4px solid rgba(28,131,164,0.9);border-radius:4px;padding:10px 16px;margin:6px 0;'>Smoke boxes are ~7× larger than fire boxes — the model must handle both large plumes and small flames in the same scene.</div>", unsafe_allow_html=True)
                 else:
                     st.info("Per-class bbox area columns not found. Re-run scripts/build_dfire_metadata.py.")
 
@@ -1702,12 +1705,7 @@ video and images?"</em></div>""",
                     _m2_fig_spatial.update_layout(height=420)
                     apply_chart_theme(_m2_fig_spatial)
                     st.plotly_chart(_m2_fig_spatial, use_container_width=True)
-                    st.info(
-                        "Fire concentrates in the **middle-centre** (75% of fire boxes in "
-                        "the middle row, 70% in the centre column). Smoke sits higher — "
-                        "mean y=0.36 vs fire y=0.51 — as smoke plumes rise above the fire "
-                        "source and bias toward the upper half of the frame."
-                    )
+                    st.markdown("<div style='background:rgba(15,25,50,0.7);border-left:4px solid rgba(28,131,164,0.9);border-radius:4px;padding:10px 16px;margin:6px 0;'>Fire centres mid-frame; smoke appears higher — plumes rise above the source and dominate the upper half of the image.</div>", unsafe_allow_html=True)
 
             st.divider()
 
@@ -1749,13 +1747,7 @@ video and images?"</em></div>""",
                     _m2_fig_corr.update_layout(height=420)
                     apply_chart_theme(_m2_fig_corr)
                     st.plotly_chart(_m2_fig_corr, use_container_width=True)
-                    st.info(
-                        "Pixel features are strongly intercorrelated (dark_pixel_ratio ↔ "
-                        "mean_brightness, r=0.90) — they capture the same scene lighting "
-                        "and can be treated as one feature group. Fire and smoke spatial "
-                        "positions correlate moderately (r≈0.55): both classes tend to "
-                        "appear on the same horizontal side of the frame."
-                    )
+                    st.markdown("<div style='background:rgba(15,25,50,0.7);border-left:4px solid rgba(28,131,164,0.9);border-radius:4px;padding:10px 16px;margin:6px 0;'>Brightness features are redundant (r=0.90) — treat as one group. Fire and smoke share similar horizontal position (r≈0.55).</div>", unsafe_allow_html=True)
 
             with _eda_r3c2:
                 st.subheader("Category balance per split")
@@ -1781,11 +1773,7 @@ video and images?"</em></div>""",
                     _m2_fig_ct.update_layout(bargap=0.25, bargroupgap=0.1, height=420)
                     apply_chart_theme(_m2_fig_ct)
                     st.plotly_chart(_m2_fig_ct, use_container_width=True)
-                    st.info(
-                        "The 80/20 train/test split (17,221 vs 4,306 images) maintains "
-                        "proportional category representation across both partitions — "
-                        "evaluation results on the held-out test set should be representative."
-                    )
+                    st.markdown("<div style='background:rgba(15,25,50,0.7);border-left:4px solid rgba(28,131,164,0.9);border-radius:4px;padding:10px 16px;margin:6px 0;'>The 80/20 split keeps category proportions consistent — test results should be representative of real distribution.</div>", unsafe_allow_html=True)
                 else:
                     st.warning("Split/category balance data is not available.")
 
@@ -1854,19 +1842,12 @@ video and images?"</em></div>""",
             # ── EDA Summary ───────────────────────────────────────────────────
             st.divider()
             st.subheader("EDA Summary")
-            st.info(
-                "**D-Fire in brief:** 21,527 images across four categories — background (46%), "
-                "smoke-only (27%), fire+smoke (22%), fire-only (5%). The large background class "
-                "means a naive model can score high accuracy by predicting 'no fire' for every "
-                "frame; recall must be the primary training objective.\n\n"
-                "**Key challenges for YOLO11s training:**\n"
-                "- Fire-only scenes are predominantly dark/night (~64% dark pixels); smoke-only "
-                "scenes are bright daytime (~9%). Augmentation across both lighting conditions is "
-                "essential.\n"
-                "- Smoke bboxes are ~7× larger than fire bboxes — the model must handle two very "
-                "different object scales. Small-object recall for fire should be verified in M3.\n"
-                "- Fire concentrates in the middle-centre of the frame; smoke biases toward the "
-                "upper portion. Anchor tuning for YOLO11s should reflect this asymmetry.\n"
-                "- The 80/20 train/test split maintains proportional category representation, so "
-                "held-out test results should be representative."
+            st.markdown(
+                "<div style='background:rgba(28,131,164,0.1);border-left:4px solid rgba(28,131,164,0.7);"
+                "border-radius:4px;padding:10px 16px;opacity:0.7;margin:6px 0;'>"
+                "<strong>D-Fire is class-imbalanced</strong> (46% background) — recall must be the primary metric, not accuracy.<br/>"
+                "Key training challenges: extreme lighting difference between fire and smoke scenes, "
+                "7× bbox scale gap between classes, and fire concentrating mid-frame while smoke rises higher."
+                "</div>",
+                unsafe_allow_html=True,
             )

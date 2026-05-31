@@ -94,6 +94,8 @@ Candidate libraries (no paid provider required): Folium, pydeck, GeoPandas, Shap
 
 **Metrics:** mAP@0.5 (primary), mAP@0.5:0.95, Precision, Recall, F1-score, False Alarm Rate (FP per hour or per 1,000 sampled frames), Inference speed (FPS or ms/frame).
 
+**KPI:** The model is object detection, the metric is recall, because missing a real fire is far more costly than a false alarm.
+
 **Split:** D-Fire's provided split where available; otherwise reproducible 70/15/15 stratified by image category.
 
 ---

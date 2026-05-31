@@ -295,8 +295,8 @@ def apply_chart_theme(fig, title_font_size: int = 14) -> object:
     fig.update_layout(
         paper_bgcolor="rgba(30, 35, 54, 0.50)",   # twilight_sky @ 50%
         plot_bgcolor="rgba(43, 50, 72, 0.50)",    # deep_fjord @ 50%
-        font=dict(color=PYRO_UI_COLORS["frost_white"], size=12, family="sans-serif"),
-        title_font=dict(size=title_font_size, color=PYRO_UI_COLORS["frost_white"]),
+        font=dict(color=PYRO_UI_COLORS["frost_white"], size=12, family="Inter, Source Sans Pro, sans-serif"),
+        title_font=dict(size=title_font_size, color=PYRO_UI_COLORS["frost_white"], family="Inter, Source Sans Pro, sans-serif"),
         xaxis=dict(
             gridcolor=PYRO_COLORS["grid"],
             linecolor=PYRO_COLORS["grid"],
