@@ -942,37 +942,256 @@ quadrantChart
 
         # Detection flow
         st.subheader("Detection Flow")
+        st.caption(
+            "Signal-to-alert pipeline — from existing RGB camera feed to reviewable alert record."
+        )
         st.components.v1.html("""
-<!DOCTYPE html><html><head>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<!DOCTYPE html>
+<html>
+<head>
 <style>
-  body { margin:0; background:transparent; }
-  .mermaid { background:transparent; }
-  .mermaid svg { width:100% !important; max-width:100%; height:auto; }
+  :root {
+    --pf-card: rgba(18, 28, 31, 0.88);
+    --pf-card-soft: rgba(23, 33, 37, 0.74);
+    --pf-border: rgba(116, 151, 158, 0.55);
+    --pf-border-soft: rgba(116, 151, 158, 0.28);
+    --pf-text: #E8E3D8;
+    --pf-muted: #9AA3A0;
+    --pf-ember: #C8643F;
+    --pf-cyan: #83C5BE;
+    --pf-line: rgba(157, 177, 179, 0.70);
+  }
+
+  body {
+    margin: 0;
+    background: transparent;
+    font-family: Inter, "Source Sans Pro", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--pf-text);
+  }
+
+  .pf-flow {
+    padding: 16px 18px 18px;
+    border: 1px solid var(--pf-border-soft);
+    border-radius: 18px;
+    background:
+      radial-gradient(circle at 12% 0%, rgba(200, 100, 63, 0.16), transparent 28%),
+      linear-gradient(180deg, rgba(12, 18, 22, 0.70), rgba(8, 12, 15, 0.44));
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
+  }
+
+  .pf-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+    align-items: baseline;
+    margin-bottom: 12px;
+  }
+
+  .pf-kicker {
+    color: var(--pf-cyan);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+  }
+
+  .pf-note {
+    color: var(--pf-muted);
+    font-size: 13px;
+  }
+
+  .pf-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .pf-row + .pf-row {
+    margin-top: 10px;
+  }
+
+  .pf-step,
+  .pf-reject {
+    min-width: 0;
+    flex: 1 1 0;
+    padding: 12px 12px 11px;
+    border-radius: 14px;
+  }
+
+  .pf-step {
+    border: 1px solid var(--pf-border);
+    background: linear-gradient(180deg, var(--pf-card), var(--pf-card-soft));
+    position: relative;
+  }
+
+  .pf-step.core {
+    border-color: rgba(200, 100, 63, 0.74);
+    box-shadow: inset 0 0 0 1px rgba(200, 100, 63, 0.22);
+  }
+
+  .pf-step.output {
+    border-color: rgba(131, 197, 190, 0.82);
+    box-shadow: inset 0 0 0 1px rgba(131, 197, 190, 0.18);
+  }
+
+  .pf-num {
+    display: inline-block;
+    color: var(--pf-ember);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    margin-bottom: 7px;
+  }
+
+  .pf-step h4 {
+    margin: 0 0 5px;
+    font-size: 14px;
+    line-height: 1.12;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .pf-step p {
+    margin: 0;
+    color: var(--pf-muted);
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .pf-arrow {
+    width: 22px;
+    min-width: 22px;
+    position: relative;
+    align-self: center;
+    height: 2px;
+    background: var(--pf-line);
+  }
+
+  .pf-arrow::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    top: -4px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid var(--pf-line);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+  }
+
+  .pf-turn {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin: 5px 0 4px;
+    padding-right: calc(12.5% + 11px);
+    color: var(--pf-muted);
+    font-size: 12px;
+  }
+
+  .pf-turn span {
+    border-left: 1px solid var(--pf-line);
+    border-bottom: 1px solid var(--pf-line);
+    border-radius: 0 0 0 10px;
+    padding: 7px 0 5px 12px;
+  }
+
+  .pf-reject {
+    border: 1px dashed rgba(154, 163, 160, 0.48);
+    background: rgba(10, 15, 18, 0.42);
+    color: var(--pf-muted);
+    font-size: 12px;
+    line-height: 1.32;
+  }
+
+  .pf-reject strong {
+    color: var(--pf-text);
+    font-weight: 700;
+  }
+
+  @media (max-width: 900px) {
+    .pf-step h4 { white-space: normal; }
+    .pf-step p, .pf-reject { font-size: 11.5px; }
+    .pf-arrow { width: 16px; min-width: 16px; }
+  }
 </style>
-</head><body>
-<div class="mermaid">
-%%{init:{"theme":"base","themeVariables":{"primaryColor":"#E4573D","primaryTextColor":"#F3F4F8","primaryBorderColor":"#F3F4F8","lineColor":"#D6D7E6","secondaryColor":"#3E445E","tertiaryColor":"#264036","edgeLabelBackground":"#2B3248","fontFamily":"Inter, Source Sans Pro, sans-serif","fontSize":"26px"}}}%%
-flowchart LR
-    Camera["📷 Camera Feed"] -->|"sampled frame"| Detect["NN Detection<br/>Model"]
-    Detect -->|"fire or smoke"| Confirm["Multi-frame<br/>Confirmation (N)"]
-    Detect -->|"nothing / single frame"| Noise["🔕 Ignored<br/>(< N frames)"]
-    Confirm -->|"N frames met"| Alert["🔔 Alert<br/>(owner)"]
-    Alert --> Log["📋 Alert Log<br/>(dashboard)"]
+</head>
+<body>
+  <section class="pf-flow">
+    <div class="pf-header">
+      <div class="pf-kicker">Signal-to-alert pipeline</div>
+      <div class="pf-note">No owner alert is sent before temporal confirmation.</div>
+    </div>
 
-    classDef system fill:#E4573D,stroke:#F3F4F8,color:#F3F4F8,stroke-width:2px;
-    classDef step fill:#3E445E,stroke:#D6D7E6,color:#F3F4F8,stroke-width:1.5px;
-    classDef muted fill:#2B3248,stroke:#8F8CC7,color:#A5A8B8,stroke-width:1px,stroke-dasharray:4 3;
-    classDef output fill:#264036,stroke:#8CE9FF,color:#F3F4F8,stroke-width:1.5px;
+    <div class="pf-row">
+      <div class="pf-step">
+        <span class="pf-num">01</span>
+        <h4>Camera Input</h4>
+        <p>Existing RGB security feed</p>
+      </div>
 
-    class Detect,Confirm system;
-    class Camera step;
-    class Noise muted;
-    class Alert,Log output;
-</div>
-<script>mermaid.initialize({startOnLoad:true,securityLevel:"loose"});</script>
-</body></html>
-""", height=400)
+      <div class="pf-arrow"></div>
+
+      <div class="pf-step">
+        <span class="pf-num">02</span>
+        <h4>Frame Sampling</h4>
+        <p>Periodic frame extraction</p>
+      </div>
+
+      <div class="pf-arrow"></div>
+
+      <div class="pf-step core">
+        <span class="pf-num">03</span>
+        <h4>NN Detection Model</h4>
+        <p>Fire / smoke + confidence</p>
+      </div>
+
+      <div class="pf-arrow"></div>
+
+      <div class="pf-step core">
+        <span class="pf-num">04</span>
+        <h4>N-frame Confirmation</h4>
+        <p>Filters single-frame noise</p>
+      </div>
+    </div>
+
+    <div class="pf-turn">
+      <span>confirmed signal continues to mapping and alerting</span>
+    </div>
+
+    <div class="pf-row">
+      <div class="pf-reject">
+        <strong>Not confirmed:</strong><br/>
+        single-frame or non-persistent detections are ignored as operational alerts.
+      </div>
+
+      <div class="pf-step">
+        <span class="pf-num">05</span>
+        <h4>Mapping Layer</h4>
+        <p>Approx. zone + direction</p>
+      </div>
+
+      <div class="pf-arrow"></div>
+
+      <div class="pf-step output">
+        <span class="pf-num">06</span>
+        <h4>Alert Record</h4>
+        <p>Camera · time · class · location</p>
+      </div>
+
+      <div class="pf-arrow"></div>
+
+      <div class="pf-step output">
+        <span class="pf-num">07</span>
+        <h4>Dashboard Log</h4>
+        <p>Review · confirm · reject</p>
+      </div>
+    </div>
+  </section>
+</body>
+</html>
+""", height=360)
+
 
     # ── Tab 2: Literature Review ──────────────────────────────────────────────
     with tab_lit:
