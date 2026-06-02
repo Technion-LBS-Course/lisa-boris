@@ -1,3 +1,9 @@
+**Live app:** https://pyrofinder.streamlit.app/
+
+If the link doesn't work, run locally: `streamlit run app.py`
+
+---
+
 # lisa-boris
 ליסה + בוריס — פרויקט קורס LBS (016833)
 
