@@ -244,6 +244,8 @@ PyroFinder uses cameras the customer already owns — no new towers, sensors, dr
 
 ## Repository Structure
 
+<!-- Updated 2026-06-05: added src/eda.py, src/ui.py, src/viz.py, docs/, scripts/, data/dfire_metadata.csv, data/samples/, design_images/ -->
+
 ```text
 project-root/
 ├── README.md
@@ -254,17 +256,35 @@ project-root/
 ├── app.py
 ├── src/
 │   ├── __init__.py
-│   ├── data.py
-│   ├── model.py
-│   ├── detection.py
-│   ├── tracking.py
-│   ├── mapping.py
-│   └── alerts.py
+│   ├── data.py          ← dataset loading, inspection, Data Card utilities
+│   ├── eda.py           ← EDA helpers: summary metrics, bbox stats, spatial analysis
+│   ├── viz.py           ← on-the-fly YOLO box annotation (class map: 0=smoke, 1=fire)
+│   ├── ui.py            ← shared UI palette, CAT_COLORS, CLASS_COLORS, chart theme
+│   ├── model.py         ← model metadata, metrics plan, evaluation helpers
+│   ├── detection.py     ← DetectionResult dataclass, class validation
+│   ├── tracking.py      ← multi-frame confirmation, apparent direction estimation
+│   ├── mapping.py       ← mapping modes, polygon helpers, location formatting
+│   └── alerts.py        ← alert record creation, status validation
+├── scripts/
+│   └── build_dfire_metadata.py  ← generates data/dfire_metadata.csv from raw D-Fire
+├── data/
+│   ├── dfire_metadata.csv        ← committed; app runs on a fresh clone using only this
+│   ├── samples/
+│   │   └── dfire/
+│   │       ├── images/   ← 21 committed sample images
+│   │       └── labels/   ← matching YOLO label files
+│   └── market-survey/    ← competitor screenshots (not in Git LFS)
+├── docs/
+│   ├── M2_DATA_EDA.md
+│   ├── M2_dashboard.md
+│   ├── M2_GAP_LIST.md
+│   ├── AI_AGENT_SYSTEM.md
+│   ├── Literature_review.md
+│   └── market_survey_wildfire_existing_sensors.md
+├── design_images/        ← persona, user-journey, and UI mockup assets
 ├── SprintPlan/
 │   ├── SPRINT_PLAN.md
 │   └── Sprint_Plan_PyroFinder_final_14Jul.xlsx
-├── data/
-│   └── .gitkeep
 ├── notebooks/
 │   └── 01_eda.ipynb
 └── tests/

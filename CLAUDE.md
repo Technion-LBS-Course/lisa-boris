@@ -40,18 +40,27 @@ PyroFinder is a real-time fire outbreak detection and monitoring system using ca
 
 ## Repository Structure
 
+<!-- Updated 2026-06-05: added scripts/, docs/ listing -->
+
 ```
-app.py              — Streamlit entry point (multi-tab shell)
-src/data.py         — dataset loading, inspection, Data Card utilities
-src/eda.py          — EDA helpers: summary metrics, category/split counts, bbox stats, pixel stats, spatial analysis
-src/viz.py          — on-the-fly YOLO box annotation (D-Fire class map: 0=smoke, 1=fire)
-src/ui.py           — shared UI palette, CAT_COLORS, CLASS_COLORS, apply_chart_theme()
-src/model.py        — model metadata, metrics plan, evaluation helpers
-src/detection.py    — DetectionResult dataclass, class validation
-src/tracking.py     — multi-frame confirmation, apparent direction estimation
-src/mapping.py      — mapping modes, polygon helpers, approximate location formatting
-src/alerts.py       — alert record creation, status validation
-tests/test_smoke.py — import smoke tests, unit tests for core helpers
+app.py                              — Streamlit entry point (multi-tab shell)
+src/data.py                         — dataset loading, inspection, Data Card utilities
+src/eda.py                          — EDA helpers: summary metrics, category/split counts, bbox stats, pixel stats, spatial analysis
+src/viz.py                          — on-the-fly YOLO box annotation (D-Fire class map: 0=smoke, 1=fire)
+src/ui.py                           — shared UI palette, CAT_COLORS, CLASS_COLORS, apply_chart_theme()
+src/model.py                        — model metadata, metrics plan, evaluation helpers
+src/detection.py                    — DetectionResult dataclass, class validation
+src/tracking.py                     — multi-frame confirmation, apparent direction estimation
+src/mapping.py                      — mapping modes, polygon helpers, approximate location formatting
+src/alerts.py                       — alert record creation, status validation
+scripts/build_dfire_metadata.py     — generates data/dfire_metadata.csv from raw D-Fire root
+tests/test_smoke.py                 — import smoke tests, unit tests for core helpers
+docs/M2_DATA_EDA.md                 — data workflow, class mapping, cleaning decisions, actual counts
+docs/M2_dashboard.md                — dashboard design notes
+docs/M2_GAP_LIST.md                 — known gaps and open items as of M2
+docs/AI_AGENT_SYSTEM.md             — AI agent architecture notes
+docs/Literature_review.md           — literature and related work
+docs/market_survey_wildfire_existing_sensors.md — competitor / market landscape
 ```
 
 ## Coding Conventions
@@ -65,12 +74,14 @@ tests/test_smoke.py — import smoke tests, unit tests for core helpers
 
 ## Current MVP Priority
 
-1. Streamlit shell running without errors
-2. Dataset inspection and metadata display
-3. Basic EDA — class distribution, bounding box statistics, image samples
-4. Uploaded image/video inference placeholder
-5. YOLO11s model loading (later, requires dataset)
-6. YOLO11n baseline benchmark (later)
+<!-- Updated 2026-06-05: items 1–4 completed at M2 -->
+
+1. ~~Streamlit shell running without errors~~ ✓ Done (M2)
+2. ~~Dataset inspection and metadata display~~ ✓ Done (M2)
+3. ~~Basic EDA — class distribution, bounding box statistics, image samples~~ ✓ Done (M2)
+4. ~~Uploaded image/video inference placeholder~~ ✓ Done (M2)
+5. YOLO11s model loading (M3 — requires fine-tuned checkpoint)
+6. YOLO11n baseline benchmark (M3)
 7. Alert log from test runs
 8. Camera metadata table
 9. Manual image polygon and map linking placeholders
