@@ -1,0 +1,44 @@
+{
+  "model_name": "DummyClassifier (most_frequent)",
+  "run_date": "2026-06-05",
+  "task": "image-level classification: fire / smoke / background",
+  "dataset": {
+    "name": "D-Fire",
+    "source": "RAW_DATA/D-Fire (train/ + test/ pre-split)",
+    "train_size": 17221,
+    "test_size": 4306,
+    "class_distribution": {
+      "train": { "background": 7833, "fire": 4707, "smoke": 4681 },
+      "test":  { "background": 2005, "fire": 1115, "smoke": 1186 }
+    },
+    "label_derivation": "class 1 present → fire; class 0 only → smoke; empty file → background"
+  },
+  "features": {
+    "description": "Color statistics + normalized color histogram",
+    "vector_length": 60,
+    "components": [
+      { "name": "RGB mean per channel",        "size": 3 },
+      { "name": "RGB std per channel",         "size": 3 },
+      { "name": "HSV mean per channel",        "size": 3 },
+      { "name": "HSV std per channel",         "size": 3 },
+      { "name": "Color histogram 16-bin × 3",  "size": 48 }
+    ],
+    "image_resize": "64x64",
+    "normalization": "pixel values / 255; histogram normalized to sum=1"
+  },
+  "model_params": {
+    "strategy": "most_frequent",
+    "random_state": 42
+  },
+  "metrics": {
+    "accuracy": 0.47,
+    "classification_report": {
+      "background": { "precision": 0.47, "recall": 1.00, "f1": 0.64, "support": 2005 },
+      "fire":       { "precision": 0.00, "recall": 0.00, "f1": 0.00, "support": 1115 },
+      "smoke":      { "precision": 0.00, "recall": 0.00, "f1": 0.00, "support": 1186 }
+    },
+    "macro_avg":    { "precision": 0.16, "recall": 0.33, "f1": 0.21 },
+    "weighted_avg": { "precision": 0.22, "recall": 0.47, "f1": 0.30 }
+  },
+  "notes": "This is the minimum bar — any real model must exceed F1 macro=0.21 and recall>0 on fire and smoke."
+}

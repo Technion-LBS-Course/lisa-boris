@@ -266,7 +266,10 @@ project-root/
 │   ├── mapping.py       ← mapping modes, polygon helpers, location formatting
 │   └── alerts.py        ← alert record creation, status validation
 ├── scripts/
-│   └── build_dfire_metadata.py  ← generates data/dfire_metadata.csv from raw D-Fire
+│   ├── build_dfire_metadata.py  ← generates data/dfire_metadata.csv from raw D-Fire
+│   └── dummy_try.py             ← M3 sklearn baseline: D-Fire loading, feature extraction, DummyClassifier
+├── results/
+│   └── baseline_dummy_classifier.json  ← saved baseline metrics for model comparison
 ├── data/
 │   ├── dfire_metadata.csv        ← committed; app runs on a fresh clone using only this
 │   ├── samples/
@@ -392,6 +395,48 @@ python -m pytest
 - YOLO11n baseline run is planned for M3.
 - The complete D-Fire dataset documentation is in `docs/M2_DATA_EDA.md`.
 - Class mapping verified: D-Fire class 0 = smoke, class 1 = fire (confirmed against official category counts).
+
+---
+
+## M3 Sklearn Baseline Progress (2026-06-05)
+
+**The model is an image-level classifier (fire / smoke / background). The primary metric is F1 macro, because the classes are imbalanced and both fire and smoke recall matter equally. Recall on fire is the minimum acceptable threshold — a model that never detects fire is useless.**
+
+### Sklearn classifier pipeline
+
+`scripts/dummy_try.py` implements the full sklearn baseline pipeline on the real D-Fire dataset:
+
+- Loads D-Fire using the dataset's pre-existing train/test split (`train/` → training, `test/` → evaluation).
+- Falls back to `data/samples/dfire/` on machines without raw data.
+- Extracts a 60-value feature vector per image: RGB mean+std, HSV mean+std, 16-bin color histogram × 3 channels.
+- Image-level label from YOLO boxes: fire if class 1 present, smoke if class 0 only, background if empty label file.
+
+```bash
+python scripts/dummy_try.py
+```
+
+### Dataset split (full D-Fire)
+
+| Split | background | fire | smoke | total |
+|---|---|---|---|---|
+| train | 7,833 | 4,707 | 4,681 | 17,221 |
+| test | 2,005 | 1,115 | 1,186 | 4,306 |
+
+### Baseline results — DummyClassifier (most_frequent)
+
+| Model | Accuracy | F1 macro | Fire recall | Smoke recall |
+|---|---|---|---|---|
+| DummyClassifier | 0.47 | 0.21 | 0.00 | 0.00 |
+
+Baseline always predicts "background". Any real classifier must exceed F1 macro > 0.21 and achieve recall > 0 on both fire and smoke.
+
+Full baseline metrics saved to `results/baseline_dummy_classifier.json`.
+
+### Next steps (M3)
+
+- Add Logistic Regression and Random Forest classifiers
+- Compare F1 macro vs baseline on the same test split
+- Record results in `results/` for each model
 
 ---
 

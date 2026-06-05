@@ -40,7 +40,7 @@ PyroFinder is a real-time fire outbreak detection and monitoring system using ca
 
 ## Repository Structure
 
-<!-- Updated 2026-06-05: added scripts/, docs/ listing -->
+<!-- Updated 2026-06-05: added scripts/dummy_try.py, results/ -->
 
 ```
 app.py                              — Streamlit entry point (multi-tab shell)
@@ -54,6 +54,8 @@ src/tracking.py                     — multi-frame confirmation, apparent direc
 src/mapping.py                      — mapping modes, polygon helpers, approximate location formatting
 src/alerts.py                       — alert record creation, status validation
 scripts/build_dfire_metadata.py     — generates data/dfire_metadata.csv from raw D-Fire root
+scripts/dummy_try.py                — M3 sklearn baseline: full D-Fire loading, feature extraction, DummyClassifier
+results/baseline_dummy_classifier.json — saved baseline metrics (DummyClassifier, full D-Fire, 2026-06-05)
 tests/test_smoke.py                 — import smoke tests, unit tests for core helpers
 docs/M2_DATA_EDA.md                 — data workflow, class mapping, cleaning decisions, actual counts
 docs/M2_dashboard.md                — dashboard design notes
@@ -74,19 +76,21 @@ docs/market_survey_wildfire_existing_sensors.md — competitor / market landscap
 
 ## Current MVP Priority
 
-<!-- Updated 2026-06-05: items 1–4 completed at M2 -->
+<!-- Updated 2026-06-05: M3 sklearn baseline pipeline started -->
 
 1. ~~Streamlit shell running without errors~~ ✓ Done (M2)
 2. ~~Dataset inspection and metadata display~~ ✓ Done (M2)
 3. ~~Basic EDA — class distribution, bounding box statistics, image samples~~ ✓ Done (M2)
 4. ~~Uploaded image/video inference placeholder~~ ✓ Done (M2)
-5. YOLO11s model loading (M3 — requires fine-tuned checkpoint)
-6. YOLO11n baseline benchmark (M3)
-7. Alert log from test runs
-8. Camera metadata table
-9. Manual image polygon and map linking placeholders
+5. ~~sklearn baseline pipeline — full D-Fire loading, feature extraction (60-dim), DummyClassifier~~ ✓ Done (M3 start, 2026-06-05)
+6. Real sklearn classifiers vs baseline (M3 next — Logistic Regression, Random Forest)
+7. YOLO11s model loading (M3 — requires fine-tuned checkpoint)
+8. YOLO11n baseline benchmark (M3)
+9. Alert log from test runs
+10. Camera metadata table
+11. Manual image polygon and map linking placeholders
 
-## Data — M2 Status
+## Data — M3 Status
 
 - D-Fire raw data is local and outside Git (path varies per machine).
 - Full dataset: 21,527 images (train: 17,221 + test: 4,306), all with matching label files.
@@ -94,8 +98,19 @@ docs/market_survey_wildfire_existing_sensors.md — competitor / market landscap
 - `data/samples/dfire/images/` — 20 committed sample images (~1.1 MB); `data/samples/dfire/labels/` — matching YOLO label files. These are used as the fallback when local raw D-Fire paths are unavailable.
 - `docs/M2_DATA_EDA.md` documents the data workflow, class mapping, cleaning decisions, and actual counts.
 - **D-Fire class mapping (verified):** class 0 = smoke, class 1 = fire. Confirmed by comparing scan results against official category counts.
-- M2 focuses on descriptive EDA only — no YOLO11s training, no YOLO11n baseline run, no deployment.
 - To re-generate `data/dfire_metadata.csv` from raw D-Fire: `python scripts/build_dfire_metadata.py --raw-root "<path-to-D-Fire-root>" --output data/dfire_metadata.csv`
+
+### M3 Sklearn Baseline Pipeline
+
+- `scripts/dummy_try.py` — loads the full D-Fire dataset using its pre-existing train/test split. Falls back to `data/samples/dfire/` on machines without raw data.
+- Feature vector: 60 values per image — RGB mean+std (6), HSV mean+std (6), color histogram 16-bin×3 channels (48). Images resized to 64×64.
+- Image-level label derived from YOLO boxes: fire if class 1 present, smoke if class 0 only, background if empty label file.
+- **DummyClassifier baseline results (full D-Fire, 2026-06-05):**
+  - Train: 17,221 images — background 7,833 / fire 4,707 / smoke 4,681
+  - Test: 4,306 images — background 2,005 / fire 1,115 / smoke 1,186
+  - Accuracy: 0.47 · F1 macro: 0.21 · fire recall: 0.00 · smoke recall: 0.00
+- Saved to `results/baseline_dummy_classifier.json` for model comparison.
+- Next: add Logistic Regression and Random Forest classifiers; compare F1 macro vs baseline.
 
 ## Future Model Layer — SAM 3.1
 
