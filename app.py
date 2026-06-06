@@ -87,9 +87,10 @@ st.markdown("## 🔥 PyroFinder")
 st.caption("Real-time fire and smoke detection using existing cameras.")
 
 if mode == "Operations & Learning Dashboard":
-    tab_overview, tab_eda, tab_inference, tab_mapping, tab_alerts = st.tabs([
+    tab_overview, tab_eda, tab_baseline, tab_inference, tab_mapping, tab_alerts = st.tabs([
         "Overview",
         "Dataset & EDA",
+        "Baseline",
         "Inference Demo",
         "Mapping Setup",
         "Alert Log",
@@ -689,6 +690,237 @@ if mode == "Operations & Learning Dashboard":
                             pass
                 else:
                     st.info("Raw image paths from the CSV are not accessible on this machine.")
+
+    # ── Baseline ─────────────────────────────────────────────────────────────
+    with tab_baseline:
+        import json as _json
+
+        st.header("Sklearn Classifier Baseline")
+        st.caption(
+            "Image-level classification · fire / smoke / background · "
+            "Feature vector: 60 values per image (RGB stats, HSV stats, color histogram)"
+        )
+
+        _results_dir = Path("results")
+        _result_files = sorted(_results_dir.glob("*.json"))
+
+        if not _result_files:
+            st.warning(
+                "No model result files found in `results/`. "
+                "Run `python scripts/dummy_try.py` to generate baseline results."
+            )
+        else:
+            # ── Load all result files ────────────────────────────────────────
+            _results_data = {}
+            for _rf in _result_files:
+                try:
+                    _d = _json.loads(_rf.read_text(encoding="utf-8"))
+                    _results_data[_d.get("model_name", _rf.stem)] = _d
+                except Exception:
+                    pass
+
+            _all_names = list(_results_data.keys())
+
+            # ── Model selector ───────────────────────────────────────────────
+            if len(_all_names) > 1:
+                _selected = st.radio("Select model", _all_names, horizontal=True)
+            else:
+                _selected = _all_names[0]
+                st.markdown(f"**Model:** `{_selected}`")
+
+            _r = _results_data[_selected]
+            _metrics = _r.get("metrics", {})
+            _clf_report = _metrics.get("classification_report", {})
+            _dataset = _r.get("dataset", {})
+            _features = _r.get("features", {})
+            _classes_ordered = ["background", "fire", "smoke"]
+            _classes = [c for c in _classes_ordered if c in _clf_report]
+
+            # ── Key metric cards ─────────────────────────────────────────────
+            _km1, _km2, _km3, _km4, _km5 = st.columns(5)
+            _km1.metric("Accuracy",    f"{_metrics.get('accuracy', 0):.2f}")
+            _km2.metric("F1 macro",    f"{_metrics.get('macro_avg', {}).get('f1', 0):.2f}")
+            _km3.metric("F1 weighted", f"{_metrics.get('weighted_avg', {}).get('f1', 0):.2f}")
+            _km4.metric(
+                "Fire recall",
+                f"{_clf_report.get('fire', {}).get('recall', 0):.2f}",
+                delta=None,
+            )
+            _km5.metric(
+                "Smoke recall",
+                f"{_clf_report.get('smoke', {}).get('recall', 0):.2f}",
+            )
+
+            st.info(_r.get("notes", ""))
+            st.caption(
+                f"Run date: {_r.get('run_date', '—')}  ·  "
+                f"Dataset: {_dataset.get('name', '—')}  ·  "
+                f"Train: {_dataset.get('train_size', '—'):,}  ·  "
+                f"Test: {_dataset.get('test_size', '—'):,}"
+            )
+
+            st.divider()
+
+            # ── Row 1: Per-class bar chart | Dataset distribution ────────────
+            _row1_l, _row1_r = st.columns(2)
+
+            with _row1_l:
+                st.subheader("Precision / Recall / F1 per class")
+                _prf_rows = []
+                for _cls in _classes:
+                    for _mn, _ml in [("precision", "Precision"), ("recall", "Recall"), ("f1", "F1")]:
+                        _prf_rows.append({
+                            "class": _cls,
+                            "metric": _ml,
+                            "value": _clf_report[_cls].get(_mn, 0),
+                        })
+                if _prf_rows:
+                    _fig_prf = px.bar(
+                        pd.DataFrame(_prf_rows),
+                        x="class", y="value", color="metric",
+                        barmode="group",
+                        color_discrete_map={
+                            "Precision": "#4fc3f7",
+                            "Recall":    "#e07b39",
+                            "F1":        "#81c784",
+                        },
+                        labels={"value": "Score (0–1)", "class": "Class", "metric": ""},
+                        title=f"Per-class metrics — {_selected}",
+                    )
+                    _fig_prf.update_layout(yaxis_range=[0, 1], bargap=0.2, height=360)
+                    apply_chart_theme(_fig_prf)
+                    st.plotly_chart(_fig_prf, use_container_width=True)
+
+            with _row1_r:
+                st.subheader("Class distribution — train vs test")
+                _dist = _dataset.get("class_distribution", {})
+                _dist_rows = []
+                for _split_name, _counts in _dist.items():
+                    for _cls, _n in _counts.items():
+                        _dist_rows.append({"split": _split_name, "class": _cls, "count": _n})
+                if _dist_rows:
+                    _fig_dist = px.bar(
+                        pd.DataFrame(_dist_rows),
+                        x="class", y="count", color="split",
+                        barmode="group",
+                        color_discrete_map=SPLIT_COLORS,
+                        labels={"count": "Images", "class": "Class", "split": "Split"},
+                        title="Images per class — train vs test",
+                    )
+                    _fig_dist.update_layout(bargap=0.2, height=360)
+                    apply_chart_theme(_fig_dist)
+                    st.plotly_chart(_fig_dist, use_container_width=True)
+
+            st.divider()
+
+            # ── Row 2: Radar chart | Full metrics table ──────────────────────
+            _row2_l, _row2_r = st.columns(2)
+
+            with _row2_l:
+                st.subheader("Macro average radar")
+                _macro = _metrics.get("macro_avg", {})
+                _radar_cats  = ["Precision", "Recall", "F1", "Accuracy"]
+                _radar_vals  = [
+                    _macro.get("precision", 0),
+                    _macro.get("recall",    0),
+                    _macro.get("f1",        0),
+                    _metrics.get("accuracy", 0),
+                ]
+                _fig_radar = go.Figure(go.Scatterpolar(
+                    r=_radar_vals + [_radar_vals[0]],
+                    theta=_radar_cats + [_radar_cats[0]],
+                    fill="toself",
+                    fillcolor="rgba(224,123,57,0.18)",
+                    line=dict(color=PYRO_COLORS["primary"], width=2),
+                    name=_selected,
+                ))
+                _fig_radar.update_layout(
+                    polar=dict(
+                        radialaxis=dict(range=[0, 1], tickfont=dict(size=10)),
+                        bgcolor="rgba(0,0,0,0)",
+                    ),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#cccccc"),
+                    height=340,
+                    margin=dict(l=50, r=50, t=40, b=40),
+                )
+                st.plotly_chart(_fig_radar, use_container_width=True)
+
+            with _row2_r:
+                st.subheader("Full metrics table")
+                _tbl_rows = []
+                for _cls in _classes:
+                    _row_data = _clf_report[_cls]
+                    _tbl_rows.append({
+                        "Class":     _cls,
+                        "Precision": round(_row_data.get("precision", 0), 2),
+                        "Recall":    round(_row_data.get("recall", 0), 2),
+                        "F1":        round(_row_data.get("f1", 0), 2),
+                        "Support":   int(_row_data.get("support", 0)),
+                    })
+                for _avg_key, _avg_label in [("macro_avg", "macro avg"), ("weighted_avg", "weighted avg")]:
+                    _avg_data = _metrics.get(_avg_key, {})
+                    if _avg_data:
+                        _tbl_rows.append({
+                            "Class":     _avg_label,
+                            "Precision": round(_avg_data.get("precision", 0), 2),
+                            "Recall":    round(_avg_data.get("recall", 0), 2),
+                            "F1":        round(_avg_data.get("f1", 0), 2),
+                            "Support":   "—",
+                        })
+                st.dataframe(pd.DataFrame(_tbl_rows), use_container_width=True, hide_index=True)
+                st.caption(
+                    f"Accuracy: **{_metrics.get('accuracy', 0):.2f}**  ·  "
+                    f"Macro F1: **{_metrics.get('macro_avg', {}).get('f1', 0):.2f}**"
+                )
+
+            st.divider()
+
+            # ── Feature details ──────────────────────────────────────────────
+            with st.expander("Feature extraction details"):
+                _fc1, _fc2 = st.columns(2)
+                with _fc1:
+                    st.markdown(f"**Description:** {_features.get('description', '—')}")
+                    st.markdown(f"**Vector length:** {_features.get('vector_length', '—')}")
+                    st.markdown(f"**Image resize:** {_features.get('image_resize', '—')}")
+                    st.markdown(f"**Normalisation:** {_features.get('normalization', '—')}")
+                with _fc2:
+                    _comps = _features.get("components", [])
+                    if _comps:
+                        st.dataframe(pd.DataFrame(_comps), use_container_width=True, hide_index=True)
+
+            # ── Multi-model comparison ───────────────────────────────────────
+            if len(_all_names) > 1:
+                st.divider()
+                st.subheader("Model comparison")
+                _cmp_rows = []
+                for _n, _d in _results_data.items():
+                    _m = _d.get("metrics", {})
+                    _cr = _m.get("classification_report", {})
+                    _cmp_rows.append({
+                        "Model":          _n,
+                        "Accuracy":       round(_m.get("accuracy", 0), 2),
+                        "F1 macro":       round(_m.get("macro_avg", {}).get("f1", 0), 2),
+                        "Fire recall":    round(_cr.get("fire", {}).get("recall", 0), 2),
+                        "Smoke recall":   round(_cr.get("smoke", {}).get("recall", 0), 2),
+                        "Run date":       _d.get("run_date", "—"),
+                    })
+                _cmp_df = pd.DataFrame(_cmp_rows)
+                st.dataframe(_cmp_df, use_container_width=True, hide_index=True)
+
+                # F1 macro comparison bar chart
+                _fig_cmp = px.bar(
+                    _cmp_df,
+                    x="Model", y="F1 macro",
+                    color="Model",
+                    text="F1 macro",
+                    color_discrete_sequence=px.colors.qualitative.Set2,
+                    title="F1 macro comparison — all models",
+                    labels={"F1 macro": "F1 macro (higher is better)"},
+                )
+                _fig_cmp.update_layout(yaxis_range=[0, 1], showlegend=False)
+                apply_chart_theme(_fig_cmp)
+                st.plotly_chart(_fig_cmp, use_container_width=True)
 
     # ── Inference Demo ───────────────────────────────────────────────────────
     with tab_inference:
