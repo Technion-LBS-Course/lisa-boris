@@ -751,7 +751,13 @@ if mode == "Operations & Learning Dashboard":
                 f"{_clf_report.get('smoke', {}).get('recall', 0):.2f}",
             )
 
-            st.info(_r.get("notes", ""))
+            st.info(
+                "The dummy baseline achieved 47% accuracy by always predicting background, "
+                "but it completely failed to detect fire and smoke. "
+                "This proves that accuracy alone is not enough for our problem. "
+                "Our real model must improve macro F1 and, most importantly, "
+                "achieve meaningful recall for fire and smoke."
+            )
             st.caption(
                 f"Run date: {_r.get('run_date', '—')}  ·  "
                 f"Dataset: {_dataset.get('name', '—')}  ·  "
@@ -888,6 +894,66 @@ if mode == "Operations & Learning Dashboard":
                     _comps = _features.get("components", [])
                     if _comps:
                         st.dataframe(pd.DataFrame(_comps), use_container_width=True, hide_index=True)
+
+            # ── Detailed analysis ────────────────────────────────────────────
+            with st.expander("Detailed analysis — what this baseline tells us", expanded=False):
+                st.markdown("""
+This result is not a real fire-detection model result. It is a dummy baseline: **DummyClassifier (most_frequent)**. That means the model simply predicts the most common class every time — in this case, *background*. It does not really learn fire or smoke patterns.
+
+---
+
+#### What the result means
+
+The accuracy is **0.47**, but this is misleading. The model gets 47% accuracy only because about 47% of the test set is background. So by always saying "background," it is correct for background images and completely fails on fire and smoke.
+
+The important part is this:
+
+- **Background recall = 1.00** — it finds all background images, because it predicts background for everything.
+- **Fire recall = 0.00** — it detects zero fire images.
+- **Smoke recall = 0.00** — it detects zero smoke images.
+- **Macro F1 = 0.21** — this is the real "minimum bar" to beat.
+
+So the model is useless for PyroFinder as a product, because a fire-detection system that misses every fire and every smoke case has no operational value.
+
+---
+
+#### What it tells us about the data
+
+The dataset is somewhat imbalanced, but not extremely imbalanced.
+
+In the test set:
+
+| Class | Images | % |
+|---|---|---|
+| Background | 2,005 | 46.6% |
+| Fire | 1,115 | 25.9% |
+| Smoke | 1,186 | 27.5% |
+
+So background is the largest class, but fire and smoke are still well represented. This means the dataset is not broken. The problem is the dummy model, not necessarily the data.
+
+It also shows why **accuracy alone is a bad metric** for this project. A model can reach 47% accuracy while detecting zero fires. For PyroFinder, we care much more about recall for fire and smoke, macro F1, and later also false alarm rate.
+
+---
+
+#### What it tells us about the model
+
+This baseline proves only one thing: **any real model must do better than simply guessing the majority class.**
+
+The current dummy model:
+- does not use visual meaning
+- does not understand fire or smoke
+- does not localize objects
+- does not produce bounding boxes
+- does not represent the planned YOLO11s detector
+
+Even though color features were created, the dummy classifier ignores them because its strategy is only "predict the most frequent class."
+
+---
+
+#### The main conclusion
+
+This baseline is useful because it gives us the minimum comparison point: **PyroFinder's real model must beat Macro F1 = 0.21 and must achieve recall above 0 for both fire and smoke.**
+""")
 
             # ── Multi-model comparison ───────────────────────────────────────
             if len(_all_names) > 1:
