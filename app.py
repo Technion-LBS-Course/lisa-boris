@@ -719,274 +719,439 @@ if mode == "Operations & Learning Dashboard":
                 except Exception:
                     pass
 
-            _all_names = list(_results_data.keys())
+            # ── Helper: short display label ──────────────────────────────────
+            def _short_model_label(name):
+                if "Dummy" in name:
+                    return "Dummy"
+                if "Logistic" in name:
+                    return "Logistic Regression"
+                if "Random Forest" in name:
+                    return "Random Forest"
+                return name
 
-            # ── Model selector ───────────────────────────────────────────────
-            if len(_all_names) > 1:
-                _selected = st.radio("Select model", _all_names, horizontal=True)
-            else:
-                _selected = _all_names[0]
-                st.markdown(f"**Model:** `{_selected}`")
+            # ── Helper: sort order ───────────────────────────────────────────
+            def _model_sort_key(name):
+                if "Dummy" in name:
+                    return (0, name)
+                if "Logistic" in name:
+                    return (1, name)
+                if "Random Forest" in name:
+                    return (2, name)
+                return (3, name)
 
-            _r = _results_data[_selected]
-            _metrics = _r.get("metrics", {})
-            _clf_report = _metrics.get("classification_report", {})
-            _dataset = _r.get("dataset", {})
-            _features = _r.get("features", {})
-            _classes_ordered = ["background", "fire", "smoke"]
-            _classes = [c for c in _classes_ordered if c in _clf_report]
+            # ── Helper: per-model summary info text ──────────────────────────
+            def _model_summary_text(name):
+                if "Dummy" in name:
+                    return (
+                        "The dummy baseline achieved 47% accuracy by always predicting background, "
+                        "but it completely failed to detect fire and smoke. "
+                        "This proves that accuracy alone is not enough for PyroFinder. "
+                        "Any real model must improve Macro F1 and, most importantly, "
+                        "achieve meaningful recall for fire and smoke."
+                    )
+                if "Logistic" in name:
+                    return (
+                        "Logistic Regression is the first real learning baseline. It uses the 60 handcrafted "
+                        "color features and improves Macro F1 to about 0.62, with real recall for both fire "
+                        "and smoke. This proves that simple color information contains useful signal, but the "
+                        "model still creates many false alarms by confusing background images with fire or smoke."
+                    )
+                if "Random Forest" in name:
+                    return (
+                        "Random Forest is the strongest classical ML baseline so far. It improves Macro F1 to "
+                        "about 0.85 and gives balanced recall for background, fire, and smoke. This suggests "
+                        "that the relationship between color features and fire/smoke labels is non-linear, and "
+                        "that tree-based models capture these patterns much better than a linear classifier."
+                    )
+                return (
+                    "This baseline is an image-level sklearn classifier using handcrafted color features. "
+                    "It should be compared using Macro F1 and fire/smoke recall, not accuracy alone."
+                )
 
-            # ── Key metric cards ─────────────────────────────────────────────
-            _km1, _km2, _km3, _km4, _km5 = st.columns(5)
-            _km1.metric("Accuracy",    f"{_metrics.get('accuracy', 0):.2f}")
-            _km2.metric("F1 macro",    f"{_metrics.get('macro_avg', {}).get('f1', 0):.2f}")
-            _km3.metric("F1 weighted", f"{_metrics.get('weighted_avg', {}).get('f1', 0):.2f}")
-            _km4.metric(
-                "Fire recall",
-                f"{_clf_report.get('fire', {}).get('recall', 0):.2f}",
-                delta=None,
-            )
-            _km5.metric(
-                "Smoke recall",
-                f"{_clf_report.get('smoke', {}).get('recall', 0):.2f}",
-            )
+            # ── Helper: per-model detailed analysis text ─────────────────────
+            def _model_detailed_analysis(name):
+                if "Dummy" in name:
+                    return """
+This result is not a real fire-detection model. It is a DummyClassifier with the most_frequent strategy, meaning it always predicts the most common class: background.
 
-            st.info(
-                "The dummy baseline achieved 47% accuracy by always predicting background, "
-                "but it completely failed to detect fire and smoke. "
-                "This proves that accuracy alone is not enough for our problem. "
-                "Our real model must improve macro F1 and, most importantly, "
-                "achieve meaningful recall for fire and smoke."
-            )
-            st.caption(
-                f"Run date: {_r.get('run_date', '—')}  ·  "
-                f"Dataset: {_dataset.get('name', '—')}  ·  "
-                f"Train: {_dataset.get('train_size', '—'):,}  ·  "
-                f"Test: {_dataset.get('test_size', '—'):,}"
-            )
+---
 
-            st.divider()
+#### What the result means
 
-            # ── Row 1: Per-class bar chart | Dataset distribution ────────────
-            _row1_l, _row1_r = st.columns(2)
+The model reaches about 47% accuracy only because background is the largest class in the test set. It gets background recall of 1.00, but fire recall and smoke recall are both 0.00. This means it misses every real fire and every smoke case.
 
-            with _row1_l:
-                st.subheader("Precision / Recall / F1 per class")
-                _prf_rows = []
-                for _cls in _classes:
-                    for _mn, _ml in [("precision", "Precision"), ("recall", "Recall"), ("f1", "F1")]:
-                        _prf_rows.append({
-                            "class": _cls,
-                            "metric": _ml,
-                            "value": _clf_report[_cls].get(_mn, 0),
+---
+
+#### What it tells us about the data
+
+The dataset is somewhat imbalanced, but not broken. Background is the largest class, while fire and smoke are still well represented. The result mainly proves that accuracy alone is misleading.
+
+---
+
+#### What it tells us about the model
+
+The model does not use visual meaning and does not learn fire or smoke patterns. It only gives the minimum bar that every real model must beat.
+
+---
+
+#### Main conclusion
+
+The DummyClassifier is useful only as a minimum comparison point: PyroFinder must beat Macro F1 = 0.21 and must achieve recall above 0 for both fire and smoke.
+"""
+                if "Logistic" in name:
+                    return """
+Logistic Regression is a simple linear learning baseline. Unlike the dummy model, it actually uses the 60 color features extracted from each image.
+
+---
+
+#### What the result means
+
+The model improves strongly over the dummy baseline. It reaches about 61% accuracy and Macro F1 around 0.62. Most importantly, it detects both danger classes, with meaningful recall for fire and smoke.
+
+---
+
+#### What it tells us about the data
+
+The color features contain useful signal. Fire and smoke images are not random in feature space: simple RGB/HSV statistics and histograms already help separate them from background.
+
+---
+
+#### What it tells us about the model
+
+The model is still limited because it is linear. It catches many fire and smoke cases, but it also misclassifies many background images as fire or smoke. This means it is too aggressive and would create too many false alarms in an operational system.
+
+---
+
+#### Main conclusion
+
+Logistic Regression proves that handcrafted color features are useful, but it is not strong enough as an operational baseline because background handling and false-alarm behavior are weak.
+"""
+                if "Random Forest" in name:
+                    return """
+Random Forest is a non-linear classical ML baseline using the same 60 handcrafted color features as Logistic Regression.
+
+---
+
+#### What the result means
+
+Random Forest performs much better than the other sklearn baselines. It reaches about 86% accuracy and Macro F1 around 0.85, with strong recall for background, fire, and smoke.
+
+---
+
+#### What it tells us about the data
+
+The dataset contains strong visual color patterns that can separate the three image-level classes. However, because this is based on simple color features, the model may also learn dataset-specific patterns such as lighting, background style, or scene color distribution.
+
+---
+
+#### What it tells us about the model
+
+The strong improvement over Logistic Regression suggests that the relationship between features and labels is non-linear. Random Forest captures these interactions better and reduces false alarms much more effectively.
+
+---
+
+#### Main conclusion
+
+Random Forest is the strongest classical ML baseline. It should be used as the main simple sklearn baseline, but it is still only an image-level classifier. It cannot replace YOLO11s, because PyroFinder needs object detection, bounding boxes, and approximate location support.
+"""
+                return """
+This is an image-level sklearn classifier using handcrafted color features.
+
+---
+
+#### What the result means
+
+Evaluate using Macro F1 and fire/smoke recall rather than accuracy alone, since background class imbalance makes accuracy misleading.
+
+---
+
+#### What it tells us about the data
+
+Performance relative to other baselines indicates how much useful signal the 60 color features contain for this class.
+
+---
+
+#### What it tells us about the model
+
+Compare against DummyClassifier (Macro F1 = 0.21) as the minimum bar and against Logistic Regression and Random Forest to see if it adds value.
+
+---
+
+#### Main conclusion
+
+Any sklearn baseline is an image-level classifier. It cannot replace YOLO11s object detection, which is needed for bounding boxes, confidence scores, and approximate location support.
+"""
+
+            # ── Helper: render one model tab ─────────────────────────────────
+            def _render_single_baseline_model(model_name, result_dict):
+                _r = result_dict
+                _metrics = _r.get("metrics", {})
+                _clf_report = _metrics.get("classification_report", {})
+                _dataset = _r.get("dataset", {})
+                _features = _r.get("features", {})
+                _classes_ordered = ["background", "fire", "smoke"]
+                _classes = [c for c in _classes_ordered if c in _clf_report]
+                _slug = _short_model_label(model_name).lower().replace(" ", "_")
+
+                # Key metric cards
+                _km1, _km2, _km3, _km4, _km5 = st.columns(5)
+                _km1.metric("Accuracy",    f"{_metrics.get('accuracy', 0):.2f}")
+                _km2.metric("F1 macro",    f"{_metrics.get('macro_avg', {}).get('f1', 0):.2f}")
+                _km3.metric("F1 weighted", f"{_metrics.get('weighted_avg', {}).get('f1', 0):.2f}")
+                _km4.metric("Fire recall",  f"{_clf_report.get('fire', {}).get('recall', 0):.2f}")
+                _km5.metric("Smoke recall", f"{_clf_report.get('smoke', {}).get('recall', 0):.2f}")
+
+                st.info(_model_summary_text(model_name))
+                st.caption(
+                    f"Run date: {_r.get('run_date', '—')}  ·  "
+                    f"Dataset: {_dataset.get('name', '—')}  ·  "
+                    f"Train: {_dataset.get('train_size', '—'):,}  ·  "
+                    f"Test: {_dataset.get('test_size', '—'):,}"
+                )
+
+                st.divider()
+
+                # Row 1: Per-class bar chart | Dataset distribution
+                _row1_l, _row1_r = st.columns(2)
+
+                with _row1_l:
+                    st.subheader("Precision / Recall / F1 per class")
+                    _prf_rows = []
+                    for _cls in _classes:
+                        for _mn, _ml in [("precision", "Precision"), ("recall", "Recall"), ("f1", "F1")]:
+                            _prf_rows.append({
+                                "class": _cls,
+                                "metric": _ml,
+                                "value": _clf_report[_cls].get(_mn, 0),
+                            })
+                    if _prf_rows:
+                        _fig_prf = px.bar(
+                            pd.DataFrame(_prf_rows),
+                            x="class", y="value", color="metric",
+                            barmode="group",
+                            color_discrete_map={
+                                "Precision": "#4fc3f7",
+                                "Recall":    "#e07b39",
+                                "F1":        "#81c784",
+                            },
+                            labels={"value": "Score (0–1)", "class": "Class", "metric": ""},
+                            title=f"Per-class metrics — {_short_model_label(model_name)}",
+                        )
+                        _fig_prf.update_layout(yaxis_range=[0, 1], bargap=0.2, height=360)
+                        apply_chart_theme(_fig_prf)
+                        st.plotly_chart(_fig_prf, use_container_width=True, key=f"baseline_prf_{_slug}")
+
+                with _row1_r:
+                    st.subheader("Class distribution — train vs test")
+                    _dist = _dataset.get("class_distribution", {})
+                    _dist_rows = []
+                    for _split_name, _counts in _dist.items():
+                        for _cls, _n in _counts.items():
+                            _dist_rows.append({"split": _split_name, "class": _cls, "count": _n})
+                    if _dist_rows:
+                        _fig_dist = px.bar(
+                            pd.DataFrame(_dist_rows),
+                            x="class", y="count", color="split",
+                            barmode="group",
+                            color_discrete_map=SPLIT_COLORS,
+                            labels={"count": "Images", "class": "Class", "split": "Split"},
+                            title="Images per class — train vs test",
+                        )
+                        _fig_dist.update_layout(bargap=0.2, height=360)
+                        apply_chart_theme(_fig_dist)
+                        st.plotly_chart(_fig_dist, use_container_width=True, key=f"baseline_dist_{_slug}")
+
+                st.divider()
+
+                # Row 2: Radar chart | Full metrics table
+                _row2_l, _row2_r = st.columns(2)
+
+                with _row2_l:
+                    st.subheader("Macro average radar")
+                    _macro = _metrics.get("macro_avg", {})
+                    _radar_cats = ["Precision", "Recall", "F1", "Accuracy"]
+                    _radar_vals = [
+                        _macro.get("precision", 0),
+                        _macro.get("recall",    0),
+                        _macro.get("f1",        0),
+                        _metrics.get("accuracy", 0),
+                    ]
+                    _fig_radar = go.Figure(go.Scatterpolar(
+                        r=_radar_vals + [_radar_vals[0]],
+                        theta=_radar_cats + [_radar_cats[0]],
+                        fill="toself",
+                        fillcolor="rgba(224,123,57,0.18)",
+                        line=dict(color=PYRO_COLORS["primary"], width=2),
+                        name=_short_model_label(model_name),
+                    ))
+                    _fig_radar.update_layout(
+                        polar=dict(
+                            radialaxis=dict(range=[0, 1], tickfont=dict(size=10)),
+                            bgcolor="rgba(0,0,0,0)",
+                        ),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#cccccc"),
+                        height=340,
+                        margin=dict(l=50, r=50, t=40, b=40),
+                    )
+                    st.plotly_chart(_fig_radar, use_container_width=True, key=f"baseline_radar_{_slug}")
+
+                with _row2_r:
+                    st.subheader("Full metrics table")
+                    _tbl_rows = []
+                    for _cls in _classes:
+                        _row_data = _clf_report[_cls]
+                        _tbl_rows.append({
+                            "Class":     _cls,
+                            "Precision": round(_row_data.get("precision", 0), 2),
+                            "Recall":    round(_row_data.get("recall", 0), 2),
+                            "F1":        round(_row_data.get("f1", 0), 2),
+                            "Support":   int(_row_data.get("support", 0)),
                         })
-                if _prf_rows:
-                    _fig_prf = px.bar(
-                        pd.DataFrame(_prf_rows),
-                        x="class", y="value", color="metric",
-                        barmode="group",
-                        color_discrete_map={
-                            "Precision": "#4fc3f7",
-                            "Recall":    "#e07b39",
-                            "F1":        "#81c784",
-                        },
-                        labels={"value": "Score (0–1)", "class": "Class", "metric": ""},
-                        title=f"Per-class metrics — {_selected}",
+                    for _avg_key, _avg_label in [("macro_avg", "macro avg"), ("weighted_avg", "weighted avg")]:
+                        _avg_data = _metrics.get(_avg_key, {})
+                        if _avg_data:
+                            _tbl_rows.append({
+                                "Class":     _avg_label,
+                                "Precision": round(_avg_data.get("precision", 0), 2),
+                                "Recall":    round(_avg_data.get("recall", 0), 2),
+                                "F1":        round(_avg_data.get("f1", 0), 2),
+                                "Support":   "—",
+                            })
+                    st.dataframe(pd.DataFrame(_tbl_rows), use_container_width=True, hide_index=True)
+                    st.caption(
+                        f"Accuracy: **{_metrics.get('accuracy', 0):.2f}**  ·  "
+                        f"Macro F1: **{_metrics.get('macro_avg', {}).get('f1', 0):.2f}**"
                     )
-                    _fig_prf.update_layout(yaxis_range=[0, 1], bargap=0.2, height=360)
-                    apply_chart_theme(_fig_prf)
-                    st.plotly_chart(_fig_prf, use_container_width=True)
 
-            with _row1_r:
-                st.subheader("Class distribution — train vs test")
-                _dist = _dataset.get("class_distribution", {})
-                _dist_rows = []
-                for _split_name, _counts in _dist.items():
-                    for _cls, _n in _counts.items():
-                        _dist_rows.append({"split": _split_name, "class": _cls, "count": _n})
-                if _dist_rows:
-                    _fig_dist = px.bar(
-                        pd.DataFrame(_dist_rows),
-                        x="class", y="count", color="split",
-                        barmode="group",
-                        color_discrete_map=SPLIT_COLORS,
-                        labels={"count": "Images", "class": "Class", "split": "Split"},
-                        title="Images per class — train vs test",
-                    )
-                    _fig_dist.update_layout(bargap=0.2, height=360)
-                    apply_chart_theme(_fig_dist)
-                    st.plotly_chart(_fig_dist, use_container_width=True)
+                st.divider()
 
-            st.divider()
+                # Feature details
+                with st.expander("Feature extraction details"):
+                    _fc1, _fc2 = st.columns(2)
+                    with _fc1:
+                        st.markdown(f"**Description:** {_features.get('description', '—')}")
+                        st.markdown(f"**Vector length:** {_features.get('vector_length', '—')}")
+                        st.markdown(f"**Image resize:** {_features.get('image_resize', '—')}")
+                        st.markdown(f"**Normalisation:** {_features.get('normalization', '—')}")
+                    with _fc2:
+                        _comps = _features.get("components", [])
+                        if _comps:
+                            st.dataframe(pd.DataFrame(_comps), use_container_width=True, hide_index=True)
 
-            # ── Row 2: Radar chart | Full metrics table ──────────────────────
-            _row2_l, _row2_r = st.columns(2)
+                # Detailed analysis
+                with st.expander("Detailed analysis — what this baseline tells us", expanded=False):
+                    st.markdown(_model_detailed_analysis(model_name))
 
-            with _row2_l:
-                st.subheader("Macro average radar")
-                _macro = _metrics.get("macro_avg", {})
-                _radar_cats  = ["Precision", "Recall", "F1", "Accuracy"]
-                _radar_vals  = [
-                    _macro.get("precision", 0),
-                    _macro.get("recall",    0),
-                    _macro.get("f1",        0),
-                    _metrics.get("accuracy", 0),
-                ]
-                _fig_radar = go.Figure(go.Scatterpolar(
-                    r=_radar_vals + [_radar_vals[0]],
-                    theta=_radar_cats + [_radar_cats[0]],
-                    fill="toself",
-                    fillcolor="rgba(224,123,57,0.18)",
-                    line=dict(color=PYRO_COLORS["primary"], width=2),
-                    name=_selected,
-                ))
-                _fig_radar.update_layout(
+            # ── Helper: build comparison dataframe ───────────────────────────
+            def _build_comparison_df(results_data):
+                _cmp_rows = []
+                for _n, _d in results_data.items():
+                    _m = _d.get("metrics", {})
+                    _cr = _m.get("classification_report", {})
+                    _ma = _m.get("macro_avg", {})
+                    _cmp_rows.append({
+                        "Model":             _short_model_label(_n),
+                        "Accuracy":          round(_m.get("accuracy", 0), 2),
+                        "Macro Precision":   round(_ma.get("precision", 0), 2),
+                        "Macro Recall":      round(_ma.get("recall", 0), 2),
+                        "Macro F1":          round(_ma.get("f1", 0), 2),
+                        "Fire Recall":       round(_cr.get("fire", {}).get("recall", 0), 2),
+                        "Smoke Recall":      round(_cr.get("smoke", {}).get("recall", 0), 2),
+                        "Background Recall": round(_cr.get("background", {}).get("recall", 0), 2),
+                        "Run date":          _d.get("run_date", "—"),
+                    })
+                return pd.DataFrame(_cmp_rows)
+
+            # ── Helper: render comparison tab ────────────────────────────────
+            def _render_model_comparison(results_data):
+                _cmp_df = _build_comparison_df(results_data)
+
+                
+                # A. Written conclusions
+                st.info(
+                    "**Comparison conclusion:** The DummyClassifier is only a minimum bar and is not useful "
+                    "for detection because it misses all fire and smoke cases. Logistic Regression proves that "
+                    "the 60 color features contain real signal, but it produces too many false alarms. Random "
+                    "Forest is the strongest classical ML baseline, reaching the best Macro F1 and the most "
+                    "balanced recall across background, fire, and smoke. However, all three models are still "
+                    "image-level classifiers. The final PyroFinder model must use YOLO11s object detection "
+                    "because the product needs bounding boxes, confidence scores, and approximate location support."
+                )
+
+                # B. Comparison table
+                st.subheader("Comparison table")
+                st.dataframe(_cmp_df, use_container_width=True, hide_index=True)
+
+                st.divider()
+
+                # C. Macro F1 bar chart
+                st.subheader("Macro F1 comparison")
+                _fig_cmp = px.bar(
+                    _cmp_df,
+                    x="Model", y="Macro F1",
+                    color="Model",
+                    text="Macro F1",
+                    color_discrete_sequence=px.colors.qualitative.Set2,
+                    title="Macro F1 comparison — all models",
+                    labels={"Macro F1": "F1 macro (higher is better)"},
+                )
+                _fig_cmp.update_layout(yaxis_range=[0, 1], showlegend=False)
+                apply_chart_theme(_fig_cmp)
+                st.plotly_chart(_fig_cmp, use_container_width=True, key="baseline_cmp_f1_bar")
+
+                st.divider()
+
+                # D. All-model radar chart
+                st.subheader("Macro average radar — all models")
+                _radar_cats = ["Macro Precision", "Macro Recall", "Macro F1", "Accuracy"]
+                _radar_colors = px.colors.qualitative.Set2
+                _radar_fig = go.Figure()
+                for _i, (_, _row) in enumerate(_cmp_df.iterrows()):
+                    _vals = [
+                        _row["Macro Precision"],
+                        _row["Macro Recall"],
+                        _row["Macro F1"],
+                        _row["Accuracy"],
+                    ]
+                    _radar_fig.add_trace(go.Scatterpolar(
+                        r=_vals + [_vals[0]],
+                        theta=_radar_cats + [_radar_cats[0]],
+                        fill="toself",
+                        name=_row["Model"],
+                        line=dict(color=_radar_colors[_i % len(_radar_colors)], width=2),
+                    ))
+                _radar_fig.update_layout(
                     polar=dict(
                         radialaxis=dict(range=[0, 1], tickfont=dict(size=10)),
                         bgcolor="rgba(0,0,0,0)",
                     ),
                     paper_bgcolor="rgba(0,0,0,0)",
                     font=dict(color="#cccccc"),
-                    height=340,
-                    margin=dict(l=50, r=50, t=40, b=40),
+                    height=400,
+                    margin=dict(l=60, r=60, t=50, b=40),
+                    showlegend=True,
                 )
-                st.plotly_chart(_fig_radar, use_container_width=True)
+                st.plotly_chart(_radar_fig, use_container_width=True, key="baseline_cmp_radar")
 
-            with _row2_r:
-                st.subheader("Full metrics table")
-                _tbl_rows = []
-                for _cls in _classes:
-                    _row_data = _clf_report[_cls]
-                    _tbl_rows.append({
-                        "Class":     _cls,
-                        "Precision": round(_row_data.get("precision", 0), 2),
-                        "Recall":    round(_row_data.get("recall", 0), 2),
-                        "F1":        round(_row_data.get("f1", 0), 2),
-                        "Support":   int(_row_data.get("support", 0)),
-                    })
-                for _avg_key, _avg_label in [("macro_avg", "macro avg"), ("weighted_avg", "weighted avg")]:
-                    _avg_data = _metrics.get(_avg_key, {})
-                    if _avg_data:
-                        _tbl_rows.append({
-                            "Class":     _avg_label,
-                            "Precision": round(_avg_data.get("precision", 0), 2),
-                            "Recall":    round(_avg_data.get("recall", 0), 2),
-                            "F1":        round(_avg_data.get("f1", 0), 2),
-                            "Support":   "—",
-                        })
-                st.dataframe(pd.DataFrame(_tbl_rows), use_container_width=True, hide_index=True)
-                st.caption(
-                    f"Accuracy: **{_metrics.get('accuracy', 0):.2f}**  ·  "
-                    f"Macro F1: **{_metrics.get('macro_avg', {}).get('f1', 0):.2f}**"
-                )
-
-            st.divider()
-
-            # ── Feature details ──────────────────────────────────────────────
-            with st.expander("Feature extraction details"):
-                _fc1, _fc2 = st.columns(2)
-                with _fc1:
-                    st.markdown(f"**Description:** {_features.get('description', '—')}")
-                    st.markdown(f"**Vector length:** {_features.get('vector_length', '—')}")
-                    st.markdown(f"**Image resize:** {_features.get('image_resize', '—')}")
-                    st.markdown(f"**Normalisation:** {_features.get('normalization', '—')}")
-                with _fc2:
-                    _comps = _features.get("components", [])
-                    if _comps:
-                        st.dataframe(pd.DataFrame(_comps), use_container_width=True, hide_index=True)
-
-            # ── Detailed analysis ────────────────────────────────────────────
-            with st.expander("Detailed analysis — what this baseline tells us", expanded=False):
-                st.markdown("""
-This result is not a real fire-detection model result. It is a dummy baseline: **DummyClassifier (most_frequent)**. That means the model simply predicts the most common class every time — in this case, *background*. It does not really learn fire or smoke patterns.
-
----
-
-#### What the result means
-
-The accuracy is **0.47**, but this is misleading. The model gets 47% accuracy only because about 47% of the test set is background. So by always saying "background," it is correct for background images and completely fails on fire and smoke.
-
-The important part is this:
-
-- **Background recall = 1.00** — it finds all background images, because it predicts background for everything.
-- **Fire recall = 0.00** — it detects zero fire images.
-- **Smoke recall = 0.00** — it detects zero smoke images.
-- **Macro F1 = 0.21** — this is the real "minimum bar" to beat.
-
-So the model is useless for PyroFinder as a product, because a fire-detection system that misses every fire and every smoke case has no operational value.
-
----
-
-#### What it tells us about the data
-
-The dataset is somewhat imbalanced, but not extremely imbalanced.
-
-In the test set:
-
-| Class | Images | % |
-|---|---|---|
-| Background | 2,005 | 46.6% |
-| Fire | 1,115 | 25.9% |
-| Smoke | 1,186 | 27.5% |
-
-So background is the largest class, but fire and smoke are still well represented. This means the dataset is not broken. The problem is the dummy model, not necessarily the data.
-
-It also shows why **accuracy alone is a bad metric** for this project. A model can reach 47% accuracy while detecting zero fires. For PyroFinder, we care much more about recall for fire and smoke, macro F1, and later also false alarm rate.
-
----
-
-#### What it tells us about the model
-
-This baseline proves only one thing: **any real model must do better than simply guessing the majority class.**
-
-The current dummy model:
-- does not use visual meaning
-- does not understand fire or smoke
-- does not localize objects
-- does not produce bounding boxes
-- does not represent the planned YOLO11s detector
-
-Even though color features were created, the dummy classifier ignores them because its strategy is only "predict the most frequent class."
-
----
-
-#### The main conclusion
-
-This baseline is useful because it gives us the minimum comparison point: **PyroFinder's real model must beat Macro F1 = 0.21 and must achieve recall above 0 for both fire and smoke.**
-""")
-
-            # ── Multi-model comparison ───────────────────────────────────────
-            if len(_all_names) > 1:
                 st.divider()
-                st.subheader("Model comparison")
-                _cmp_rows = []
-                for _n, _d in _results_data.items():
-                    _m = _d.get("metrics", {})
-                    _cr = _m.get("classification_report", {})
-                    _cmp_rows.append({
-                        "Model":          _n,
-                        "Accuracy":       round(_m.get("accuracy", 0), 2),
-                        "F1 macro":       round(_m.get("macro_avg", {}).get("f1", 0), 2),
-                        "Fire recall":    round(_cr.get("fire", {}).get("recall", 0), 2),
-                        "Smoke recall":   round(_cr.get("smoke", {}).get("recall", 0), 2),
-                        "Run date":       _d.get("run_date", "—"),
-                    })
-                _cmp_df = pd.DataFrame(_cmp_rows)
-                st.dataframe(_cmp_df, use_container_width=True, hide_index=True)
 
-                # F1 macro comparison bar chart
-                _fig_cmp = px.bar(
-                    _cmp_df,
-                    x="Model", y="F1 macro",
-                    color="Model",
-                    text="F1 macro",
-                    color_discrete_sequence=px.colors.qualitative.Set2,
-                    title="F1 macro comparison — all models",
-                    labels={"F1 macro": "F1 macro (higher is better)"},
-                )
-                _fig_cmp.update_layout(yaxis_range=[0, 1], showlegend=False)
-                apply_chart_theme(_fig_cmp)
-                st.plotly_chart(_fig_cmp, use_container_width=True)
+
+            # ── Sort models and build tabs ────────────────────────────────────
+            _sorted_names = sorted(_results_data.keys(), key=_model_sort_key)
+            _tab_labels = [_short_model_label(n) for n in _sorted_names] + ["Model comparison"]
+            _model_tabs = st.tabs(_tab_labels)
+
+            # ── Render each model tab ────────────────────────────────────────
+            for _tab, _mname in zip(_model_tabs[:-1], _sorted_names):
+                with _tab:
+                    _render_single_baseline_model(_mname, _results_data[_mname])
+
+            # ── Model comparison tab ─────────────────────────────────────────
+            with _model_tabs[-1]:
+                if len(_sorted_names) < 2:
+                    st.info("Add more model result files to `results/` to enable a full comparison.")
+                _render_model_comparison(_results_data)
 
     # ── Inference Demo ───────────────────────────────────────────────────────
     with tab_inference:

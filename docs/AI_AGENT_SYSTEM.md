@@ -23,12 +23,14 @@ It does **not** redefine the product, data strategy, ML problem, or architecture
 
 ## 3. Current Focus
 
+**M2 submitted 2026-06-02. M3 is now active. Deadline: 2026-06-23.**
+
 | Priority | Area | Goal |
 |---|---|---|
-| 1 | M2 Refinement | Dashboard story: Problem → Literature → Market → EDA + KPI |
-| 2 | UX/UI | Information hierarchy, visual consistency, classroom-ready presentation |
-| 3 | M3 Preparation | YOLO11s inference, YOLO11n baseline, alert logic, approximate mapping |
-| 4 | Agent System | Build and refine agents and skills that accelerate each area above |
+| 1 | M3 — Sklearn classifiers | Logistic Regression + Random Forest vs DummyClassifier baseline (F1 macro) |
+| 2 | M3 — YOLO pipeline | YOLO11s inference function, YOLO11n baseline benchmark |
+| 3 | M3 — Alert & map | N-frame confirmation, alert log, basic camera map |
+| 4 | M3 — Deployment | Streamlit Cloud deployment, requirements.txt verification |
 
 ---
 
@@ -342,33 +344,37 @@ It does **not** redefine the product, data strategy, ML problem, or architecture
 
 ### C10. Baseline & Evaluation Agent
 
-**Purpose:** Build the YOLO11n baseline benchmark and the model comparison evaluation flow.
+**Purpose:** Build the sklearn baseline pipeline, YOLO11n baseline benchmark, and model comparison evaluation flow.
 
-**When to use:** At M3, when implementing model evaluation, comparison metrics, or the experiment tracking section.
+**When to use:** At M3, when extending sklearn classifiers, implementing YOLO model evaluation, comparison metrics, or the experiment tracking section.
 
-**Inputs:** `src/model.py`, `PROJECT_CONTEXT.md` §8 (Metrics), YOLO11s inference pipeline from C9.
+**Inputs:** `src/model.py`, `PROJECT_CONTEXT.md` §8 (Metrics), `scripts/dummy_try.py`, `results/baseline_dummy_classifier.json`, YOLO11s inference pipeline from C9.
 
-**Outputs:** Updated `src/model.py` or new `src/evaluation.py`, comparison display in dashboard.
+**Outputs:** Updated `scripts/dummy_try.py`, new results JSONs per classifier, updated `src/model.py` or new `src/evaluation.py`, comparison display in Baseline tab and dashboard.
 
 **Responsibilities:**
-- Run YOLO11n on the same test split as YOLO11s.
-- Compute and display all 7 metrics for both models.
-- Display comparison table and declare YOLO11s the primary model if it outperforms on mAP@0.5 and recall.
-- Log experiment results with full metadata (dataset, split, hyperparameters, metrics, timestamp).
+- **Sklearn pipeline (M3 active):** Add Logistic Regression and Random Forest to the same pipeline as DummyClassifier. Use identical feature extraction (60-dim: RGB mean/std, HSV mean/std, 16-bin×3 color histogram, 64×64 resize). Report F1 macro and per-class recall vs DummyClassifier baseline. Save results to `results/` as JSON.
+- **YOLO evaluation (M3 later):** Run YOLO11n on the same test split as YOLO11s. Compute all 7 metrics for both models. Display comparison table; declare YOLO11s primary if it outperforms on mAP@0.5 and recall.
+- Log experiment results with full metadata (model, dataset, split, hyperparameters, metrics, timestamp).
 
 **Must not do:**
 - Present YOLO11n as an equal primary model.
 - Display fake performance numbers.
 - Run training inside the dashboard.
+- Change the feature extraction pipeline when comparing classifiers (break comparability).
 
-**Files to inspect:** `src/model.py`, `PROJECT_CONTEXT.md` §8.
+**Files to inspect:** `src/model.py`, `scripts/dummy_try.py`, `results/baseline_dummy_classifier.json`, `PROJECT_CONTEXT.md` §8.
 
-**Skills it depends on:** YOLO inference pipeline (C9), pandas, Plotly comparison charts.
+**Skills it depends on:** scikit-learn, pandas, YOLO inference pipeline (C9), Plotly comparison charts.
+
+**M3 baseline results already saved (2026-06-05):**
+- DummyClassifier — Accuracy 0.47, F1 macro 0.21, fire recall 0.00, smoke recall 0.00
+- Full D-Fire: train 17,221 / test 4,306 images
 
 **Example prompt:**
-> "Build src/evaluation.py. Accept a model name (yolo11s or yolo11n), a dataset path, and a split. Run inference on the split, compute mAP@0.5, precision, recall, F1, false alarm rate, and inference speed. Return an experiment record dict matching the schema in PROJECT_CONTEXT.md §13."
+> "Add Logistic Regression and Random Forest classifiers to scripts/dummy_try.py. Use the same 60-dim feature pipeline and train/test split as DummyClassifier. Report accuracy, F1 macro, and per-class recall for all three models. Save results to results/sklearn_classifiers.json. Do not change the feature extraction code."
 
-**Definition of Done:** Function runs on a test split, returns a complete experiment record, and result can be displayed in a comparison table in the dashboard.
+**Definition of Done:** All three classifiers run on full D-Fire test split, results are saved to `results/`, and a comparison table renders in the Baseline tab of the dashboard.
 
 ---
 
@@ -645,9 +651,9 @@ For any code change, always:
 
 ---
 
-## 8. Workflow From Today Until M2
+## 8. Workflow From Today Until M2 *(HISTORICAL — M2 submitted 2026-06-02)*
 
-M2 submission deadline: **02/06/2026**
+M2 submission deadline: **02/06/2026** — completed.
 
 | Step | Task | Agent | Output |
 |---|---|---|---|
@@ -669,22 +675,26 @@ M2 submission deadline: **02/06/2026**
 
 M3 submission deadline: **23/06/2026**
 
-| Phase | Task | Agent | Output |
-|---|---|---|---|
-| 1 | Lock M2 dashboard with a Git tag | Workspace & Run Manager | `git tag m2-final` |
-| 2 | Build YOLO11s inference function | YOLO Inference Agent | Updated src/detection.py |
-| 3 | Build YOLO11n baseline benchmark | Baseline & Evaluation Agent | src/evaluation.py |
-| 4 | Build N-frame confirmation logic | Alert Logic Agent | Updated src/tracking.py |
-| 5 | Build alert record creation | Alert Logic Agent | Updated src/alerts.py |
-| 6 | Add inference tab to dashboard | YOLO Inference Agent | New inference tab |
-| 7 | Add alert log tab | Alert Logic Agent | Alert log display |
-| 8 | Add model comparison display | Baseline & Evaluation Agent | Comparison table |
-| 9 | Add basic map + camera metadata | Mapping & Geolocation Agent | Basic map tab |
-| 10 | Add image polygon prototype | Mapping & Geolocation Agent | Polygon display |
-| 11 | Extend test suite | Testing & QA Agent | Green pytest |
-| 12 | Deployment readiness check | Deployment Readiness Agent | Deployment checklist |
-| 13 | Deploy to Streamlit Cloud | User + Workspace Manager | Public URL |
-| 14 | Final M3 review | Shadow Mentor | Go/no-go |
+| Phase | Task | Agent | Output | Status |
+|---|---|---|---|---|
+| 1 | Lock M2 dashboard with a Git tag | Workspace & Run Manager | `git tag m2-final` | — |
+| 2 | DummyClassifier baseline pipeline (60-dim features, full D-Fire) | Baseline & Evaluation Agent | `scripts/dummy_try.py`, `results/baseline_dummy_classifier.json` | ✅ Done 2026-06-05 |
+| 3 | Add Baseline tab to Operations & Learning Dashboard | Baseline & Evaluation Agent | Baseline tab in `app.py` | ✅ Done 2026-06-06 |
+| 4 | Add Logistic Regression and Random Forest classifiers | Baseline & Evaluation Agent | Updated `scripts/dummy_try.py`, new results JSON | Next |
+| 5 | Display sklearn model comparison in dashboard | Baseline & Evaluation Agent | Comparison table in Baseline tab | Next |
+| 6 | Build YOLO11s inference function | YOLO Inference Agent | Updated `src/detection.py` | — |
+| 7 | Build YOLO11n baseline benchmark | Baseline & Evaluation Agent | `src/evaluation.py` | — |
+| 8 | Build N-frame confirmation logic | Alert Logic Agent | Updated `src/tracking.py` | — |
+| 9 | Build alert record creation | Alert Logic Agent | Updated `src/alerts.py` | — |
+| 10 | Add inference tab to dashboard | YOLO Inference Agent | New inference tab | — |
+| 11 | Add alert log tab | Alert Logic Agent | Alert log display | — |
+| 12 | Add model comparison display (YOLO11s vs YOLO11n) | Baseline & Evaluation Agent | Comparison table | — |
+| 13 | Add basic map + camera metadata | Mapping & Geolocation Agent | Basic map tab | — |
+| 14 | Add image polygon prototype | Mapping & Geolocation Agent | Polygon display | — |
+| 15 | Extend test suite | Testing & QA Agent | Green pytest | — |
+| 16 | Deployment readiness check | Deployment Readiness Agent | Deployment checklist | — |
+| 17 | Deploy to Streamlit Cloud | User + Workspace Manager | Public URL | — |
+| 18 | Final M3 review | Shadow Mentor | Go/no-go | — |
 
 ---
 
@@ -812,12 +822,13 @@ M2 is done when all of the following are true:
 
 ## 14. Definition of Ready for M3
 
-M3 work can begin when:
+M3 has started as of 2026-06-05. Prerequisites:
 
-- [ ] M2 Definition of Done is fully checked off.
+- [x] M2 Definition of Done fully checked off (submitted 2026-06-02).
 - [ ] `git tag m2-final` exists.
-- [ ] `requirements.txt` is verified and complete.
-- [ ] All M2 tests pass.
+- [x] `requirements.txt` is verified and complete (in use).
+- [x] All M2 tests pass.
+- [x] DummyClassifier sklearn baseline complete (`results/baseline_dummy_classifier.json`).
 - [ ] The YOLO11s inference path is planned in `src/detection.py` (stub or full).
 - [ ] YOLO11n baseline scope is confirmed: same data, same split, same metrics.
 - [ ] Alert schema in `src/alerts.py` matches `PROJECT_CONTEXT.md` §13.
@@ -1003,13 +1014,21 @@ project-root/
 │   ├── mapping.py              ← mapping modes, polygon helpers, location formatting
 │   └── alerts.py               ← alert record creation, status validation
 ├── scripts/
-│   └── build_dfire_metadata.py ← generates data/dfire_metadata.csv
+│   ├── build_dfire_metadata.py ← generates data/dfire_metadata.csv
+│   └── dummy_try.py            ← M3 sklearn baseline: DummyClassifier on full D-Fire
+├── results/
+│   └── baseline_dummy_classifier.json ← saved DummyClassifier metrics (2026-06-05)
 ├── data/
 │   ├── .gitkeep
-│   └── dfire_metadata.csv      ← 36-column generated CSV (committed)
+│   ├── dfire_metadata.csv      ← 36-column generated CSV (committed)
+│   └── samples/dfire/          ← 20 sample images + labels (committed fallback)
 ├── docs/
 │   ├── AI_AGENT_SYSTEM.md      ← agent roles, skill catalogue (this file)
-│   └── M2_DATA_EDA.md          ← data workflow and EDA documentation
+│   ├── M2_DATA_EDA.md          ← data workflow, class mapping, cleaning decisions
+│   ├── M2_dashboard.md         ← dashboard design notes
+│   ├── M2_GAP_LIST.md          ← known gaps and open items as of M2
+│   ├── Literature_review.md    ← literature and related work
+│   └── market_survey_wildfire_existing_sensors.md ← competitor/market landscape
 ├── SprintPlan/
 │   └── SPRINT_PLAN.md
 ├── notebooks/
@@ -1024,7 +1043,7 @@ Future additions expected for M3:
 
 ---
 
-*PyroFinder · AI Agent System · Technion Course 016833 · Last updated: 2026-05-27*
+*PyroFinder · AI Agent System · Technion Course 016833 · Last updated: 2026-06-06*
 
 ---
 

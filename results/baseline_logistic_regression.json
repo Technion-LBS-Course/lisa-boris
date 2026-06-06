@@ -1,0 +1,116 @@
+{
+  "model_name": "Logistic Regression (color features)",
+  "run_date": "2026-06-06",
+  "task": "image-level classification: fire / smoke / background",
+  "dataset": {
+    "name": "D-Fire",
+    "source": "RAW_DATA/D-Fire (train/ + test/ pre-split)",
+    "label_derivation": "class 1 present → fire; class 0 only → smoke; empty file → background",
+    "train_size": 17221,
+    "test_size": 4306,
+    "class_distribution": {
+      "train": {
+        "background": 7833,
+        "fire": 4707,
+        "smoke": 4681
+      },
+      "test": {
+        "background": 2005,
+        "fire": 1115,
+        "smoke": 1186
+      }
+    }
+  },
+  "features": {
+    "description": "Color statistics + normalized color histogram",
+    "vector_length": 60,
+    "components": [
+      {
+        "name": "RGB mean per channel",
+        "size": 3
+      },
+      {
+        "name": "RGB std per channel",
+        "size": 3
+      },
+      {
+        "name": "HSV mean per channel",
+        "size": 3
+      },
+      {
+        "name": "HSV std per channel",
+        "size": 3
+      },
+      {
+        "name": "Color histogram 16-bin × 3",
+        "size": 48
+      }
+    ],
+    "image_resize": "64x64",
+    "normalization": "pixel values / 255; histogram normalized to sum=1"
+  },
+  "model_params": {
+    "pipeline": "StandardScaler + LogisticRegression",
+    "max_iter": 1000,
+    "class_weight": "balanced",
+    "random_state": 42
+  },
+  "metrics": {
+    "accuracy": 0.6078,
+    "classification_report": {
+      "background": {
+        "precision": 0.69,
+        "recall": 0.4963,
+        "f1": 0.5773,
+        "support": 2005
+      },
+      "fire": {
+        "precision": 0.6667,
+        "recall": 0.7462,
+        "f1": 0.7042,
+        "support": 1115
+      },
+      "smoke": {
+        "precision": 0.4889,
+        "recall": 0.6661,
+        "f1": 0.5639,
+        "support": 1186
+      }
+    },
+    "macro_avg": {
+      "precision": 0.6152,
+      "recall": 0.6362,
+      "f1": 0.6151
+    },
+    "weighted_avg": {
+      "precision": 0.6286,
+      "recall": 0.6078,
+      "f1": 0.6065
+    },
+    "confusion_matrix": {
+      "labels": [
+        "background",
+        "fire",
+        "smoke"
+      ],
+      "matrix": [
+        [
+          995,
+          335,
+          675
+        ],
+        [
+          132,
+          832,
+          151
+        ],
+        [
+          315,
+          81,
+          790
+        ]
+      ]
+    }
+  },
+  "notes": "Simple sklearn baseline using handcrafted color features. Must beat DummyClassifier macro F1=0.21 and achieve recall>0 on fire and smoke."
+}
