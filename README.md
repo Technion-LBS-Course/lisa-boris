@@ -244,7 +244,7 @@ PyroFinder uses cameras the customer already owns — no new towers, sensors, dr
 
 ## Repository Structure
 
-<!-- Updated 2026-06-05: added src/eda.py, src/ui.py, src/viz.py, docs/, scripts/, data/dfire_metadata.csv, data/samples/, design_images/ -->
+<!-- Updated 2026-06-09: added YOLO11n baseline results, scripts/YOLO11n_baseline.py, models/ (local only) -->
 
 ```text
 project-root/
@@ -267,16 +267,25 @@ project-root/
 │   └── alerts.py        ← alert record creation, status validation
 ├── scripts/
 │   ├── build_dfire_metadata.py  ← generates data/dfire_metadata.csv from raw D-Fire
-│   └── dummy_try.py             ← M3 sklearn baseline: D-Fire loading, feature extraction, DummyClassifier
+│   ├── dummy_try.py             ← M3 sklearn baseline: D-Fire loading, feature extraction, DummyClassifier
+│   ├── simple_baselines.py      ← M3: Logistic Regression and Random Forest baselines
+│   └── YOLO11n_baseline.py      ← M3: YOLO11n object-detection baseline runner (reproducible)
 ├── results/
-│   └── baseline_dummy_classifier.json  ← saved baseline metrics for model comparison
+│   ├── baseline_dummy_classifier.json      ← DummyClassifier metrics
+│   ├── baseline_logistic_regression.json   ← Logistic Regression metrics
+│   ├── baseline_random_forest.json         ← Random Forest metrics
+│   ├── baseline_yolo11n.json               ← YOLO11n detection metrics (mAP, P, R, F1)
+│   └── results_yolo11n.csv                 ← YOLO11n per-epoch training curves
+├── models/                      ← local only, Git-ignored (model weights)
+│   └── yolo11n_dfire_best.pt    ← YOLO11n best checkpoint from Kaggle training
 ├── data/
 │   ├── dfire_metadata.csv        ← committed; app runs on a fresh clone using only this
+│   ├── dfire_yolo11n.yaml        ← YOLO data config for YOLO11n training
 │   ├── samples/
 │   │   └── dfire/
-│   │       ├── images/   ← 21 committed sample images
+│   │       ├── images/   ← 20 committed sample images
 │   │       └── labels/   ← matching YOLO label files
-│   └── market-survey/    ← competitor screenshots (not in Git LFS)
+│   └── market-survey/    ← competitor screenshots
 ├── docs/
 │   ├── M2_DATA_EDA.md
 │   ├── M2_dashboard.md
@@ -391,8 +400,8 @@ python -m pytest
 
 ### Notes
 
-- No YOLO11s training has been done yet. No mAP results are available at M2.
-- YOLO11n baseline run is planned for M3.
+- No YOLO11s training has been done yet. YOLO11s fine-tuning is next after M3.
+- YOLO11n baseline is **complete** — see the M3 YOLO11n section below for results.
 - The complete D-Fire dataset documentation is in `docs/M2_DATA_EDA.md`.
 - Class mapping verified: D-Fire class 0 = smoke, class 1 = fire (confirmed against official category counts).
 
@@ -432,11 +441,77 @@ Baseline always predicts "background". Any real classifier must exceed F1 macro 
 
 Full baseline metrics saved to `results/baseline_dummy_classifier.json`.
 
-### Next steps (M3)
+### Sklearn classifier results (full D-Fire)
 
-- Add Logistic Regression and Random Forest classifiers
-- Compare F1 macro vs baseline on the same test split
-- Record results in `results/` for each model
+| Model | Accuracy | F1 macro | Fire recall | Smoke recall |
+|---|---|---|---|---|
+| DummyClassifier | 0.47 | 0.21 | 0.00 | 0.00 |
+| Logistic Regression | ~0.61 | ~0.62 | >0 | >0 |
+| Random Forest | ~0.86 | ~0.85 | >0 | >0 |
+
+Full metrics saved to `results/baseline_logistic_regression.json` and `results/baseline_random_forest.json`.
+
+---
+
+## M3 YOLO11n Object-Detection Baseline
+
+**Training platform:** Kaggle Notebook, GPU Tesla T4
+
+**Dataset:** D-Fire (primary training and held-out test evaluation)
+
+| Split | Images |
+|---|---|
+| Train | 17,221 |
+| Test | 4,306 |
+
+**Classes:** `0 = smoke`, `1 = fire`
+
+**Model:** Ultralytics YOLO11n  
+**Image size:** 640 px  
+**Epochs:** 30  
+**Batch size:** 16
+
+### Results
+
+| Metric | Value |
+|---|---|
+| mAP@0.5 | **0.747** |
+| mAP@0.5:0.95 | 0.4249 |
+| Precision | 0.7397 |
+| Recall | 0.6825 |
+| F1 | 0.7099 |
+
+### Result files
+
+| File | Description |
+|---|---|
+| `results/baseline_yolo11n.json` | Detection metrics (committed to Git) |
+| `results/results_yolo11n.csv` | Per-epoch training curves (committed to Git) |
+| `models/yolo11n_dfire_best.pt` | Best checkpoint — **local only, Git-ignored** |
+
+### Important distinctions
+
+YOLO11n is an **object-detection** baseline, not an image-level sklearn classifier.
+It predicts bounding boxes, class labels, and confidence scores for fire and smoke.
+It should be compared to the future YOLO11s using detection metrics:
+mAP@0.5, mAP@0.5:0.95, Precision, Recall, F1, and inference speed.
+
+Do **not** compare YOLO11n mAP directly to sklearn accuracy or Macro F1 —
+these measure different tasks at different granularities.
+
+YOLO11n is the lightweight **baseline and fallback** model.
+YOLO11s remains the planned primary detector for PyroFinder.
+
+### Reproducibility
+
+The training was run on Kaggle because local hardware GPU availability was limited.
+To reproduce locally:
+
+```bash
+python scripts/YOLO11n_baseline.py --train --raw-root "<path-to-D-Fire>"
+```
+
+Ultralytics downloads starting weights (`yolo11n.pt`) automatically if not present.
 
 ---
 

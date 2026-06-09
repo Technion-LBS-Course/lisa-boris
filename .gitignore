@@ -80,6 +80,10 @@ wandb/
 # Streamlit
 .streamlit/secrets.toml
 
+# Archives
+*.zip
+*.tar.gz
+
 # Logs and temp
 *.log
 

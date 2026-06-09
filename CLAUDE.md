@@ -40,7 +40,7 @@ PyroFinder is a real-time fire outbreak detection and monitoring system using ca
 
 ## Repository Structure
 
-<!-- Updated 2026-06-05: added scripts/dummy_try.py, results/ -->
+<!-- Updated 2026-06-09: added YOLO11n baseline results, scripts/YOLO11n_baseline.py, models/ (local only) -->
 
 ```
 app.py                              — Streamlit entry point (multi-tab shell)
@@ -55,7 +55,14 @@ src/mapping.py                      — mapping modes, polygon helpers, approxim
 src/alerts.py                       — alert record creation, status validation
 scripts/build_dfire_metadata.py     — generates data/dfire_metadata.csv from raw D-Fire root
 scripts/dummy_try.py                — M3 sklearn baseline: full D-Fire loading, feature extraction, DummyClassifier
-results/baseline_dummy_classifier.json — saved baseline metrics (DummyClassifier, full D-Fire, 2026-06-05)
+scripts/simple_baselines.py         — M3: Logistic Regression and Random Forest classifiers on D-Fire
+scripts/YOLO11n_baseline.py         — M3: YOLO11n object-detection baseline runner (reproducible; final run on Kaggle)
+results/baseline_dummy_classifier.json     — DummyClassifier metrics (full D-Fire, 2026-06-05)
+results/baseline_logistic_regression.json  — Logistic Regression metrics (full D-Fire)
+results/baseline_random_forest.json        — Random Forest metrics (full D-Fire)
+results/baseline_yolo11n.json              — YOLO11n detection metrics (mAP, P, R, F1; Kaggle, 2026-06-09)
+results/results_yolo11n.csv                — YOLO11n per-epoch training curves
+models/                             — local only; Git-ignored. Contains yolo11n_dfire_best.pt.
 tests/test_smoke.py                 — import smoke tests, unit tests for core helpers
 docs/M2_DATA_EDA.md                 — data workflow, class mapping, cleaning decisions, actual counts
 docs/M2_dashboard.md                — dashboard design notes
@@ -76,16 +83,16 @@ docs/market_survey_wildfire_existing_sensors.md — competitor / market landscap
 
 ## Current MVP Priority
 
-<!-- Updated 2026-06-05: M3 sklearn baseline pipeline started -->
+<!-- Updated 2026-06-09: sklearn classifiers done, YOLO11n baseline done -->
 
 1. ~~Streamlit shell running without errors~~ ✓ Done (M2)
 2. ~~Dataset inspection and metadata display~~ ✓ Done (M2)
 3. ~~Basic EDA — class distribution, bounding box statistics, image samples~~ ✓ Done (M2)
 4. ~~Uploaded image/video inference placeholder~~ ✓ Done (M2)
 5. ~~sklearn baseline pipeline — full D-Fire loading, feature extraction (60-dim), DummyClassifier~~ ✓ Done (M3 start, 2026-06-05)
-6. Real sklearn classifiers vs baseline (M3 next — Logistic Regression, Random Forest)
-7. YOLO11s model loading (M3 — requires fine-tuned checkpoint)
-8. YOLO11n baseline benchmark (M3)
+6. ~~Real sklearn classifiers vs baseline — Logistic Regression, Random Forest~~ ✓ Done (M3, 2026-06-05)
+7. YOLO11s model loading / fine-tuning — **next** (requires fine-tuned checkpoint on D-Fire)
+8. ~~YOLO11n baseline benchmark~~ ✓ Done (M3, Kaggle, 2026-06-09) — see M3 YOLO11n section below
 9. Alert log from test runs
 10. Camera metadata table
 11. Manual image polygon and map linking placeholders
@@ -109,8 +116,34 @@ docs/market_survey_wildfire_existing_sensors.md — competitor / market landscap
   - Train: 17,221 images — background 7,833 / fire 4,707 / smoke 4,681
   - Test: 4,306 images — background 2,005 / fire 1,115 / smoke 1,186
   - Accuracy: 0.47 · F1 macro: 0.21 · fire recall: 0.00 · smoke recall: 0.00
-- Saved to `results/baseline_dummy_classifier.json` for model comparison.
-- Next: add Logistic Regression and Random Forest classifiers; compare F1 macro vs baseline.
+- `scripts/simple_baselines.py` — Logistic Regression and Random Forest classifiers on the same 60-dim feature vector.
+- **Logistic Regression:** ~0.61 accuracy · ~0.62 F1 macro · fire and smoke recall > 0.
+- **Random Forest:** ~0.86 accuracy · ~0.85 F1 macro · strongest classical baseline.
+- All three saved to `results/` as separate JSON files for model comparison.
+
+### M3 YOLO11n Object-Detection Baseline
+
+YOLO11n is the lightweight **object-detection baseline and fallback** for PyroFinder.
+It is **not** an image-level classifier and must **not** be compared to sklearn accuracy.
+Evaluation uses detection metrics: mAP@0.5, mAP@0.5:0.95, Precision, Recall, F1.
+
+- **Training platform:** Kaggle Notebook, Tesla T4 GPU
+- **Dataset:** D-Fire — train: 17,221 images · test: 4,306 images
+- **Classes:** 0 = smoke, 1 = fire
+- **Image size:** 640 px · **Epochs:** 30 · **Batch:** 16
+- **Final metrics (epoch 30):**
+  - mAP@0.5: **0.747**
+  - mAP@0.5:0.95: 0.4249
+  - Precision: 0.7397
+  - Recall: 0.6825
+  - F1: 0.7099
+- Result JSON: `results/baseline_yolo11n.json`
+- Training curve CSV: `results/results_yolo11n.csv`
+- Local ignored checkpoint: `models/yolo11n_dfire_best.pt`
+- Reproducible runner: `scripts/YOLO11n_baseline.py`
+
+YOLO11n is the **baseline**. YOLO11s remains the planned primary detector.
+YOLO11s should be compared to YOLO11n using detection metrics, not to sklearn classifiers.
 
 ## Future Model Layer — SAM 3.1
 

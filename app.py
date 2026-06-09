@@ -695,10 +695,10 @@ if mode == "Operations & Learning Dashboard":
     with tab_baseline:
         import json as _json
 
-        st.header("Sklearn Classifier Baseline")
+        st.header("Model Baselines")
         st.caption(
-            "Image-level classification · fire / smoke / background · "
-            "Feature vector: 60 values per image (RGB stats, HSV stats, color histogram)"
+            "Sklearn image-level classifiers (color features) and YOLO11n object-detection baseline · "
+            "D-Fire dataset · fire / smoke / background"
         )
 
         _results_dir = Path("results")
@@ -727,6 +727,8 @@ if mode == "Operations & Learning Dashboard":
                     return "Logistic Regression"
                 if "Random Forest" in name:
                     return "Random Forest"
+                if "YOLO11n" in name or "yolo11n" in name.lower():
+                    return "YOLO11n"
                 return name
 
             # ── Helper: sort order ───────────────────────────────────────────
@@ -737,7 +739,16 @@ if mode == "Operations & Learning Dashboard":
                     return (1, name)
                 if "Random Forest" in name:
                     return (2, name)
-                return (3, name)
+                if "YOLO11n" in name or "yolo11n" in name.lower():
+                    return (3, name)
+                return (4, name)
+
+            # ── Helper: result type detection ─────────────────────────────────
+            def _is_object_detection_result(result_dict):
+                return result_dict.get("model_family") == "object_detection"
+
+            def _is_sklearn_result(result_dict):
+                return not _is_object_detection_result(result_dict)
 
             # ── Helper: per-model summary info text ──────────────────────────
             def _model_summary_text(name):
@@ -1043,6 +1054,226 @@ Any sklearn baseline is an image-level classifier. It cannot replace YOLO11s obj
                 with st.expander("Detailed analysis — what this baseline tells us", expanded=False):
                     st.markdown(_model_detailed_analysis(model_name))
 
+            # ── Helper: render YOLO11n detection tab ─────────────────────────
+            def _render_yolo11n_baseline_model(model_name, result_dict):
+                _r = result_dict or {}
+                _m = _r.get("metrics", {})
+                _ran = _r.get("run_date") is not None and _m.get("map50") is not None
+
+                st.subheader("YOLO11n Object-Detection Baseline")
+                st.caption(
+                    "Lightweight YOLO11n detector · fire / smoke · "
+                    "bounding boxes + confidence · D-Fire test split"
+                )
+
+                if not _ran:
+                    st.warning(
+                        "YOLO11n has not been evaluated yet. "
+                        "Run training and evaluation with:\n\n"
+                        "```\npython scripts/YOLO11n_baseline.py --train\n```\n\n"
+                        "The result will be saved to `results/baseline_yolo11n.json`."
+                    )
+
+                # Metric cards
+                def _fmt(v):
+                    return f"{v:.4f}" if v is not None else "—"
+
+                _yk1, _yk2, _yk3, _yk4, _yk5 = st.columns(5)
+                _yk1.metric("mAP@0.5",       _fmt(_m.get("map50")))
+                _yk2.metric("mAP@0.5:0.95",  _fmt(_m.get("map50_95")))
+                _yk3.metric("Precision",      _fmt(_m.get("precision")))
+                _yk4.metric("Recall",         _fmt(_m.get("recall")))
+                _yk5.metric("F1",             _fmt(_m.get("f1")))
+
+                st.info(
+                    "YOLO11n is the lightweight object-detection baseline for PyroFinder. "
+                    "Unlike the sklearn baselines, it does not classify the whole image only — "
+                    "it predicts bounding boxes, class labels, and confidence scores for fire and smoke. "
+                    "This makes it the correct baseline for the final YOLO11s detector, because "
+                    "PyroFinder needs localization for approximate map-based alerts."
+                )
+
+                if _r.get("run_date"):
+                    _ds = _r.get("dataset", {})
+                    st.caption(
+                        f"Run date: {_r['run_date']}  ·  "
+                        f"Dataset: {_ds.get('name', '—')}  ·  "
+                        f"Train: {_ds.get('train_size', '—'):,}  ·  "
+                        f"Test: {_ds.get('test_size', '—'):,}"
+                    )
+
+                st.divider()
+
+                # Metrics table
+                st.subheader("Detection metrics")
+                _det_rows = [
+                    {"Metric": "mAP@0.5",      "Value": _fmt(_m.get("map50")),    "Meaning": "Detection quality at IoU threshold 0.5"},
+                    {"Metric": "mAP@0.5:0.95", "Value": _fmt(_m.get("map50_95")), "Meaning": "Stricter detection quality across IoU thresholds 0.5 to 0.95"},
+                    {"Metric": "Precision",     "Value": _fmt(_m.get("precision")),"Meaning": "How many predicted detections are correct"},
+                    {"Metric": "Recall",        "Value": _fmt(_m.get("recall")),   "Meaning": "How many real fire/smoke objects are found"},
+                    {"Metric": "F1",            "Value": _fmt(_m.get("f1")),       "Meaning": "Balance between precision and recall"},
+                ]
+                st.dataframe(pd.DataFrame(_det_rows), use_container_width=True, hide_index=True)
+
+                # Per-class table
+                _per_class = _m.get("per_class")
+                if _per_class:
+                    st.subheader("Per-class metrics")
+                    _pc_rows = []
+                    for _cls_name in ["smoke", "fire"]:
+                        _cls_d = _per_class.get(_cls_name, {})
+                        _pc_rows.append({
+                            "Class":      _cls_name,
+                            "mAP@0.5":    _fmt(_cls_d.get("map50")),
+                            "mAP@0.5:0.95": _fmt(_cls_d.get("map50_95")),
+                        })
+                    st.dataframe(pd.DataFrame(_pc_rows), use_container_width=True, hide_index=True)
+
+                st.divider()
+
+                # ── Training curves ───────────────────────────────────────────
+                _results_csv_primary = Path("results/results_yolo11n.csv")
+                _runs_csv_fallback = Path("runs/detect/yolo11n_dfire_baseline/results.csv")
+                _runs_csv = _results_csv_primary if _results_csv_primary.exists() else _runs_csv_fallback
+                if _runs_csv.exists():
+                    try:
+                        _tc_df = pd.read_csv(_runs_csv)
+                        _tc_df.columns = [c.strip() for c in _tc_df.columns]
+
+                        _loss_cols = {
+                            "train/box_loss": "Train box loss",
+                            "train/cls_loss": "Train cls loss",
+                            "train/dfl_loss": "Train dfl loss",
+                            "val/box_loss":   "Val box loss",
+                            "val/cls_loss":   "Val cls loss",
+                        }
+                        _map_cols = {
+                            "metrics/mAP50(B)":     "mAP@0.5",
+                            "metrics/mAP50-95(B)":  "mAP@0.5:0.95",
+                            "metrics/precision(B)": "Precision",
+                            "metrics/recall(B)":    "Recall",
+                        }
+
+                        _epoch_col = "epoch" if "epoch" in _tc_df.columns else None
+                        if _epoch_col:
+                            _tc_l, _tc_r = st.columns(2)
+
+                            with _tc_l:
+                                st.subheader("Training loss vs. epoch")
+                                _loss_fig = go.Figure()
+                                _loss_colors = {
+                                    "Train box loss": "#e07b39",
+                                    "Train cls loss": "#4fc3f7",
+                                    "Train dfl loss": "#81c784",
+                                    "Val box loss":   "#e07b39",
+                                    "Val cls loss":   "#4fc3f7",
+                                }
+                                _loss_dash = {
+                                    "Train box loss": "solid",
+                                    "Train cls loss": "solid",
+                                    "Train dfl loss": "solid",
+                                    "Val box loss":   "dash",
+                                    "Val cls loss":   "dash",
+                                }
+                                for _col, _label in _loss_cols.items():
+                                    if _col in _tc_df.columns:
+                                        _loss_fig.add_trace(go.Scatter(
+                                            x=_tc_df[_epoch_col],
+                                            y=_tc_df[_col],
+                                            mode="lines",
+                                            name=_label,
+                                            line=dict(
+                                                color=_loss_colors.get(_label, "#cccccc"),
+                                                dash=_loss_dash.get(_label, "solid"),
+                                                width=2,
+                                            ),
+                                        ))
+                                _loss_fig.update_layout(
+                                    xaxis_title="Epoch",
+                                    yaxis_title="Loss",
+                                    legend=dict(orientation="h", yanchor="top", y=-0.25),
+                                    height=340,
+                                    paper_bgcolor="rgba(0,0,0,0)",
+                                    plot_bgcolor="rgba(0,0,0,0)",
+                                    font=dict(color="#cccccc"),
+                                    margin=dict(l=50, r=20, t=20, b=60),
+                                )
+                                apply_chart_theme(_loss_fig)
+                                st.plotly_chart(_loss_fig, use_container_width=True, key="yolo_loss_curve")
+
+                            with _tc_r:
+                                st.subheader("Validation metrics vs. epoch")
+                                _map_fig = go.Figure()
+                                _map_colors = ["#e07b39", "#4fc3f7", "#81c784", "#ffb74d"]
+                                for _i, (_col, _label) in enumerate(_map_cols.items()):
+                                    if _col in _tc_df.columns:
+                                        _map_fig.add_trace(go.Scatter(
+                                            x=_tc_df[_epoch_col],
+                                            y=_tc_df[_col],
+                                            mode="lines",
+                                            name=_label,
+                                            line=dict(color=_map_colors[_i % len(_map_colors)], width=2),
+                                        ))
+                                _map_fig.update_layout(
+                                    xaxis_title="Epoch",
+                                    yaxis_title="Score (0–1)",
+                                    yaxis_range=[0, 1],
+                                    legend=dict(orientation="h", yanchor="top", y=-0.25),
+                                    height=340,
+                                    paper_bgcolor="rgba(0,0,0,0)",
+                                    plot_bgcolor="rgba(0,0,0,0)",
+                                    font=dict(color="#cccccc"),
+                                    margin=dict(l=50, r=20, t=20, b=60),
+                                )
+                                apply_chart_theme(_map_fig)
+                                st.plotly_chart(_map_fig, use_container_width=True, key="yolo_map_curve")
+
+                            _n_epochs_done = int(_tc_df[_epoch_col].max()) + 1
+                            st.caption(
+                                f"Showing {_n_epochs_done} epoch(s) completed so far · "
+                                f"solid lines = train · dashed lines = val · "
+                                f"source: `{_runs_csv}`"
+                            )
+                    except Exception as _e:
+                        st.info(f"Could not load training curves: {_e}")
+                else:
+                    st.info(
+                        "Training curves not found. "
+                        "Expected at: `results/results_yolo11n.csv` "
+                        "(fallback: `runs/detect/yolo11n_dfire_baseline/results.csv`)."
+                    )
+
+                st.divider()
+
+                with st.expander("Detailed analysis — what YOLO11n tells us", expanded=False):
+                    st.markdown("""
+YOLO11n is different from the sklearn baselines. The sklearn models classify an entire image as background, fire, or smoke using handcrafted color features. YOLO11n performs object detection: it predicts **where** fire or smoke appears in the frame.
+
+---
+
+#### What the result means
+
+The key metrics are mAP, precision, and recall, not accuracy. mAP measures whether the predicted bounding boxes overlap the real fire/smoke boxes. Recall is especially important because missing real fire or smoke is more dangerous than creating a false alert.
+
+---
+
+#### What it tells us about the data
+
+This evaluation tests whether D-Fire annotations are useful for object detection, not only for image-level classification. It also shows whether the model can learn separate localization patterns for fire and smoke.
+
+---
+
+#### What it tells us about the model
+
+YOLO11n is lightweight and fast, but it may be less accurate than YOLO11s. It is useful as a speed-oriented baseline and fallback model.
+
+---
+
+#### Main conclusion
+
+YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should be selected as the main model only if it improves detection quality, especially mAP@0.5 and recall, while keeping acceptable inference speed.
+""")
+
             # ── Helper: build comparison dataframe ───────────────────────────
             def _build_comparison_df(results_data):
                 _cmp_rows = []
@@ -1065,92 +1296,188 @@ Any sklearn baseline is an image-level classifier. It cannot replace YOLO11s obj
 
             # ── Helper: render comparison tab ────────────────────────────────
             def _render_model_comparison(results_data):
-                _cmp_df = _build_comparison_df(results_data)
+                _sklearn_data = {n: d for n, d in results_data.items() if _is_sklearn_result(d)}
+                _yolo_data    = {n: d for n, d in results_data.items() if _is_object_detection_result(d)}
 
-                
-                # A. Written conclusions
+                # ── A. Sklearn classification baselines ──────────────────────
+                st.subheader("Image-level sklearn classification baselines")
+                st.caption(
+                    "These baselines classify the whole image using 60 handcrafted color features. "
+                    "They are evaluated with image-level classification metrics (accuracy, Macro F1, recall)."
+                )
+
+                if _sklearn_data:
+                    _cmp_df = _build_comparison_df(_sklearn_data)
+
+                    st.dataframe(_cmp_df, use_container_width=True, hide_index=True)
+
+                    st.divider()
+
+                    # Macro F1 bar chart — sklearn only
+                    st.subheader("Macro F1 comparison — sklearn baselines")
+                    _fig_cmp = px.bar(
+                        _cmp_df,
+                        x="Model", y="Macro F1",
+                        color="Model",
+                        text="Macro F1",
+                        color_discrete_sequence=px.colors.qualitative.Set2,
+                        title="Macro F1 — sklearn image-level baselines",
+                        labels={"Macro F1": "F1 macro (higher is better)"},
+                    )
+                    _fig_cmp.update_layout(yaxis_range=[0, 1], showlegend=False)
+                    apply_chart_theme(_fig_cmp)
+                    st.plotly_chart(_fig_cmp, use_container_width=True, key="baseline_cmp_f1_bar")
+
+                    st.divider()
+
+                    # Radar chart — sklearn only
+                    st.subheader("Macro average radar — sklearn baselines")
+                    _radar_cats = ["Macro Precision", "Macro Recall", "Macro F1", "Accuracy"]
+                    _radar_colors = px.colors.qualitative.Set2
+                    _radar_fig = go.Figure()
+                    for _i, (_, _row) in enumerate(_cmp_df.iterrows()):
+                        _vals = [
+                            _row["Macro Precision"],
+                            _row["Macro Recall"],
+                            _row["Macro F1"],
+                            _row["Accuracy"],
+                        ]
+                        _radar_fig.add_trace(go.Scatterpolar(
+                            r=_vals + [_vals[0]],
+                            theta=_radar_cats + [_radar_cats[0]],
+                            fill="toself",
+                            name=_row["Model"],
+                            line=dict(color=_radar_colors[_i % len(_radar_colors)], width=2),
+                        ))
+                    _radar_fig.update_layout(
+                        polar=dict(
+                            radialaxis=dict(range=[0, 1], tickfont=dict(size=10)),
+                            bgcolor="rgba(0,0,0,0)",
+                        ),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#cccccc"),
+                        height=400,
+                        margin=dict(l=60, r=60, t=50, b=40),
+                        showlegend=True,
+                    )
+                    st.plotly_chart(_radar_fig, use_container_width=True, key="baseline_cmp_radar")
+                else:
+                    st.info("No sklearn baseline results found in `results/`.")
+
+                st.divider()
+
+                # ── B. Object-detection baseline ─────────────────────────────
+                st.subheader("Object-detection baseline")
+                st.caption(
+                    "YOLO11n is evaluated with detection metrics (mAP, precision, recall). "
+                    "These are not the same as classification accuracy and should not be compared directly."
+                )
+
+                if _yolo_data:
+                    _yolo_rows = []
+                    for _yn, _yd in _yolo_data.items():
+                        _ym = _yd.get("metrics", {})
+                        def _fv(v):
+                            return round(v, 4) if v is not None else "—"
+                        _yolo_rows.append({
+                            "Model":        _short_model_label(_yn),
+                            "mAP@0.5":      _fv(_ym.get("map50")),
+                            "mAP@0.5:0.95": _fv(_ym.get("map50_95")),
+                            "Precision":    _fv(_ym.get("precision")),
+                            "Recall":       _fv(_ym.get("recall")),
+                            "F1":           _fv(_ym.get("f1")),
+                            "Run date":     _yd.get("run_date") or "—",
+                        })
+                    st.dataframe(
+                        pd.DataFrame(_yolo_rows), use_container_width=True, hide_index=True
+                    )
+
+                    # Radar chart for YOLO11n if metrics are available
+                    _y_first = next(iter(_yolo_data.values()))
+                    _ym_first = _y_first.get("metrics", {})
+                    if all(_ym_first.get(k) is not None for k in ["map50", "map50_95", "precision", "recall", "f1"]):
+                        st.subheader("YOLO11n detection radar")
+                        _yolo_radar_cats = ["mAP@0.5", "mAP@0.5:0.95", "Precision", "Recall", "F1"]
+                        _yolo_radar_vals = [
+                            _ym_first["map50"],
+                            _ym_first["map50_95"],
+                            _ym_first["precision"],
+                            _ym_first["recall"],
+                            _ym_first["f1"],
+                        ]
+                        _yolo_radar_fig = go.Figure(go.Scatterpolar(
+                            r=_yolo_radar_vals + [_yolo_radar_vals[0]],
+                            theta=_yolo_radar_cats + [_yolo_radar_cats[0]],
+                            fill="toself",
+                            fillcolor="rgba(224,123,57,0.18)",
+                            line=dict(color="#e07b39", width=2),
+                            name="YOLO11n",
+                        ))
+                        _yolo_radar_fig.update_layout(
+                            polar=dict(
+                                radialaxis=dict(range=[0, 1], tickfont=dict(size=10)),
+                                bgcolor="rgba(0,0,0,0)",
+                            ),
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            font=dict(color="#cccccc"),
+                            height=380,
+                            margin=dict(l=60, r=60, t=50, b=40),
+                        )
+                        st.plotly_chart(_yolo_radar_fig, use_container_width=True, key="baseline_yolo_radar")
+                else:
+                    st.info(
+                        "YOLO11n results not available yet. "
+                        "Run: `python scripts/YOLO11n_baseline.py --train`"
+                    )
+
+                st.divider()
+
+                # ── C. Conclusion text ────────────────────────────────────────
                 st.info(
-                    "**Comparison conclusion:** The DummyClassifier is only a minimum bar and is not useful "
-                    "for detection because it misses all fire and smoke cases. Logistic Regression proves that "
-                    "the 60 color features contain real signal, but it produces too many false alarms. Random "
-                    "Forest is the strongest classical ML baseline, reaching the best Macro F1 and the most "
-                    "balanced recall across background, fire, and smoke. However, all three models are still "
-                    "image-level classifiers. The final PyroFinder model must use YOLO11s object detection "
-                    "because the product needs bounding boxes, confidence scores, and approximate location support."
+                    "**Comparison conclusion:** "
+                    "The sklearn baselines test whether simple image-level color features can separate "
+                    "background, fire, and smoke. DummyClassifier is only a minimum bar, Logistic Regression "
+                    "proves that color features contain signal, and Random Forest is the strongest classical "
+                    "image-level baseline. "
+                    "YOLO11n is different: it is the first object-detection baseline. It should be judged by "
+                    "mAP, precision, and recall because it predicts bounding boxes, not just image labels. "
+                    "The final YOLO11s model should be compared mainly against YOLO11n, not against the sklearn "
+                    "models, because both YOLO models solve the real PyroFinder task: detecting and localizing "
+                    "fire/smoke."
                 )
-
-                # B. Comparison table
-                st.subheader("Comparison table")
-                st.dataframe(_cmp_df, use_container_width=True, hide_index=True)
-
-                st.divider()
-
-                # C. Macro F1 bar chart
-                st.subheader("Macro F1 comparison")
-                _fig_cmp = px.bar(
-                    _cmp_df,
-                    x="Model", y="Macro F1",
-                    color="Model",
-                    text="Macro F1",
-                    color_discrete_sequence=px.colors.qualitative.Set2,
-                    title="Macro F1 comparison — all models",
-                    labels={"Macro F1": "F1 macro (higher is better)"},
-                )
-                _fig_cmp.update_layout(yaxis_range=[0, 1], showlegend=False)
-                apply_chart_theme(_fig_cmp)
-                st.plotly_chart(_fig_cmp, use_container_width=True, key="baseline_cmp_f1_bar")
-
-                st.divider()
-
-                # D. All-model radar chart
-                st.subheader("Macro average radar — all models")
-                _radar_cats = ["Macro Precision", "Macro Recall", "Macro F1", "Accuracy"]
-                _radar_colors = px.colors.qualitative.Set2
-                _radar_fig = go.Figure()
-                for _i, (_, _row) in enumerate(_cmp_df.iterrows()):
-                    _vals = [
-                        _row["Macro Precision"],
-                        _row["Macro Recall"],
-                        _row["Macro F1"],
-                        _row["Accuracy"],
-                    ]
-                    _radar_fig.add_trace(go.Scatterpolar(
-                        r=_vals + [_vals[0]],
-                        theta=_radar_cats + [_radar_cats[0]],
-                        fill="toself",
-                        name=_row["Model"],
-                        line=dict(color=_radar_colors[_i % len(_radar_colors)], width=2),
-                    ))
-                _radar_fig.update_layout(
-                    polar=dict(
-                        radialaxis=dict(range=[0, 1], tickfont=dict(size=10)),
-                        bgcolor="rgba(0,0,0,0)",
-                    ),
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#cccccc"),
-                    height=400,
-                    margin=dict(l=60, r=60, t=50, b=40),
-                    showlegend=True,
-                )
-                st.plotly_chart(_radar_fig, use_container_width=True, key="baseline_cmp_radar")
 
                 st.divider()
 
 
-            # ── Sort models and build tabs ────────────────────────────────────
-            _sorted_names = sorted(_results_data.keys(), key=_model_sort_key)
-            _tab_labels = [_short_model_label(n) for n in _sorted_names] + ["Model comparison"]
+            # ── Separate sklearn vs object-detection results ──────────────────
+            _sklearn_names = sorted(
+                [n for n, d in _results_data.items() if _is_sklearn_result(d)],
+                key=_model_sort_key,
+            )
+            _yolo_name_key = next(
+                (n for n in _results_data if _is_object_detection_result(_results_data[n])),
+                None,
+            )
+
+            # ── Build tabs: Dummy → LR → RF → YOLO11n → Model comparison ────
+            _sklearn_labels = [_short_model_label(n) for n in _sklearn_names]
+            _tab_labels = _sklearn_labels + ["YOLO11n", "Model comparison"]
             _model_tabs = st.tabs(_tab_labels)
 
-            # ── Render each model tab ────────────────────────────────────────
-            for _tab, _mname in zip(_model_tabs[:-1], _sorted_names):
+            # ── Render sklearn tabs ───────────────────────────────────────────
+            for _tab, _mname in zip(_model_tabs[:len(_sklearn_names)], _sklearn_names):
                 with _tab:
                     _render_single_baseline_model(_mname, _results_data[_mname])
 
+            # ── YOLO11n tab ───────────────────────────────────────────────────
+            with _model_tabs[len(_sklearn_names)]:
+                _yolo_result = _results_data.get(_yolo_name_key) if _yolo_name_key else None
+                _render_yolo11n_baseline_model(
+                    "YOLO11n (object detection baseline)", _yolo_result
+                )
+
             # ── Model comparison tab ─────────────────────────────────────────
             with _model_tabs[-1]:
-                if len(_sorted_names) < 2:
-                    st.info("Add more model result files to `results/` to enable a full comparison.")
                 _render_model_comparison(_results_data)
 
     # ── Inference Demo ───────────────────────────────────────────────────────
