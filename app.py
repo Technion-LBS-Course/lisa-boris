@@ -1299,7 +1299,24 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                 _sklearn_data = {n: d for n, d in results_data.items() if _is_sklearn_result(d)}
                 _yolo_data    = {n: d for n, d in results_data.items() if _is_object_detection_result(d)}
 
-                # ── A. Sklearn classification baselines ──────────────────────
+                 # ── A. Conclusion text ────────────────────────────────────────
+                st.info(
+                    "**Comparison conclusion:** "
+                    "The sklearn baselines test whether simple image-level color features can separate "
+                    "background, fire, and smoke. DummyClassifier is only a minimum bar, Logistic Regression "
+                    "proves that color features contain signal, and Random Forest is the strongest classical "
+                    "image-level baseline. "
+                    "YOLO11n is different: it is the first object-detection baseline. It should be judged by "
+                    "mAP, precision, and recall because it predicts bounding boxes, not just image labels. "
+                    "The final YOLO11s model should be compared mainly against YOLO11n, not against the sklearn "
+                    "models, because both YOLO models solve the real PyroFinder task: detecting and localizing "
+                    "fire/smoke."
+                )
+
+                st.divider()
+
+
+                # ── B. Sklearn classification baselines ──────────────────────
                 st.subheader("Image-level sklearn classification baselines")
                 st.caption(
                     "These baselines classify the whole image using 60 handcrafted color features. "
@@ -1366,7 +1383,7 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
 
                 st.divider()
 
-                # ── B. Object-detection baseline ─────────────────────────────
+                # ── C. Object-detection baseline ─────────────────────────────
                 st.subheader("Object-detection baseline")
                 st.caption(
                     "YOLO11n is evaluated with detection metrics (mAP, precision, recall). "
@@ -1432,23 +1449,7 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
 
                 st.divider()
 
-                # ── C. Conclusion text ────────────────────────────────────────
-                st.info(
-                    "**Comparison conclusion:** "
-                    "The sklearn baselines test whether simple image-level color features can separate "
-                    "background, fire, and smoke. DummyClassifier is only a minimum bar, Logistic Regression "
-                    "proves that color features contain signal, and Random Forest is the strongest classical "
-                    "image-level baseline. "
-                    "YOLO11n is different: it is the first object-detection baseline. It should be judged by "
-                    "mAP, precision, and recall because it predicts bounding boxes, not just image labels. "
-                    "The final YOLO11s model should be compared mainly against YOLO11n, not against the sklearn "
-                    "models, because both YOLO models solve the real PyroFinder task: detecting and localizing "
-                    "fire/smoke."
-                )
-
-                st.divider()
-
-
+               
             # ── Separate sklearn vs object-detection results ──────────────────
             _sklearn_names = sorted(
                 [n for n, d in _results_data.items() if _is_sklearn_result(d)],
