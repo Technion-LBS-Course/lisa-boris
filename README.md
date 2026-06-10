@@ -32,7 +32,7 @@ Existing wildfire monitoring solutions require dedicated towers, sensors, drones
 **Primary users and paying customers:** homeowners, farm owners, ranch owners, agricultural facility managers, and private landowners in fire-prone areas.
 
 **Primary persona: Dani, farm owner, central Israel:**
-Dani manages a 120-dunam farm with outdoor security cameras at boundary points. During dry summer months, fire risk from neighboring fields or agricultural equipment is high. PyroFinder monitors the feeds automatically and alerts Dani when fire or smoke is confirmedincluding which camera triggered it and the approximate location within the frame.
+Dani manages a 120-dunam farm with outdoor security cameras at boundary points. During dry summer months, fire risk from neighboring fields or agricultural equipment is high. PyroFinder monitors the feeds automatically and alerts Dani when fire or smoke is confirmed, including which camera triggered it and the approximate location within the frame.
 
 **Main use case:** A fire ignites at the edge of Dani's property. PyroFinder detects smoke or fire, confirms it across multiple frames, creates an alert within seconds, and shows the approximate event location as a named image polygon (e.g., "north field") or image quadrant  so Dani can respond immediately.
 
