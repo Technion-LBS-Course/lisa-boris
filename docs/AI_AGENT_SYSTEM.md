@@ -15,7 +15,8 @@ It does **not** redefine the product, data strategy, ML problem, or architecture
 | `PROJECT_CONTEXT.md` | Canonical product context, ML problem, data strategy, architecture, user stories, sprint plan, coding rules |
 | `CLAUDE.md` | Coding-agent context: repo structure, conventions, module responsibilities, current MVP priority |
 | `README.md` | External-facing project description |
-| `AI_AGENT_SYSTEM.md` | Agent roles, skills, workflows, prompts, and operating procedures — this file |
+| `ASSISTANT_WORKING_RULES.md` | General assistant behavior rules: language, accuracy, coding style, and project guardrails |
+| `docs/AI_AGENT_SYSTEM.md` | Agent roles, skills, workflows, prompts, and operating procedures |
 
 **Rule:** If you update the product scope, model choice, dataset strategy, or terminology, update `PROJECT_CONTEXT.md`. If you update repo structure or coding conventions, update `CLAUDE.md`. If you change agent roles or workflows, update this file. Never let these files drift out of sync with each other silently.
 
