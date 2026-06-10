@@ -715,6 +715,12 @@ if mode == "Operations & Learning Dashboard":
             for _rf in _result_files:
                 try:
                     _d = _json.loads(_rf.read_text(encoding="utf-8"))
+                    # Skip operational-metrics JSONs (e.g. yolo11n_operational_metrics.json).
+                    # These are loaded only inside _render_operational_alert_metrics(),
+                    # not as standalone model baselines — otherwise they would show up as a
+                    # second object-detection row with missing mAP/precision/recall.
+                    if _d.get("evaluation_type") == "operational_alert_metrics":
+                        continue
                     _results_data[_d.get("model_name", _rf.stem)] = _d
                 except Exception:
                     pass
@@ -1450,6 +1456,145 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                 st.divider()
 
                
+            # ── Helper: Operational Alert Metrics (cost-sensitive comparison) ─
+            def _render_operational_alert_metrics(results_data):
+                from src.evaluation import (
+                    operational_alert_metrics_from_confusion_matrix as _op_from_cm,
+                )
+
+                st.subheader("Operational Alert Metrics")
+                st.caption(
+                    "Cost-sensitive comparison at the alert level: fire/smoke = hazard, "
+                    "background = no hazard. A missed hazard (false negative) is weighted "
+                    "**10×** a false alert (false positive). "
+                    "**Primary decision metric: Hazard Recall.** Secondary: False Alert Rate. "
+                    "Final ranking: Operational Alert Score (FN weight 10, FP weight 1)."
+                )
+
+                def _op_for(d):
+                    # Prefer embedded operational_metrics; else derive from a stored
+                    # confusion matrix (same predictions, no re-run).
+                    om = d.get("operational_metrics")
+                    if om:
+                        return om
+                    cm = d.get("metrics", {}).get("confusion_matrix")
+                    if cm and cm.get("matrix") and cm.get("labels"):
+                        return _op_from_cm(cm["matrix"], cm["labels"])
+                    return None
+
+                def _fmt(v):
+                    return f"{v:.3f}" if isinstance(v, (int, float)) else "N/A"
+
+                rows, chart_data = [], []
+
+                # ── sklearn rows (image-level classifiers — no localization) ──
+                _sk = {n: d for n, d in results_data.items()
+                       if not _is_object_detection_result(d)}
+                for _n in sorted(_sk, key=_model_sort_key):
+                    _om = _op_for(_sk[_n])
+                    if not _om:
+                        continue
+                    _label = _short_model_label(_n)
+                    rows.append({
+                        "Model": _label,
+                        "Type": "Image-level classifier",
+                        "Hazard Recall": _fmt(_om.get("hazard_recall")),
+                        "False Alert Rate": _fmt(_om.get("false_alert_rate")),
+                        "Alert Precision": _fmt(_om.get("alert_precision")),
+                        "Alert F1": _fmt(_om.get("alert_f1")),
+                        "Operational Alert Score": _fmt(_om.get("operational_alert_score")),
+                        "Location Grid Hit": "N/A",
+                        "Mean Location Error": "N/A",
+                        "Notes": "Image-level baseline — no bounding boxes / localization.",
+                    })
+                    chart_data.append({"Model": _label, "Metric": "Hazard Recall",
+                                       "Value": _om.get("hazard_recall", 0)})
+                    chart_data.append({"Model": _label, "Metric": "Operational Alert Score",
+                                       "Value": _om.get("operational_alert_score", 0)})
+
+                # ── YOLO operational row (from the dedicated operational JSON) ──
+                _yolo_op_path = Path("results/yolo11n_operational_metrics.json")
+                _yolo_op = None
+                if _yolo_op_path.exists():
+                    try:
+                        _yolo_op = _json.loads(_yolo_op_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        _yolo_op = None
+                if _yolo_op:
+                    _om = _yolo_op.get("operational_metrics", {})
+                    _lm = _yolo_op.get("location_metrics", {}) or {}
+                    _label = _yolo_op.get("model_name", "YOLO11n")
+                    rows.append({
+                        "Model": _label,
+                        "Type": "Object detector",
+                        "Hazard Recall": _fmt(_om.get("hazard_recall")),
+                        "False Alert Rate": _fmt(_om.get("false_alert_rate")),
+                        "Alert Precision": _fmt(_om.get("alert_precision")),
+                        "Alert F1": _fmt(_om.get("alert_f1")),
+                        "Operational Alert Score": _fmt(_om.get("operational_alert_score")),
+                        "Location Grid Hit": _fmt(_lm.get("fire_location_grid_hit_rate")),
+                        "Mean Location Error": _fmt(_lm.get("fire_location_error_mean")),
+                        "Notes": "Detects + localizes fire/smoke (approximate image-space location).",
+                    })
+                    chart_data.append({"Model": _label, "Metric": "Hazard Recall",
+                                       "Value": _om.get("hazard_recall", 0)})
+                    chart_data.append({"Model": _label, "Metric": "Operational Alert Score",
+                                       "Value": _om.get("operational_alert_score", 0)})
+
+                _table_cols = [
+                    "Model", "Type", "Hazard Recall", "False Alert Rate",
+                    "Alert Precision", "Alert F1", "Operational Alert Score",
+                    "Location Grid Hit", "Mean Location Error", "Notes",
+                ]
+                if rows:
+                    st.dataframe(
+                        pd.DataFrame(rows)[_table_cols],
+                        use_container_width=True, hide_index=True,
+                    )
+                else:
+                    st.info("No operational alert metrics available in `results/` yet.")
+
+                # Compact chart: Hazard Recall + Operational Alert Score per model
+                if chart_data:
+                    _fig_op = px.bar(
+                        pd.DataFrame(chart_data),
+                        x="Model", y="Value", color="Metric", barmode="group",
+                        color_discrete_map={
+                            "Hazard Recall": "#e07b39",
+                            "Operational Alert Score": "#4fc3f7",
+                        },
+                        labels={"Value": "Score (0–1, higher is better)"},
+                        title="Hazard Recall vs Operational Alert Score (FN weight 10, FP weight 1)",
+                    )
+                    _fig_op.update_layout(yaxis_range=[0, 1], bargap=0.25, height=360)
+                    apply_chart_theme(_fig_op)
+                    st.plotly_chart(_fig_op, use_container_width=True, key="baseline_operational_bar")
+
+                # ── Missing YOLO operational metrics → show generation command ──
+                if not _yolo_op:
+                    st.info(
+                        "YOLO11n operational alert metrics not found "
+                        "(`results/yolo11n_operational_metrics.json`). "
+                        "Generate them (evaluation only, no training) with:\n\n"
+                        "```\n"
+                        "py scripts/evaluate_yolo_alert_metrics.py "
+                        "--raw-root \"<path-to-D-Fire-root>\" "
+                        "--weights \"models/yolo11n_dfire_best.pt\" "
+                        "--model-name \"YOLO11n\" --conf 0.25 "
+                        "--output-json \"results/yolo11n_operational_metrics.json\" "
+                        "--output-csv \"results/yolo11n_test_predictions.csv\"\n"
+                        "```"
+                    )
+
+                st.caption(
+                    "Location metrics apply only to object detectors (YOLO11n / YOLO11s). "
+                    "The sklearn models are **image-level baselines only** and cannot replace "
+                    "YOLO11s, the planned primary detector. YOLO11n is the lightweight "
+                    "object-detection baseline / fallback. Both YOLO models solve the real "
+                    "detection + localization task PyroFinder needs; the sklearn classifiers "
+                    "produce no bounding boxes."
+                )
+
             # ── Separate sklearn vs object-detection results ──────────────────
             _sklearn_names = sorted(
                 [n for n, d in _results_data.items() if _is_sklearn_result(d)],
@@ -1480,6 +1625,10 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
             # ── Model comparison tab ─────────────────────────────────────────
             with _model_tabs[-1]:
                 _render_model_comparison(_results_data)
+
+            # ── Operational Alert Metrics (cost-sensitive, below the sub-tabs) ─
+            st.divider()
+            _render_operational_alert_metrics(_results_data)
 
     # ── Inference Demo ───────────────────────────────────────────────────────
     with tab_inference:

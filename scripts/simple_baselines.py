@@ -17,7 +17,9 @@ D-Fire class mapping: 0 = smoke, 1 = fire  (verified in CLAUDE.md)
 
 from __future__ import annotations
 
+import csv
 import json
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -30,6 +32,14 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+
+# Make `src` importable when run as `python scripts/simple_baselines.py`.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from src.evaluation import (  # noqa: E402  (import after sys.path tweak)
+    compute_operational_alert_metrics,
+    alert_outcome,
+    to_hazard_label,
+)
 
 # ── Paths ────────────────────────────────────────────────────────────────────
 
@@ -117,7 +127,11 @@ def load_split(images_dir: Path, labels_dir: Path, limit: int | None) -> tuple:
 
 
 def build_dataset() -> tuple:
-    """Load train and test sets, preferring the full D-Fire raw data."""
+    """Load train and test sets, preferring the full D-Fire raw data.
+
+    Returns (X_train, X_test, y_train, y_test, test_names). ``test_names`` are the
+    image file names aligned with the test rows, used for per-image prediction CSVs.
+    """
     if DFIRE_ROOT.exists():
         print(f"Using full D-Fire dataset: {DFIRE_ROOT}")
         train_imgs = DFIRE_ROOT / "train" / "images"
@@ -128,21 +142,21 @@ def build_dataset() -> tuple:
         print("Loading train split...")
         X_train, y_train, _ = load_split(train_imgs, train_lbls, MAX_PER_SPLIT)
         print("Loading test split...")
-        X_test,  y_test,  _ = load_split(test_imgs,  test_lbls,  MAX_PER_SPLIT)
+        X_test,  y_test,  test_names = load_split(test_imgs, test_lbls, MAX_PER_SPLIT)
 
     else:
         print(f"D-Fire root not found - falling back to samples: {SAMPLES_ROOT}")
-        X, y, _ = load_split(
+        X, y, names = load_split(
             SAMPLES_ROOT / "images", SAMPLES_ROOT / "labels", limit=None
         )
         _, counts = np.unique(y, return_counts=True)
         can_stratify = all(c >= 2 for c in counts)
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42,
+        X_train, X_test, y_train, y_test, _, test_names = train_test_split(
+            X, y, names, test_size=0.2, random_state=42,
             stratify=y if can_stratify else None,
         )
 
-    return X_train, X_test, y_train, y_test
+    return X_train, X_test, y_train, y_test, test_names
 
 
 # ── Metrics helpers ──────────────────────────────────────────────────────────
@@ -233,10 +247,46 @@ def _save_result(path: Path, doc: dict) -> None:
     print(f"  Saved to: {path}")
 
 
+def _operational_section(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
+    """Alert-level operational metrics for an image-level classifier.
+
+    `location_metrics` is None: sklearn classifiers produce no bounding boxes, so
+    fire-location error / grid hit are not applicable (only object detectors get them).
+    """
+    section = compute_operational_alert_metrics(y_true, y_pred)
+    section["location_metrics"] = None
+    return section
+
+
+def _save_predictions_csv(
+    path: Path, names, y_true: np.ndarray, y_pred: np.ndarray
+) -> None:
+    """Write a per-image prediction table for alert-level review.
+
+    Columns: image_id, y_true, y_pred, hazard_present, hazard_detected, alert_outcome.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(
+            ["image_id", "y_true", "y_pred", "hazard_present", "hazard_detected", "alert_outcome"]
+        )
+        for name, true_label, pred_label in zip(names, y_true, y_pred):
+            writer.writerow([
+                Path(str(name)).stem,
+                str(true_label),
+                str(pred_label),
+                to_hazard_label(true_label),
+                to_hazard_label(pred_label),
+                alert_outcome(true_label, pred_label),
+            ])
+    print(f"  Saved predictions CSV: {path} ({len(names)} rows)")
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    X_train, X_test, y_train, y_test = build_dataset()
+    X_train, X_test, y_train, y_test, test_names = build_dataset()
 
     print(f"\nFeature vector length : {X_train.shape[1]}")
     print(f"Train size            : {len(y_train)}")
@@ -271,6 +321,7 @@ if __name__ == "__main__":
     lr_pred    = lr_pipe.predict(X_test)
     lr_metrics = _build_metrics(y_test, lr_pred)
     _print_summary("Logistic Regression (color features)", lr_metrics)
+    lr_operational = _operational_section(y_test, lr_pred)
 
     lr_doc = {
         "model_name": "Logistic Regression (color features)",
@@ -285,12 +336,16 @@ if __name__ == "__main__":
             "random_state": 42,
         },
         "metrics": lr_metrics,
+        "operational_metrics": lr_operational,
         "notes": (
             "Simple sklearn baseline using handcrafted color features. "
             "Must beat DummyClassifier macro F1=0.21 and achieve recall>0 on fire and smoke."
         ),
     }
     _save_result(RESULTS_DIR / "baseline_logistic_regression.json", lr_doc)
+    _save_predictions_csv(
+        RESULTS_DIR / "predictions_logistic_regression.csv", test_names, y_test, lr_pred
+    )
 
     # ── B. Random Forest ─────────────────────────────────────────────────────
 
@@ -308,6 +363,7 @@ if __name__ == "__main__":
     rf_pred    = rf.predict(X_test)
     rf_metrics = _build_metrics(y_test, rf_pred)
     _print_summary("Random Forest (color features)", rf_metrics)
+    rf_operational = _operational_section(y_test, rf_pred)
 
     rf_doc = {
         "model_name": "Random Forest (color features)",
@@ -325,11 +381,27 @@ if __name__ == "__main__":
             "n_jobs":           -1,
         },
         "metrics": rf_metrics,
+        "operational_metrics": rf_operational,
         "notes": (
             "Simple sklearn baseline using handcrafted color features. "
             "Must beat DummyClassifier macro F1=0.21 and achieve recall>0 on fire and smoke."
         ),
     }
     _save_result(RESULTS_DIR / "baseline_random_forest.json", rf_doc)
+    _save_predictions_csv(
+        RESULTS_DIR / "predictions_random_forest.csv", test_names, y_test, rf_pred
+    )
+
+    print("\nOperational alert metrics (FN weight 10, FP weight 1):")
+    print(
+        f"  Logistic Regression : hazard_recall={lr_operational['hazard_recall']:.4f}  "
+        f"false_alert_rate={lr_operational['false_alert_rate']:.4f}  "
+        f"operational_alert_score={lr_operational['operational_alert_score']:.4f}"
+    )
+    print(
+        f"  Random Forest       : hazard_recall={rf_operational['hazard_recall']:.4f}  "
+        f"false_alert_rate={rf_operational['false_alert_rate']:.4f}  "
+        f"operational_alert_score={rf_operational['operational_alert_score']:.4f}"
+    )
 
     print("\nDone.")

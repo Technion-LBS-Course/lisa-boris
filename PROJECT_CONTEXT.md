@@ -413,6 +413,33 @@ Result files:
 
 YOLO11s remains the planned primary detector. YOLO11s should be selected as the main model only if it improves detection quality, especially mAP@0.5 and recall, while preserving acceptable inference speed.
 
+### 12.3 Operational alert metrics (cost-sensitive comparison)
+
+Standard detection/classification metrics do not capture PyroFinder's real operating cost, so a cost-sensitive **operational alert** layer is used to rank models. At the alert level, `fire` and `smoke` both count as a hazard:
+
+- `hazard_present` = ground truth has fire OR smoke
+- `hazard_detected` = prediction has fire OR smoke
+
+A **missed hazard** (false negative) is the worst failure and is weighted **10×** a **false alert** (false positive). Decision metrics:
+
+- **Primary decision metric: Hazard Recall** = TP / (TP + FN)
+- **Secondary metric: False Alert Rate** = FP / (FP + TN)
+- **Final ranking metric: Operational Alert Score** = 1 − weighted_error_cost / max_possible_cost, with FN weight 10 and FP weight 1 (higher is better)
+
+**Location metrics apply only to object detectors** (YOLO11n / YOLO11s). They use the fire-box (class 1) **bottom-center anchor** (`anchor_x = x_center`, `anchor_y = y_center + height/2`) as an approximate image-space event point (normalized location error + 3×3 grid hit). Image-level sklearn classifiers produce no boxes, so their location metrics are N/A. All location outputs are approximate, never precise geolocation. Smoke-only images are never treated as a fire epicenter.
+
+Operational alert metrics on the D-Fire test split (sklearn baselines — alert-level reduction of the same predictions; no retraining):
+
+| Model | Hazard Recall | False Alert Rate | Operational Alert Score |
+|---|---:|---:|---:|
+| DummyClassifier | 0.0000 | 0.0000 | 0.0802 |
+| Logistic Regression | 0.8057 | 0.5037 | 0.7809 |
+| Random Forest | 0.8779 | 0.0828 | 0.8810 |
+
+DummyClassifier scores near zero because it misses every hazard. Random Forest is the strongest classical baseline but remains an image-level classifier — not a replacement for YOLO11s. YOLO11n / YOLO11s operational and approximate-location metrics are produced by `scripts/evaluate_yolo_alert_metrics.py` (evaluation only, no training).
+
+Implementation: `src/evaluation.py` (pure, dependency-light). Result files: `results/baseline_*.json` (each with an `operational_metrics` block) and `results/yolo11n_operational_metrics.json` (when generated).
+
 ---
 
 ## 13. Detection, Tracking, and Alert Logic

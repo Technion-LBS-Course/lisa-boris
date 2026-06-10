@@ -40,5 +40,24 @@
     "macro_avg":    { "precision": 0.16, "recall": 0.33, "f1": 0.21 },
     "weighted_avg": { "precision": 0.22, "recall": 0.47, "f1": 0.30 }
   },
+  "operational_metrics": {
+    "tp_alert": 0,
+    "fn_alert": 2301,
+    "fp_alert": 0,
+    "tn_alert": 2005,
+    "total_hazard_cases": 2301,
+    "total_background_cases": 2005,
+    "hazard_recall": 0.0,
+    "false_alert_rate": 0.0,
+    "alert_precision": 0.0,
+    "alert_f1": 0.0,
+    "weighted_error_cost": 23010,
+    "max_possible_cost": 25015,
+    "operational_alert_score": 0.0802,
+    "fn_weight": 10,
+    "fp_weight": 1,
+    "location_metrics": null
+  },
+  "operational_metrics_note": "Alert-level reduction of the same predictions (fire/smoke = hazard, background = no hazard). FN weight 10, FP weight 1. Location metrics are null because image-level classifiers produce no bounding boxes.",
   "notes": "This is the minimum bar — any real model must exceed F1 macro=0.21 and recall>0 on fire and smoke."
 }
