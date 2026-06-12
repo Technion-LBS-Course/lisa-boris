@@ -34,9 +34,9 @@ Existing wildfire monitoring solutions require dedicated towers, sensors, drones
 **Primary persona: Dani, farm owner, central Israel:**
 Dani manages a 120-dunam farm with outdoor security cameras at boundary points. During dry summer months, fire risk from neighboring fields or agricultural equipment is high. PyroFinder monitors the feeds automatically and alerts Dani when fire or smoke is confirmed, including which camera triggered it and the approximate location within the frame.
 
-**Main use case:** A fire ignites at the edge of Dani's property. PyroFinder detects smoke or fire, confirms it across multiple frames, creates an alert within seconds, and shows the approximate event location as a named image polygon (e.g., "north field") or image quadrant  so Dani can respond immediately.
+**Main use case:** A fire ignites at the edge of Dani's property. PyroFinder detects smoke or fire, confirms it across multiple frames, raises an alert, and shows the approximate event location as a named image polygon (e.g., "north field") or image quadrant  so Dani can respond.
 
-**Secondary users:** Municipalities, emergency response teams, rescue teams, and forest and park authorities may receive geolocation-tagged alerts when a detected fire may affect public areas. The Emergency / Third-Party Viewer Dashboard is a future product anchor, not part of the first course MVP.
+**Secondary users:** Municipalities, emergency response teams, rescue teams, and forest and park authorities may receive alerts with approximate location context — a named image zone, image quadrant, or approximate map location when mapping configuration is available — when a detected fire may affect public areas. The Emergency / Third-Party Viewer Dashboard is a future product anchor, not part of the first course MVP.
 
 ---
 
@@ -103,6 +103,36 @@ Candidate libraries (no paid provider required): Folium, pydeck, GeoPandas, Shap
 **KPI:** The model is object detection, the metric is recall, because missing a real fire is far more costly than a false alarm.
 
 **Split:** D-Fire's provided split where available; otherwise reproducible 70/15/15 stratified by image category.
+
+---
+
+## Current Model Results
+
+The fine-tuned **YOLO11n baseline** has been evaluated two complementary ways. Detection metrics evaluate the boxes and classes the model predicts; operational metrics reduce each image to *hazard detected / not detected*. They answer different questions and are not interchangeable. (YOLO11s, the planned primary detector, is not yet trained.)
+
+**YOLO11n object-detection baseline** (D-Fire test split):
+
+```text
+mAP@0.5: 0.7470
+mAP@0.5:0.95: 0.4249
+Precision: 0.7397
+Recall: 0.6825
+F1: 0.7099
+```
+
+**YOLO11n operational alert evaluation** (D-Fire test split, evaluation only, confidence 0.25; `fire` and `smoke` both count as a hazard, and a missed hazard is weighted 10× a false alert):
+
+```text
+Hazard Recall: 0.9331
+False Alert Rate: 0.0209
+Alert Precision: 0.9808
+Alert F1: 0.9563
+Operational Alert Score: 0.9368
+```
+
+Approximate fire-location coverage: 0.9148 · 3×3 grid hit rate: 0.9559 (image-space estimates only, not precise geolocation).
+
+Result files: `results/baseline_yolo11n.json` (detection), `results/yolo11n_operational_metrics.json` and `results/yolo11n_test_predictions.csv` (operational + per-image failure analysis).
 
 ---
 
@@ -204,7 +234,7 @@ flowchart TD
 **Story 1 — Customer receives confirmed fire/smoke alert**
 > As a property owner, I want to receive an alert the moment fire or smoke is confirmed in any of my camera feeds, so that I can respond immediately without monitoring footage manually.
 
-*Acceptance criterion:* When YOLO11s detects fire or smoke above the configured threshold across `N` consecutive frames, the dashboard displays a confirmed alert within 5 seconds, including camera identifier, timestamp, and approximate location if available.
+*Acceptance criterion:* When YOLO11s detects fire or smoke above the configured threshold across `N` consecutive frames, the dashboard displays a confirmed alert including camera identifier, timestamp, and approximate location if available.
 
 **Story 2 — Operator sees all customers and cameras on a central map**
 > As a PyroFinder operator, I want to see all customers, sites, and cameras on a single map view, so that I can monitor system status across all installations from one screen.
@@ -245,6 +275,7 @@ PyroFinder uses cameras the customer already owns — no new towers, sensors, dr
 ## Repository Structure
 
 <!-- Updated 2026-06-09: added YOLO11n baseline results, scripts/YOLO11n_baseline.py, models/ (local only) -->
+<!-- Updated 2026-06-12: added src/evaluation.py, scripts/evaluate_yolo_alert_metrics.py, tests/test_evaluation.py, YOLO11n operational metrics -->
 
 ```text
 project-root/
@@ -264,18 +295,22 @@ project-root/
 │   ├── detection.py     ← DetectionResult dataclass, class validation
 │   ├── tracking.py      ← multi-frame confirmation, apparent direction estimation
 │   ├── mapping.py       ← mapping modes, polygon helpers, location formatting
-│   └── alerts.py        ← alert record creation, status validation
+│   ├── alerts.py        ← alert record creation, status validation
+│   └── evaluation.py    ← cost-sensitive operational alert metrics + approximate fire-location helpers (pure stdlib)
 ├── scripts/
 │   ├── build_dfire_metadata.py  ← generates data/dfire_metadata.csv from raw D-Fire
 │   ├── dummy_try.py             ← M3 sklearn baseline: D-Fire loading, feature extraction, DummyClassifier
 │   ├── simple_baselines.py      ← M3: Logistic Regression and Random Forest baselines
-│   └── YOLO11n_baseline.py      ← M3: YOLO11n object-detection baseline runner (reproducible)
+│   ├── YOLO11n_baseline.py      ← M3: YOLO11n object-detection baseline runner (reproducible)
+│   └── evaluate_yolo_alert_metrics.py  ← M3: evaluation-only operational alert + fire-location metrics for a YOLO checkpoint (no training)
 ├── results/
 │   ├── baseline_dummy_classifier.json      ← DummyClassifier metrics
 │   ├── baseline_logistic_regression.json   ← Logistic Regression metrics
 │   ├── baseline_random_forest.json         ← Random Forest metrics
 │   ├── baseline_yolo11n.json               ← YOLO11n detection metrics (mAP, P, R, F1)
-│   └── results_yolo11n.csv                 ← YOLO11n per-epoch training curves
+│   ├── results_yolo11n.csv                 ← YOLO11n per-epoch training curves
+│   ├── yolo11n_operational_metrics.json    ← YOLO11n operational alert + fire-location metrics
+│   └── yolo11n_test_predictions.csv        ← YOLO11n per-image alert outcome + fire-location error table
 ├── models/                      ← local only, Git-ignored (model weights)
 │   └── yolo11n_dfire_best.pt    ← YOLO11n best checkpoint from Kaggle training
 ├── data/
@@ -300,7 +335,8 @@ project-root/
 ├── notebooks/
 │   └── 01_eda.ipynb
 └── tests/
-    └── test_smoke.py
+    ├── test_smoke.py
+    └── test_evaluation.py   ← unit tests for src/evaluation.py (alert confusion, cost weighting, location helpers)
 ```
 
 ---
@@ -512,6 +548,17 @@ python scripts/YOLO11n_baseline.py --train --raw-root "<path-to-D-Fire>"
 ```
 
 Ultralytics downloads starting weights (`yolo11n.pt`) automatically if not present.
+
+### Operational alert evaluation (evaluation only)
+
+Beyond detection metrics, YOLO11n was also evaluated with PyroFinder's cost-sensitive **operational alert** metrics — see the [Current Model Results](#current-model-results) section above for the numbers. This run performs inference only (no training) on the D-Fire test split and writes `results/yolo11n_operational_metrics.json` and `results/yolo11n_test_predictions.csv`:
+
+```bash
+python scripts/evaluate_yolo_alert_metrics.py \
+  --raw-root "<path-to-D-Fire>" \
+  --weights "models/yolo11n_dfire_best.pt" \
+  --model-name "YOLO11n" --conf 0.25
+```
 
 ---
 

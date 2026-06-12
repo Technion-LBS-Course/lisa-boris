@@ -1,6 +1,6 @@
 # PyroFinder — Project Context Brief
 
-**Last updated:** 2026-06-10  
+**Last updated:** 2026-06-12  
 **Status:** M2 submitted; M3 active  
 **Primary use:** Source-of-truth context for Claude, Claude Code, ChatGPT, Cursor, and future AI coding agents.
 
@@ -436,9 +436,73 @@ Operational alert metrics on the D-Fire test split (sklearn baselines — alert-
 | Logistic Regression | 0.8057 | 0.5037 | 0.7809 |
 | Random Forest | 0.8779 | 0.0828 | 0.8810 |
 
-DummyClassifier scores near zero because it misses every hazard. Random Forest is the strongest classical baseline but remains an image-level classifier — not a replacement for YOLO11s. YOLO11n / YOLO11s operational and approximate-location metrics are produced by `scripts/evaluate_yolo_alert_metrics.py` (evaluation only, no training).
+DummyClassifier scores near zero because it misses every hazard. Random Forest is the strongest classical baseline but remains an image-level classifier — not a replacement for YOLO11s.
 
-Implementation: `src/evaluation.py` (pure, dependency-light). Result files: `results/baseline_*.json` (each with an `operational_metrics` block) and `results/yolo11n_operational_metrics.json` (when generated).
+Implementation: `src/evaluation.py` (pure, dependency-light, no ML imports). Unit tests: `tests/test_evaluation.py` (alert confusion, cost weighting, location helpers). Result files: `results/baseline_*.json` (each with an `operational_metrics` block). YOLO11n / YOLO11s operational and approximate-location metrics are produced by `scripts/evaluate_yolo_alert_metrics.py` (evaluation only, no training).
+
+### 12.4 YOLO11n operational alert evaluation — complete
+
+The YOLO11n operational alert evaluation is **complete** (2026-06-10). It is an **evaluation/inference-only** run — no training or retraining occurred. The fine-tuned YOLO11n checkpoint was run on the full D-Fire test split and reduced to image-level alert metrics, plus approximate image-space fire-location metrics.
+
+Run configuration:
+
+| Item | Value |
+|---|---|
+| Evaluation date | 2026-06-10 |
+| Platform | Kaggle Notebook |
+| GPU | Tesla T4 |
+| Dataset | D-Fire test split |
+| Images evaluated | 4,306 |
+| Confidence threshold | 0.25 |
+| Image size | 640 |
+| FN weight | 10 |
+| FP weight | 1 |
+
+Alert-level confusion (image-level, `fire` or `smoke` = hazard):
+
+| Outcome | Count |
+|---|---:|
+| TP alert | 2,147 |
+| FN alert | 154 |
+| FP alert | 42 |
+| TN alert | 1,963 |
+
+Operational alert metrics:
+
+| Metric | Value |
+|---|---:|
+| Hazard Recall | 0.9331 |
+| False Alert Rate | 0.0209 |
+| Alert Precision | 0.9808 |
+| Alert F1 | 0.9563 |
+| Weighted Error Cost | 1,582 |
+| Operational Alert Score | 0.9368 |
+
+Approximate fire-location metrics (bottom-center anchor of class-1 fire boxes; image-space only):
+
+| Metric | Value |
+|---|---:|
+| Ground-truth fire images | 1,115 |
+| Location coverage | 1,020 / 1,115 |
+| Location coverage rate | 0.9148 |
+| Mean fire location error | 0.01343 |
+| Median fire location error | 0.005704 |
+| 3×3 fire-location grid hit rate | 0.9559 |
+
+Output files:
+
+- `results/yolo11n_operational_metrics.json`
+- `results/yolo11n_test_predictions.csv` — per-image alert outcome + fire-location error table, used for failure analysis.
+
+Key distinctions — the two YOLO11n evaluations are **complementary and must not be presented as interchangeable**:
+
+- The **alert-level** evaluation treats both `fire` and `smoke` as a single hazard, then reduces each image to hazard detected / not detected.
+- Missing a hazard (false negative) is weighted **10×** a false alert (false positive).
+- The operational metrics above are **image-level alert metrics**.
+- The standard YOLO11n metrics in `results/baseline_yolo11n.json` (§12.2) remain **object-detection metrics** (mAP, precision, recall, F1 over boxes and classes).
+- These two evaluations answer different questions and must never be mixed or treated as the same score.
+
+The operational location metric uses the **bottom-center anchor** of a class-1 fire bounding box (`anchor_x = x_center`, `anchor_y = y_center + height/2`), not the box centroid. It is an approximate image-space location only — never precise geolocation. Centroids may still be used for tracking, motion analysis, or polygon lookup where appropriate, but the completed operational location metric is bottom-center-anchor-based.
 
 ---
 
@@ -456,7 +520,7 @@ PyroFinder does not trigger an alert from a single-frame detection. A confirmed 
 
 ### Fire location estimation
 
-Fire detections are used to estimate an approximate fire location. The default approximation is based on bounding-box centroid and image-space mapping.
+Fire detections are used to estimate an approximate fire location in image space. The completed YOLO11n operational location metric (§12.4) anchors a class-1 fire box at its **bottom-center** point (`anchor_x = x_center`, `anchor_y = y_center + height/2`), where flames meet the ground in the frame. Bounding-box centroids may still be used for tracking, motion analysis, and polygon lookup, but the operational location metric is bottom-center-anchor-based, not centroid-based. All outputs are approximate image-space locations — never precise geolocation.
 
 Allowed location outputs:
 
@@ -610,12 +674,14 @@ src/
   tracking.py
   mapping.py
   alerts.py
+  evaluation.py           # cost-sensitive operational alert metrics + approximate fire-location helpers; pure stdlib, no ML imports
 
 scripts/
   build_dfire_metadata.py
   dummy_try.py
   simple_baselines.py
   YOLO11n_baseline.py
+  evaluate_yolo_alert_metrics.py   # evaluation-only operational alert + fire-location metrics for a YOLO checkpoint (no training)
 
 data/
   dfire_metadata.csv
@@ -628,6 +694,8 @@ results/
   baseline_random_forest.json
   baseline_yolo11n.json
   results_yolo11n.csv
+  yolo11n_operational_metrics.json   # YOLO11n operational alert + location metrics
+  yolo11n_test_predictions.csv       # per-image alert outcome + fire-location error table
 
 models/
   yolo11n_dfire_best.pt   # local only, Git-ignored
@@ -642,6 +710,7 @@ docs/
 
 tests/
   test_smoke.py
+  test_evaluation.py      # unit tests for src/evaluation.py (alert confusion, cost weighting, location helpers)
 ```
 
 Important note: `ASSISTANT_WORKING_RULES.md` should be kept at the repository root next to `PROJECT_CONTEXT.md`, `CLAUDE.md`, and `README.md`, because it is a source-of-truth instruction file for all future AI sessions.
@@ -718,15 +787,18 @@ Current status:
 5. DummyClassifier baseline — done.
 6. Logistic Regression and Random Forest baselines — done.
 7. YOLO11n object-detection baseline — done.
-8. YOLO11s model loading / fine-tuning — next.
-9. Alert log from test runs — next.
-10. Camera metadata table — next.
-11. Manual image polygon and map-linking placeholders — next.
+8. Cost-sensitive operational alert metric framework (`src/evaluation.py` + `tests/test_evaluation.py`) — done.
+9. YOLO11n operational alert evaluation — done (2026-06-10, evaluation only).
+10. Approximate fire-location evaluation for YOLO11n — done (2026-06-10).
+11. YOLO11s model loading / fine-tuning — next.
+12. Alert log from test runs — next.
+13. Camera metadata table — next.
+14. Manual image polygon and map-linking placeholders — next.
 
 Recommended next M3 work order:
 
-1. Deepen the baseline result analysis and document conclusions.
-2. Create `docs/M3_RESULTS_SUMMARY.md` after the analysis is stable.
+1. Detailed analysis of YOLO11n false negatives, false positives, hazard subtypes, and location errors using `results/yolo11n_test_predictions.csv`.
+2. Create `docs/M3_RESULTS_SUMMARY.md` only after that analysis is reviewed and stable.
 3. Implement or finalize YOLO11s inference path in `src/detection.py`.
 4. Add alert log and N-frame confirmation tests.
 5. Add camera metadata table and basic map view.
