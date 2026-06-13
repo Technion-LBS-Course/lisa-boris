@@ -332,7 +332,7 @@ These datasets are candidates only. Before use, labels must be verified and norm
 - False Alarm Rate, measured as false positives per hour or per 1,000 sampled frames
 - Inference speed, measured in FPS or milliseconds per frame
 
-**Primary KPI statement:** The model is a two-class object detection model, the primary metric is Recall, because missing a real fire or smoke event is more costly than triggering a false alarm.
+**Primary KPI statement:** This is a two-class object-detection model. The primary operational KPI / model-selection metric is **Hazard Recall**, because missing a real fire or smoke hazard is more costly than triggering a false alarm. **False Alert Rate** is the main secondary operational metric, and **Operational Alert Score** (FN weight 10, FP weight 1) is the weighted ranking summary. Detection Recall and mAP@0.5 are supporting object-detection quality metrics, distinct from Hazard Recall (see §12.3).
 
 **Split:** Use D-Fire's provided train/test split. If a different dataset has no split, use a reproducible stratified split by image category.
 
@@ -718,7 +718,6 @@ requirements.txt
 README.md
 CLAUDE.md
 PROJECT_CONTEXT.md
-AI_AGENT_SYSTEM.md
 ASSISTANT_WORKING_RULES.md
 .env.example
 .gitignore
@@ -770,7 +769,7 @@ docs/
   M2_GAP_LIST.md
   Literature_review.md
   market_survey_wildfire_existing_sensors.md
-  AI_AGENT_SYSTEM.md      # optional docs copy if kept there
+  AI_AGENT_SYSTEM.md      # agent roles, workflows, prompts (canonical location)
 
 tests/
   test_smoke.py
@@ -877,7 +876,7 @@ Recommended next M3 work order:
 | `PROJECT_CONTEXT.md` | Canonical product context, ML scope, data strategy, architecture, current status. |
 | `CLAUDE.md` | Coding-agent context: repo structure, module responsibilities, current implementation status. |
 | `README.md` | External-facing project description and reproducibility notes. |
-| `AI_AGENT_SYSTEM.md` | Agent roles, workflows, prompts, operating procedures. |
+| `docs/AI_AGENT_SYSTEM.md` | Agent roles, workflows, prompts, operating procedures. |
 | `ASSISTANT_WORKING_RULES.md` | General communication, accuracy, coding, and session rules for AI assistants. |
 | `docs/M2_DATA_EDA.md` | D-Fire data workflow, class mapping, EDA documentation. |
 | `docs/M2_dashboard.md` | M2 dashboard requirements and dashboard design notes. |
@@ -890,7 +889,7 @@ Update rule:
 
 - If product scope, model choice, data strategy, or terminology changes — update `PROJECT_CONTEXT.md`.
 - If repo structure, module responsibilities, or current coding status changes — update `CLAUDE.md`.
-- If agent workflows or prompts change — update `AI_AGENT_SYSTEM.md`.
+- If agent workflows or prompts change — update `docs/AI_AGENT_SYSTEM.md`.
 - If assistant behavior or working style changes — update `ASSISTANT_WORKING_RULES.md`.
 - If public-facing project claims change — update `README.md`.
 
@@ -1004,5 +1003,5 @@ Do not:
 When asking an AI agent to write code, update documentation, or plan work for PyroFinder, include this instruction:
 
 ```text
-Use PROJECT_CONTEXT.md as the source of truth. Do not change the product scope, model choice, dataset strategy, terminology, or target audience unless explicitly requested. Prefer CLAUDE.md for current code/repo status, AI_AGENT_SYSTEM.md for agent workflows, and ASSISTANT_WORKING_RULES.md for assistant behavior.
+Use PROJECT_CONTEXT.md as the source of truth. Do not change the product scope, model choice, dataset strategy, terminology, or target audience unless explicitly requested. Prefer CLAUDE.md for current code/repo status, docs/AI_AGENT_SYSTEM.md for agent workflows, and ASSISTANT_WORKING_RULES.md for assistant behavior.
 ```

@@ -379,7 +379,7 @@ The final repository must provide evidence for:
 
 - sklearn training code (`scripts/dummy_try.py`, `scripts/simple_baselines.py`);
 - YOLO11n training code (`scripts/YOLO11n_baseline.py`);
-- YOLO11s training or reproducible training workflow (`notebooks/PyroFinder_YOLO11s_Kaggle_Training.ipynb` — present, untracked; produces no committed results yet);
+- YOLO11s training or reproducible training workflow (`notebooks/PyroFinder_YOLO11s_Kaggle_Training.ipynb` — present and tracked in Git; the notebook itself commits no result files — measured results are committed separately under `results/`);
 - model-evaluation code;
 - operational evaluation code (`scripts/evaluate_yolo_alert_metrics.py`, `src/evaluation.py`);
 - result JSON / CSV files;

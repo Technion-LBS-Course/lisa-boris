@@ -24,7 +24,7 @@ It does **not** redefine the product, data strategy, ML problem, or architecture
 
 ## 3. Current Focus
 
-**M2 submitted 2026-06-02. M3 is now active. Deadline: 2026-06-23.**
+**M2 submitted 2026-06-02. M3 is now active. Deadline: Tuesday, June 16, 2026** (authoritative per `docs/M3_SUBMISSION_REQUIREMENTS.md`; the earlier June 23, 2026 date is superseded).
 
 Completed in M3 (do not treat these as future work):
 
@@ -581,7 +581,7 @@ Remaining M3 build work:
 
 **When to use:** At the start of every session, after completing a task, when feeling stuck, or when unsure what to work on next.
 
-**Inputs:** `PROJECT_CONTEXT.md`, `CLAUDE.md`, `README.md`, `AI_AGENT_SYSTEM.md`, current progress description from the user.
+**Inputs:** `PROJECT_CONTEXT.md`, `CLAUDE.md`, `README.md`, `docs/AI_AGENT_SYSTEM.md`, current progress description from the user.
 
 **Outputs:** Next task recommendation, scope warning (if needed), command reminders, handoff summary, recommendation to update source-of-truth files.
 
@@ -712,7 +712,7 @@ M2 submission deadline: **02/06/2026** — completed.
 
 ## 9. Workflow From M2 To M3
 
-M3 submission deadline: **23/06/2026**
+M3 submission deadline: **16/06/2026** (authoritative per `docs/M3_SUBMISSION_REQUIREMENTS.md`; the earlier 23/06/2026 date is superseded)
 
 | Phase | Task | Agent | Output | Status |
 |---|---|---|---|---|
@@ -746,7 +746,7 @@ M3 submission deadline: **23/06/2026**
 **Rules:**
 - Start a fresh Claude conversation for each distinct agent task.
 - Never carry a conversation beyond ~15,000 tokens of productive work without a handoff summary.
-- Always start a session by providing the relevant source-of-truth files (`PROJECT_CONTEXT.md`, `CLAUDE.md`, `AI_AGENT_SYSTEM.md`) and a brief current-state description.
+- Always start a session by providing the relevant source-of-truth files (`PROJECT_CONTEXT.md`, `CLAUDE.md`, `docs/AI_AGENT_SYSTEM.md`) and a brief current-state description.
 - When switching agents, produce a handoff summary first (see §17).
 - If a task requires more than one agent, split it across conversations.
 - When Claude starts repeating itself, hedging more than usual, or producing inconsistent output, assume context overload and start a fresh session.
@@ -836,7 +836,7 @@ git tag m2-final                    # tag at milestone submission
 **Claude Code tips:**
 - Open one agent task per Claude Code session.
 - Provide the source-of-truth files at the start of each session.
-- Never ask Claude Code to modify `PROJECT_CONTEXT.md`, `CLAUDE.md`, or `AI_AGENT_SYSTEM.md` unless that is the explicit task.
+- Never ask Claude Code to modify `PROJECT_CONTEXT.md`, `CLAUDE.md`, or `docs/AI_AGENT_SYSTEM.md` unless that is the explicit task.
 - Use Claude Code for code edits; use the Claude chat interface for planning, review, and handoffs.
 
 ---

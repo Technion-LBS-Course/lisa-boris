@@ -66,7 +66,7 @@ For PyroFinder, the pricing advantage should be framed as:
 
 ## 4. Screenshots of central features to include
 
-Use screenshots as visual evidence that the market already values dashboards, alerts, map views, and verification workflows. Add screenshots manually to the repository under `assets/market-survey/` and reference them here.
+Use screenshots as visual evidence that the market already values dashboards, alerts, map views, and verification workflows. Add screenshots manually to the repository under `data/market-survey/` and reference them here.
 
 | Screenshot to add | Source page | What to capture | Why it matters |
 |---|---|---|---|

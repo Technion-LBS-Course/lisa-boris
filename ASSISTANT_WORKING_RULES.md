@@ -17,7 +17,7 @@
 ## Source and Accuracy Rules
 
 - Prefer project source files over memory.
-- Use README.md, PROJECT_CONTEXT.md, CLAUDE.md, and AI_AGENT_SYSTEM.md as source-of-truth files.
+- Use README.md, PROJECT_CONTEXT.md, CLAUDE.md, and docs/AI_AGENT_SYSTEM.md as source-of-truth files.
 - Do not cite or reference sources unless they are real, relevant, and verified.
 - When using academic papers, use only real papers with valid publication details, DOI, URL, or uploaded PDF evidence.
 - Mark uncertain claims as uncertain.

@@ -2015,8 +2015,11 @@ elif mode == "M2 Course Dashboard":
         # KPI
         st.subheader("KPI")
         st.markdown(
-            "The model is object detection, the metric is **recall**, "
-            "because missing a real fire is far more costly than a false alarm."
+            "This is a two-class object-detection task. The primary operational KPI is "
+            "**Hazard Recall** — missing a real fire/smoke hazard is far more costly than a "
+            "false alarm. **False Alert Rate** is the secondary metric and **Operational Alert "
+            "Score** (FN weight 10, FP weight 1) is the ranking summary. Detection Recall and "
+            "mAP@0.5 are supporting object-detection quality metrics, not the same as Hazard Recall."
         )
 
         st.divider()

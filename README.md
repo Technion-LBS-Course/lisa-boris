@@ -98,9 +98,9 @@ Candidate libraries (no paid provider required): Folium, pydeck, GeoPandas, Shap
 
 **Loss:** Ultralytics YOLO detection loss,  bounding-box regression, classification loss, and distribution focal loss.
 
-**Metrics:** mAP@0.5 (primary), mAP@0.5:0.95, Precision, Recall, F1-score, False Alarm Rate (FP per hour or per 1,000 sampled frames), Inference speed (FPS or ms/frame).
+**Metrics:** mAP@0.5, mAP@0.5:0.95, Precision, Recall, F1-score (object-detection quality metrics); False Alarm Rate (FP per hour or per 1,000 sampled frames); Inference speed (FPS or ms/frame).
 
-**KPI:** The model is object detection, the metric is recall, because missing a real fire is far more costly than a false alarm.
+**KPI:** This is a two-class object-detection task. The primary operational KPI / model-selection metric is **Hazard Recall**, because missing a real fire or smoke hazard is far more costly than a false alarm. **False Alert Rate** is the main secondary operational metric, and **Operational Alert Score** (FN weight 10, FP weight 1) is the weighted ranking summary. Detection Recall and mAP@0.5 are supporting object-detection quality metrics, not the same as Hazard Recall.
 
 **Split:** D-Fire's provided split where available; otherwise reproducible 70/15/15 stratified by image category.
 
