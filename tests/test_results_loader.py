@@ -152,7 +152,7 @@ def test_null_required_metric_is_not_selectable(tmp_path):
 
 
 def test_pending_yolo11s_does_not_beat_measured_yolo11n(tmp_path):
-    # YOLO11n measured; YOLO11s file absent (training in progress).
+    # YOLO11n measured; YOLO11s file absent → generic missing-file fallback (never wins).
     n_op = _write(tmp_path / "yolo11n_operational_metrics.json", _operational_doc("YOLO11n"))
     op_items = [
         ("YOLO11n", n_op),

@@ -15,8 +15,8 @@ models:
 
 D-Fire class mapping (verified): class 0 = smoke, class 1 = fire.
 
-YOLO11n is the lightweight object-detection baseline/fallback. YOLO11s remains the
-planned primary detector. This script works for either checkpoint via --weights.
+YOLO11n is the lightweight object-detection baseline/fallback. YOLO11s is the
+current primary detector. This script works for either checkpoint via --weights.
 
 Usage
 -----

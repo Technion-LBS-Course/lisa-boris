@@ -25,7 +25,7 @@
 ## PyroFinder Project Rules
 
 - PyroFinder uses existing cameras; do not introduce new dedicated hardware unless explicitly marked as future/out of scope.
-- Use YOLO11s as the planned primary detector.
+- Use YOLO11s as the current primary detector.
 - Use YOLO11n only as the lightweight speed baseline/fallback.
 - Do not write generic “YOLO” when the model version matters.
 - Classes are strictly `fire` and `smoke`.

@@ -5,7 +5,7 @@ functions that need them, never at module import time, so importing this module
 is cheap and test-safe. Only the two fine-tuned D-Fire checkpoints are used:
 
     models/yolo11n_dfire_best.pt   — lightweight baseline / fallback
-    models/yolo11s_dfire_best.pt   — planned primary detector (training in progress)
+    models/yolo11s_dfire_best.pt   — current primary detector (measured; weights Git-ignored)
 
 The demo never falls back to pretrained ``yolo11n.pt`` / ``yolo11s.pt``: the M3
 inference demo must run on the fine-tuned fire/smoke detectors, so a missing
@@ -28,10 +28,12 @@ CHECKPOINTS: dict[str, Path] = {
     "YOLO11s": Path("models/yolo11s_dfire_best.pt"),
 }
 
-# Shown when the YOLO11s checkpoint is not yet present.
+# Shown when the local YOLO11s checkpoint file is absent (weights are Git-ignored,
+# so a fresh clone has no checkpoint even though YOLO11s results are measured).
 MISSING_YOLO11S_MESSAGE = (
-    "YOLO11s training is still in progress. "
-    "Add models/yolo11s_dfire_best.pt after the Kaggle run completes."
+    "YOLO11s checkpoint not found locally (model weights are Git-ignored). "
+    "Add models/yolo11s_dfire_best.pt; if a Kaggle run is still in progress, "
+    "add the checkpoint after it completes."
 )
 
 

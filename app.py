@@ -100,10 +100,10 @@ st.markdown("## 🔥 PyroFinder")
 st.caption("Real-time fire and smoke detection using existing cameras.")
 
 if mode == "Operations & Learning Dashboard":
-    tab_overview, tab_eda, tab_baseline, tab_inference, tab_mapping, tab_alerts = st.tabs([
+    tab_overview, tab_eda, tab_models, tab_inference, tab_mapping, tab_alerts = st.tabs([
         "Overview",
         "Dataset & EDA",
-        "Baseline",
+        "Models",
         "Inference Demo",
         "Mapping Setup",
         "Alert Log",
@@ -116,7 +116,7 @@ if mode == "Operations & Learning Dashboard":
         col1, col2 = st.columns(2)
 
         with col1:
-            st.subheader("Planned model")
+            st.subheader("Model plan")
             _mp = get_model_plan()
             st.markdown(f"**Primary model:** {_mp['primary_model']} (`{_mp['primary_weights']}`)")
             st.caption(_mp["primary_reason"])
@@ -704,13 +704,14 @@ if mode == "Operations & Learning Dashboard":
                 else:
                     st.info("Raw image paths from the CSV are not accessible on this machine.")
 
-    # ── Baseline ─────────────────────────────────────────────────────────────
-    with tab_baseline:
+    # ── Models ───────────────────────────────────────────────────────────────
+    with tab_models:
         import json as _json
 
-        st.header("Model Baselines")
+        st.header("Models")
         st.caption(
-            "Sklearn image-level classifiers (color features) and YOLO11n object-detection baseline · "
+            "Sklearn image-level classifiers (color features), the YOLO11n object-detection "
+            "baseline / fallback, and the YOLO11s current primary detector · "
             "D-Fire dataset · fire / smoke / background"
         )
 
@@ -746,8 +747,10 @@ if mode == "Operations & Learning Dashboard":
                     return "Logistic Regression"
                 if "Random Forest" in name:
                     return "Random Forest"
-                if "YOLO11n" in name or "yolo11n" in name.lower():
+                if "yolo11n" in name.lower():
                     return "YOLO11n"
+                if "yolo11s" in name.lower():
+                    return "YOLO11s"
                 return name
 
             # ── Helper: sort order ───────────────────────────────────────────
@@ -758,9 +761,11 @@ if mode == "Operations & Learning Dashboard":
                     return (1, name)
                 if "Random Forest" in name:
                     return (2, name)
-                if "YOLO11n" in name or "yolo11n" in name.lower():
+                if "yolo11n" in name.lower():
                     return (3, name)
-                return (4, name)
+                if "yolo11s" in name.lower():
+                    return (4, name)
+                return (5, name)
 
             # ── Helper: result type detection ─────────────────────────────────
             def _is_object_detection_result(result_dict):
@@ -1073,24 +1078,32 @@ Any sklearn baseline is an image-level classifier. It cannot replace YOLO11s obj
                 with st.expander("Detailed analysis — what this baseline tells us", expanded=False):
                     st.markdown(_model_detailed_analysis(model_name))
 
-            # ── Helper: render YOLO11n detection tab ─────────────────────────
-            def _render_yolo11n_baseline_model(model_name, result_dict):
+            # ── Helper: render a YOLO object-detection model tab ─────────────
+            # One generic renderer shared by YOLO11n and YOLO11s so their tabs
+            # stay identical. It shows object-detection metrics and training
+            # curves only — never sklearn classification metrics. Real values are
+            # read from ``result_dict``; when it is missing/empty a clear pending
+            # state is shown and no metric values are invented.
+            def _render_yolo_detection_model(
+                model_key, display_name, role_label, result_dict,
+                training_csv_path, fallback_csv_path,
+            ):
                 _r = result_dict or {}
                 _m = _r.get("metrics", {})
+                _slug = model_key.lower()
                 _ran = _r.get("run_date") is not None and _m.get("map50") is not None
 
-                st.subheader("YOLO11n Object-Detection Baseline")
+                st.subheader(f"{display_name} Object-Detection — {role_label}")
                 st.caption(
-                    "Lightweight YOLO11n detector · fire / smoke · "
+                    f"{display_name} detector · fire / smoke · "
                     "bounding boxes + confidence · D-Fire test split"
                 )
 
                 if not _ran:
                     st.warning(
-                        "YOLO11n has not been evaluated yet. "
-                        "Run training and evaluation with:\n\n"
-                        "```\npython scripts/YOLO11n_baseline.py --train\n```\n\n"
-                        "The result will be saved to `results/baseline_yolo11n.json`."
+                        f"{display_name} measured result file not found. "
+                        "No metric values are shown until a measured result file exists "
+                        f"(`results/baseline_{_slug}.json`). No placeholder values are invented."
                     )
 
                 # Metric cards
@@ -1104,13 +1117,25 @@ Any sklearn baseline is an image-level classifier. It cannot replace YOLO11s obj
                 _yk4.metric("Recall",         _fmt(_m.get("recall")))
                 _yk5.metric("F1",             _fmt(_m.get("f1")))
 
-                st.info(
-                    "YOLO11n is the lightweight object-detection baseline for PyroFinder. "
-                    "Unlike the sklearn baselines, it does not classify the whole image only — "
-                    "it predicts bounding boxes, class labels, and confidence scores for fire and smoke. "
-                    "This makes it the correct baseline for the final YOLO11s detector, because "
-                    "PyroFinder needs localization for approximate map-based alerts."
-                )
+                if model_key == "YOLO11s":
+                    st.info(
+                        "YOLO11s is the **current primary detector** for PyroFinder. "
+                        "Like YOLO11n it is an object detector — it predicts bounding boxes, "
+                        "class labels, and confidence scores for fire and smoke — but it is the "
+                        "larger model that delivers the best detection quality. "
+                        "YOLO11n remains the lightweight speed baseline / fallback; YOLO11s is "
+                        "compared against it using detection metrics (mAP, precision, recall), "
+                        "never against the sklearn image-level classifiers."
+                    )
+                else:
+                    st.info(
+                        "YOLO11n is the lightweight object-detection **baseline / fallback** for PyroFinder. "
+                        "Unlike the sklearn baselines, it does not classify the whole image only — "
+                        "it predicts bounding boxes, class labels, and confidence scores for fire and smoke. "
+                        "This makes it the correct baseline for the YOLO11s current primary detector, because "
+                        "PyroFinder needs localization for approximate map-based alerts. "
+                        "YOLO11n is a speed-oriented baseline, not an equal parallel model to YOLO11s."
+                    )
 
                 if _r.get("run_date"):
                     _ds = _r.get("dataset", {})
@@ -1148,11 +1173,41 @@ Any sklearn baseline is an image-level classifier. It cannot replace YOLO11s obj
                         })
                     st.dataframe(pd.DataFrame(_pc_rows), use_container_width=True, hide_index=True)
 
+                # ── Run metadata ──────────────────────────────────────────────
+                if _ran:
+                    with st.expander("Run metadata", expanded=False):
+                        _ds = _r.get("dataset", {})
+                        _mp = _r.get("model_params", {})
+
+                        def _meta_int(v):
+                            return f"{v:,}" if isinstance(v, int) else "—"
+
+                        _sel_epoch = _mp.get("selected_epoch_or_row")
+                        if _sel_epoch is None:
+                            _sel_epoch = _m.get("selected_epoch_or_row")
+                        _batch = _mp.get("batch", _mp.get("batch_requested"))
+                        _meta_rows = [
+                            ("Run date", _r.get("run_date", "—")),
+                            ("Dataset", _ds.get("name", "—")),
+                            ("Train size", _meta_int(_ds.get("train_size"))),
+                            ("Test size", _meta_int(_ds.get("test_size"))),
+                            ("Image size", _mp.get("imgsz", "—")),
+                            ("Epochs requested", _mp.get("epochs_requested", "—")),
+                            ("Selected epoch / row", _sel_epoch if _sel_epoch is not None else "—"),
+                            ("Batch", _batch if _batch is not None else "—"),
+                        ]
+                        if _mp.get("run_dir"):
+                            _meta_rows.append(("Run directory", _mp.get("run_dir")))
+                        st.dataframe(
+                            pd.DataFrame(_meta_rows, columns=["Field", "Value"]).astype(str),
+                            use_container_width=True, hide_index=True,
+                        )
+
                 st.divider()
 
                 # ── Training curves ───────────────────────────────────────────
-                _results_csv_primary = Path("results/results_yolo11n.csv")
-                _runs_csv_fallback = Path("runs/detect/yolo11n_dfire_baseline/results.csv")
+                _results_csv_primary = Path(training_csv_path)
+                _runs_csv_fallback = Path(fallback_csv_path)
                 _runs_csv = _results_csv_primary if _results_csv_primary.exists() else _runs_csv_fallback
                 if _runs_csv.exists():
                     try:
@@ -1218,7 +1273,7 @@ Any sklearn baseline is an image-level classifier. It cannot replace YOLO11s obj
                                     margin=dict(l=50, r=20, t=20, b=60),
                                 )
                                 apply_chart_theme(_loss_fig)
-                                st.plotly_chart(_loss_fig, use_container_width=True, key="yolo_loss_curve")
+                                st.plotly_chart(_loss_fig, use_container_width=True, key=f"yolo_loss_curve_{_slug}")
 
                             with _tc_r:
                                 st.subheader("Validation metrics vs. epoch")
@@ -1245,7 +1300,7 @@ Any sklearn baseline is an image-level classifier. It cannot replace YOLO11s obj
                                     margin=dict(l=50, r=20, t=20, b=60),
                                 )
                                 apply_chart_theme(_map_fig)
-                                st.plotly_chart(_map_fig, use_container_width=True, key="yolo_map_curve")
+                                st.plotly_chart(_map_fig, use_container_width=True, key=f"yolo_map_curve_{_slug}")
 
                             _n_epochs_done = int(_tc_df[_epoch_col].max()) + 1
                             st.caption(
@@ -1258,14 +1313,43 @@ Any sklearn baseline is an image-level classifier. It cannot replace YOLO11s obj
                 else:
                     st.info(
                         "Training curves not found. "
-                        "Expected at: `results/results_yolo11n.csv` "
-                        "(fallback: `runs/detect/yolo11n_dfire_baseline/results.csv`)."
+                        f"Expected at: `{training_csv_path}` "
+                        f"(fallback: `{fallback_csv_path}`)."
                     )
 
                 st.divider()
 
-                with st.expander("Detailed analysis — what YOLO11n tells us", expanded=False):
-                    st.markdown("""
+                with st.expander(f"Detailed analysis — what {display_name} tells us", expanded=False):
+                    if model_key == "YOLO11s":
+                        st.markdown("""
+YOLO11s is the current primary detector for PyroFinder. Like YOLO11n it performs object detection — it predicts **where** fire or smoke appears in the frame — but it is the larger model that delivers the best detection quality.
+
+---
+
+#### What the result means
+
+The key metrics are mAP, precision, and recall, not accuracy. mAP measures whether the predicted bounding boxes overlap the real fire/smoke boxes. Recall is especially important because missing real fire or smoke is more dangerous than creating a false alert.
+
+---
+
+#### What it tells us about the data
+
+This evaluation tests whether D-Fire annotations let the larger YOLO11s model learn stronger localization patterns for fire and smoke than the lightweight YOLO11n baseline.
+
+---
+
+#### What it tells us about the model
+
+YOLO11s is heavier than YOLO11n and is expected to be more accurate. It should be compared against YOLO11n using detection metrics (mAP@0.5, recall), never against the sklearn image-level classifiers.
+
+---
+
+#### Main conclusion
+
+YOLO11s is selected as the main detector only if it improves detection quality — especially mAP@0.5 and recall — and the operational alert metrics over YOLO11n, while keeping acceptable inference speed. YOLO11n remains the lightweight speed baseline / fallback.
+""")
+                    else:
+                        st.markdown("""
 YOLO11n is different from the sklearn baselines. The sklearn models classify an entire image as background, fire, or smoke using handcrafted color features. YOLO11n performs object detection: it predicts **where** fire or smoke appears in the frame.
 
 ---
@@ -1411,16 +1495,16 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
 
                 st.subheader("Object-detection comparison")
                 st.caption(
-                    "YOLO11n (baseline / fallback) and YOLO11s (planned primary detector) "
+                    "YOLO11n (baseline / fallback) and YOLO11s (current primary detector) "
                     "are evaluated with detection metrics (mAP, precision, recall, F1). "
                     "These are not classification accuracy and must not be compared to the "
-                    "sklearn baselines. YOLO11s shows **Training in progress** until its "
+                    "sklearn baselines. A detector row shows a missing-file status until its "
                     "measured result file exists — no values are invented."
                 )
 
-                # Expected detection result files. YOLO11s is loaded the same way;
-                # while its training is in progress the file is absent and the loader
-                # reports training_in_progress instead of fabricating metrics.
+                # Expected detection result files. Each detector is loaded the same way;
+                # if a measured file is absent the loader reports a missing-file status
+                # instead of fabricating metrics.
                 _det_specs = [
                     ("YOLO11n", "results/baseline_yolo11n.json"),
                     ("YOLO11s", "results/baseline_yolo11s.json"),
@@ -1451,7 +1535,7 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                     use_container_width=True, hide_index=True,
                 )
 
-                # Radar chart for any measured detector (YOLO11n now; YOLO11s once ready).
+                # Radar chart for any measured detector.
                 _radar_colors = {"YOLO11n": "#e07b39", "YOLO11s": "#4fc3f7"}
                 _det_radar_fig = go.Figure()
                 _radar_cats = ["mAP@0.5", "mAP@0.5:0.95", "Precision", "Recall", "F1"]
@@ -1486,9 +1570,9 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                     st.plotly_chart(_det_radar_fig, use_container_width=True, key="baseline_yolo_radar")
 
                 st.caption(
-                    "YOLO11s is the planned primary detector. It is selected as the main model "
-                    "only after its measured detection and operational result files exist and "
-                    "improve on YOLO11n — never while training is in progress."
+                    "YOLO11s is the current primary detector. A detector is selected as the main "
+                    "model only when its measured detection and operational result files exist and "
+                    "it wins the operational selection rule — never from missing or incomplete files."
                 )
 
                 st.divider()
@@ -1530,8 +1614,8 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                 def _fmt(v):
                     return f"{v:.3f}" if isinstance(v, (int, float)) else "N/A"
 
-                # Expected YOLO operational result files. YOLO11s reports
-                # "Training in progress" until its measured file exists.
+                # Expected YOLO operational result files. A detector reports a
+                # missing-file status until its measured file exists.
                 _op_specs = [
                     ("YOLO11n", "results/yolo11n_operational_metrics.json",
                      "results/baseline_yolo11n.json"),
@@ -1636,8 +1720,8 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                 else:
                     st.info(
                         "No detector selected yet: a model is chosen only when its measured "
-                        "operational result file exists with complete metrics. YOLO11s cannot "
-                        "be selected while its training is in progress."
+                        "operational result file exists with complete metrics. A detector with "
+                        "missing or incomplete result files cannot be selected."
                     )
 
                 # Compact chart: Hazard Recall + Operational Alert Score per model
@@ -1676,7 +1760,7 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                 st.caption(
                     "Location metrics apply only to object detectors (YOLO11n / YOLO11s). "
                     "The sklearn models are **image-level baselines only** and cannot replace "
-                    "YOLO11s, the planned primary detector. YOLO11n is the lightweight "
+                    "YOLO11s, the current primary detector. YOLO11n is the lightweight "
                     "object-detection baseline / fallback. Both YOLO models solve the real "
                     "detection + localization task PyroFinder needs; the sklearn classifiers "
                     "produce no bounding boxes."
@@ -1687,14 +1771,22 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                 [n for n, d in _results_data.items() if _is_sklearn_result(d)],
                 key=_model_sort_key,
             )
-            _yolo_name_key = next(
-                (n for n in _results_data if _is_object_detection_result(_results_data[n])),
-                None,
-            )
 
-            # ── Build tabs: Dummy → LR → RF → YOLO11n → Model comparison ────
+            # Look up each YOLO detection result by model key. A missing file is
+            # simply absent from _results_data, so this returns None and the
+            # renderer shows a pending / missing-file state — never invented values.
+            def _find_yolo_result(key_substr):
+                for _n, _d in _results_data.items():
+                    if _is_object_detection_result(_d) and key_substr in _n.lower():
+                        return _d
+                return None
+
+            _yolo11n_result = _find_yolo_result("yolo11n")
+            _yolo11s_result = _find_yolo_result("yolo11s")
+
+            # ── Build tabs: Dummy → LR → RF → YOLO11n → YOLO11s → Model comparison
             _sklearn_labels = [_short_model_label(n) for n in _sklearn_names]
-            _tab_labels = _sklearn_labels + ["YOLO11n", "Model comparison"]
+            _tab_labels = _sklearn_labels + ["YOLO11n", "YOLO11s", "Model comparison"]
             _model_tabs = st.tabs(_tab_labels)
 
             # ── Render sklearn tabs ───────────────────────────────────────────
@@ -1702,20 +1794,31 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                 with _tab:
                     _render_single_baseline_model(_mname, _results_data[_mname])
 
-            # ── YOLO11n tab ───────────────────────────────────────────────────
+            # ── YOLO11n tab (lightweight baseline / fallback) ─────────────────
             with _model_tabs[len(_sklearn_names)]:
-                _yolo_result = _results_data.get(_yolo_name_key) if _yolo_name_key else None
-                _render_yolo11n_baseline_model(
-                    "YOLO11n (object detection baseline)", _yolo_result
+                _render_yolo_detection_model(
+                    "YOLO11n", "YOLO11n", "lightweight baseline / fallback",
+                    _yolo11n_result,
+                    "results/results_yolo11n.csv",
+                    "runs/detect/yolo11n_dfire_baseline/results.csv",
                 )
 
-            # ── Model comparison tab ─────────────────────────────────────────
+            # ── YOLO11s tab (current primary detector) ────────────────────────
+            with _model_tabs[len(_sklearn_names) + 1]:
+                _render_yolo_detection_model(
+                    "YOLO11s", "YOLO11s", "current primary detector",
+                    _yolo11s_result,
+                    "results/results_yolo11s.csv",
+                    "runs/detect/yolo11s_dfire_baseline/results.csv",
+                )
+
+            # ── Model comparison tab (incl. Operational Alert Metrics) ────────
+            # Operational Alert Metrics live ONLY here so they are not repeated
+            # under every model sub-tab.
             with _model_tabs[-1]:
                 _render_model_comparison(_results_data)
-
-            # ── Operational Alert Metrics (cost-sensitive, below the sub-tabs) ─
-            st.divider()
-            _render_operational_alert_metrics(_results_data)
+                st.divider()
+                _render_operational_alert_metrics(_results_data)
 
     # ── Inference Demo ───────────────────────────────────────────────────────
     with tab_inference:
@@ -1732,7 +1835,7 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
         _n_available = _inf.checkpoint_exists("YOLO11n")
         _s_available = _inf.checkpoint_exists("YOLO11s")
 
-        # YOLO11s is the planned primary detector; until its checkpoint exists the
+        # YOLO11s is the current primary detector; until its checkpoint exists the
         # side-by-side / YOLO11s options are simply not offered.
         if not _s_available:
             st.warning(_inf.MISSING_YOLO11S_MESSAGE)

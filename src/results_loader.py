@@ -19,10 +19,10 @@ without pulling pandas, torch, or ultralytics. It never invents metric values:
 a missing file yields ``training_in_progress`` and malformed JSON yields
 ``malformed`` rather than silent defaults.
 
-YOLO11s is the planned primary detector; YOLO11n is the lightweight baseline /
-fallback. While YOLO11s training is in progress its result files do not exist
-yet, so the loaders report ``training_in_progress`` and the winner logic refuses
-to select it.
+YOLO11s is the current primary detector and YOLO11n is the lightweight baseline /
+fallback; both now have measured result files. When a detector's result files are
+absent, the loaders report ``training_in_progress`` and the winner logic refuses
+to select it, so a detector with missing files can never win.
 """
 
 from __future__ import annotations

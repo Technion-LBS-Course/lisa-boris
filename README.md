@@ -108,7 +108,7 @@ Candidate libraries (no paid provider required): Folium, pydeck, GeoPandas, Shap
 
 ## Current Model Results
 
-The fine-tuned **YOLO11n baseline** has been evaluated two complementary ways. Detection metrics evaluate the boxes and classes the model predicts; operational metrics reduce each image to *hazard detected / not detected*. They answer different questions and are not interchangeable. (YOLO11s, the planned primary detector, is not yet trained.)
+Both the **YOLO11s primary detector** and the fine-tuned **YOLO11n baseline** have been evaluated two complementary ways. Detection metrics evaluate the boxes and classes the model predicts; operational metrics reduce each image to *hazard detected / not detected*. They answer different questions and are not interchangeable.
 
 **YOLO11n object-detection baseline** (D-Fire test split):
 
@@ -134,19 +134,35 @@ Approximate fire-location coverage: 0.9148 · 3×3 grid hit rate: 0.9559 (image-
 
 Result files: `results/baseline_yolo11n.json` (detection), `results/yolo11n_operational_metrics.json` and `results/yolo11n_test_predictions.csv` (operational + per-image failure analysis).
 
-### YOLO11s — training in progress
+### YOLO11s — primary detector (measured)
 
-**YOLO11s, the planned primary detector, is currently training on Kaggle. No YOLO11s metrics are available yet, and no synthetic or placeholder values are used anywhere.** The app and model-comparison code are already prepared to load the real YOLO11s outputs as soon as they exist:
+**YOLO11s, the primary detector, has been fine-tuned and evaluated. The measured result files now exist, and no synthetic or placeholder values are used anywhere.** On the D-Fire test split YOLO11s improves on the YOLO11n baseline across detection and operational metrics.
+
+**YOLO11s object-detection metrics** (D-Fire test split):
 
 ```text
-models/yolo11s_dfire_best.pt              — fine-tuned checkpoint (local only, Git-ignored)
-results/baseline_yolo11s.json             — object-detection metrics (mAP, precision, recall, F1)
-results/results_yolo11s.csv               — per-epoch training curves
-results/yolo11s_operational_metrics.json  — operational alert + approximate fire-location metrics
-results/yolo11s_test_predictions.csv      — per-image alert outcome + fire-location error table
+mAP@0.5: 0.7668        (YOLO11n 0.7470)
+mAP@0.5:0.95: 0.4414   (YOLO11n 0.4249)
+Precision: 0.7573      (YOLO11n 0.7397)
+Recall: 0.6967         (YOLO11n 0.6825)
+F1: 0.7257             (YOLO11n 0.7099)
 ```
 
-Until those files exist, the dashboard shows a clear **Training in progress** state for YOLO11s, never invents metrics, and never selects YOLO11s as the winning detector. The Inference Demo hides the YOLO11s option and shows: *"YOLO11s training is still in progress. Add models/yolo11s_dfire_best.pt after the Kaggle run completes."* When the real files arrive, they are loaded as measured results automatically (see `src/results_loader.py` and `src/inference.py`).
+**YOLO11s operational alert evaluation** (D-Fire test split, evaluation only, confidence 0.25; `fire` and `smoke` both count as a hazard, a missed hazard weighted 10× a false alert):
+
+```text
+Hazard Recall: 0.9370        (YOLO11n 0.9331)
+False Alert Rate: 0.0185     (YOLO11n 0.0209)
+Alert Precision: 0.9831      (YOLO11n 0.9808)
+Alert F1: 0.9595             (YOLO11n 0.9563)
+Operational Alert Score: 0.9406  (YOLO11n 0.9368)
+```
+
+Approximate fire-location coverage: 0.9327 · 3×3 grid hit rate: 0.9644 (image-space estimates only, not precise geolocation).
+
+Result files: `models/yolo11s_dfire_best.pt` (local only, Git-ignored), `results/baseline_yolo11s.json`, `results/results_yolo11s.csv`, `results/yolo11s_operational_metrics.json`, `results/yolo11s_test_predictions.csv`.
+
+YOLO11s is the **selected detector** because its measured detection and operational result files exist and it wins by the operational selection rule (higher hazard recall, lower false alert rate, higher operational alert score). Detection metrics and operational metrics are kept separate and are never compared against the sklearn baselines. YOLO11n remains the lightweight speed baseline / fallback. The dashboard loads these files as measured results automatically (see `src/results_loader.py` and `src/inference.py`).
 
 ---
 
@@ -290,6 +306,7 @@ PyroFinder uses cameras the customer already owns — no new towers, sensors, dr
 
 <!-- Updated 2026-06-09: added YOLO11n baseline results, scripts/YOLO11n_baseline.py, models/ (local only) -->
 <!-- Updated 2026-06-12: added src/evaluation.py, scripts/evaluate_yolo_alert_metrics.py, tests/test_evaluation.py, YOLO11n operational metrics -->
+<!-- Updated 2026-06-13: added measured YOLO11s detection + operational result files; YOLO11s is the selected primary detector -->
 
 ```text
 project-root/
@@ -324,9 +341,14 @@ project-root/
 │   ├── baseline_yolo11n.json               ← YOLO11n detection metrics (mAP, P, R, F1)
 │   ├── results_yolo11n.csv                 ← YOLO11n per-epoch training curves
 │   ├── yolo11n_operational_metrics.json    ← YOLO11n operational alert + fire-location metrics
-│   └── yolo11n_test_predictions.csv        ← YOLO11n per-image alert outcome + fire-location error table
+│   ├── yolo11n_test_predictions.csv        ← YOLO11n per-image alert outcome + fire-location error table
+│   ├── baseline_yolo11s.json               ← YOLO11s detection metrics (measured)
+│   ├── results_yolo11s.csv                 ← YOLO11s per-epoch training curves
+│   ├── yolo11s_operational_metrics.json    ← YOLO11s operational alert + fire-location metrics (measured)
+│   └── yolo11s_test_predictions.csv        ← YOLO11s per-image alert outcome + fire-location error table
 ├── models/                      ← local only, Git-ignored (model weights)
-│   └── yolo11n_dfire_best.pt    ← YOLO11n best checkpoint from Kaggle training
+│   ├── yolo11n_dfire_best.pt    ← YOLO11n best checkpoint from Kaggle training
+│   └── yolo11s_dfire_best.pt    ← YOLO11s best checkpoint from Kaggle training
 ├── data/
 │   ├── dfire_metadata.csv        ← committed; app runs on a fresh clone using only this
 │   ├── dfire_yolo11n.yaml        ← YOLO data config for YOLO11n training
@@ -450,7 +472,7 @@ python -m pytest
 
 ### Notes
 
-- No YOLO11s training has been done yet. YOLO11s fine-tuning is next after M3.
+- YOLO11s fine-tuning and evaluation are **complete** (measured) — YOLO11s is the selected primary detector. See the [Current Model Results](#current-model-results) section above.
 - YOLO11n baseline is **complete** — see the M3 YOLO11n section below for results.
 - The complete D-Fire dataset documentation is in `docs/M2_DATA_EDA.md`.
 - Class mapping verified: D-Fire class 0 = smoke, class 1 = fire (confirmed against official category counts).
@@ -550,7 +572,7 @@ Do **not** compare YOLO11n mAP directly to sklearn accuracy or Macro F1 —
 these measure different tasks at different granularities.
 
 YOLO11n is the lightweight **baseline and fallback** model.
-YOLO11s remains the planned primary detector for PyroFinder.
+YOLO11s is the measured, selected primary detector for PyroFinder — see the [Current Model Results](#current-model-results) section above.
 
 ### Reproducibility
 

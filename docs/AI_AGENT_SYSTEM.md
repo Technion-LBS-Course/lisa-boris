@@ -34,9 +34,11 @@ Completed in M3 (do not treat these as future work):
 - YOLO11n training and object-detection evaluation (mAP@0.5 0.7470, mAP@0.5:0.95 0.4249, P 0.7397, R 0.6825, F1 0.7099).
 - Cost-sensitive operational metric framework (`src/evaluation.py` + `tests/test_evaluation.py`).
 - YOLO11n operational alert evaluation (Hazard Recall 0.9331, False Alert Rate 0.0209, Operational Alert Score 0.9368; evaluation only, 2026-06-10).
+- YOLO11s fine-tuning and object-detection evaluation — measured (mAP@0.5 0.7668, mAP@0.5:0.95 0.4414, P 0.7573, R 0.6967, F1 0.7257; Kaggle, 2026-06-12).
+- YOLO11s operational alert evaluation — measured (Hazard Recall 0.9370, False Alert Rate 0.0185, Operational Alert Score 0.9406; evaluation only, 2026-06-12). YOLO11s is the current selected primary detector; YOLO11n remains the lightweight baseline/fallback.
 - Streamlit operational-metrics comparison section.
 
-**Current analysis priority:** Analyze YOLO11n false negatives, false positives, hazard subtypes, confidence-threshold implications, and approximate fire-location errors, using `results/yolo11n_test_predictions.csv`.
+**Current analysis priority:** Compare YOLO11s and YOLO11n false negatives, false positives, hazard subtypes, confidence-threshold implications, and approximate fire-location errors, using `results/yolo11s_test_predictions.csv` and `results/yolo11n_test_predictions.csv`.
 
 `docs/M3_RESULTS_SUMMARY.md` must be created only after the result analysis is reviewed and stable.
 
@@ -44,10 +46,9 @@ Remaining M3 build work:
 
 | Priority | Area | Goal |
 |---|---|---|
-| 1 | M3 — Result analysis | FN/FP, hazard subtypes, threshold implications, location errors → then `docs/M3_RESULTS_SUMMARY.md` |
-| 2 | M3 — YOLO11s | YOLO11s fine-tuning + inference function; compare to YOLO11n on detection and operational metrics |
-| 3 | M3 — Alert & map | N-frame confirmation, alert log, basic camera map |
-| 4 | M3 — Deployment | Streamlit Cloud deployment, requirements.txt verification |
+| 1 | M3 — Result analysis | YOLO11s vs YOLO11n FN/FP, hazard subtypes, threshold implications, location errors → then `docs/M3_RESULTS_SUMMARY.md` |
+| 2 | M3 — Alert & map | N-frame confirmation, alert log, basic camera map |
+| 3 | M3 — Deployment | Streamlit Cloud deployment, requirements.txt verification |
 
 ---
 
@@ -205,30 +206,30 @@ Remaining M3 build work:
 **Outputs:** Updated KPI tab or metrics display in the dashboard. Placeholder metric cards for M3.
 
 **Responsibilities:**
-- Do **not** describe all metrics as placeholders — several are now real. Distinguish four groups:
-  - **sklearn (available):** accuracy, F1 macro, per-class recall, and operational alert metrics for DummyClassifier, Logistic Regression, Random Forest (`results/baseline_*.json`).
-  - **YOLO11n object-detection (available):** mAP@0.5, mAP@0.5:0.95, Precision, Recall, F1 (`results/baseline_yolo11n.json`).
-  - **YOLO11n operational (available):** Hazard Recall, False Alert Rate, Alert Precision, Alert F1, Operational Alert Score, plus approximate fire-location metrics (`results/yolo11n_operational_metrics.json`).
-  - **YOLO11s (pending):** detection + operational metrics still to be produced once the checkpoint is trained — mark these as pending.
-- Read real numbers from the `results/` JSON files; only YOLO11s values are placeholders.
+- Do **not** describe all metrics as placeholders — they are all now real and measured. Distinguish four groups:
+  - **sklearn (measured):** accuracy, F1 macro, per-class recall, and operational alert metrics for DummyClassifier, Logistic Regression, Random Forest (`results/baseline_*.json`).
+  - **YOLO11n object-detection (measured):** mAP@0.5, mAP@0.5:0.95, Precision, Recall, F1 (`results/baseline_yolo11n.json`).
+  - **YOLO11n operational (measured):** Hazard Recall, False Alert Rate, Alert Precision, Alert F1, Operational Alert Score, plus approximate fire-location metrics (`results/yolo11n_operational_metrics.json`).
+  - **YOLO11s (measured):** detection metrics (`results/baseline_yolo11s.json`) and operational + approximate fire-location metrics (`results/yolo11s_operational_metrics.json`). YOLO11s is the current selected primary detector.
+- Read real numbers from the `results/` JSON files; do not invent any values, and show a clear missing-file state only if a measured file is genuinely absent.
 - Keep detection metrics and operational metrics visually separated — they are complementary, not interchangeable.
 - Align metric definitions with `PROJECT_CONTEXT.md` §8 and §12.
-- Design metric display for easy update when YOLO11s numbers arrive.
+- Design the metric display so new measured result files update it cleanly.
 
 **Must not do:**
 - Display fake model performance numbers as real results.
-- Mark already-available sklearn / YOLO11n metrics as "N/A — awaits M3".
+- Mark already-measured sklearn / YOLO11n / YOLO11s metrics as "N/A — awaits M3".
 - Add metrics not defined in `PROJECT_CONTEXT.md` §8 / §12.
 - Compare sklearn macro F1 directly against YOLO mAP as if they were the same task.
 
-**Files to inspect:** `PROJECT_CONTEXT.md` §8 and §12, `src/model.py`, `src/evaluation.py`, `results/baseline_*.json`, `results/yolo11n_operational_metrics.json`.
+**Files to inspect:** `PROJECT_CONTEXT.md` §8 and §12, `src/model.py`, `src/evaluation.py`, `results/baseline_*.json`, `results/yolo11n_operational_metrics.json`, `results/yolo11s_operational_metrics.json`.
 
 **Skills it depends on:** Streamlit layout, metric card design.
 
 **Example prompt:**
-> "Build the KPI display for the Operations & Learning Dashboard. Show the available sklearn, YOLO11n detection, and YOLO11n operational metrics from the results/ JSON files as real values, keeping detection and operational metrics in separate groups. Mark only the YOLO11s row as pending. Use a two-column layout."
+> "Build the KPI display for the Operations & Learning Dashboard. Show the measured sklearn, YOLO11n, and YOLO11s detection and operational metrics from the results/ JSON files as real values, keeping detection and operational metrics in separate groups. Use a missing-file state only when a measured result file is genuinely absent. Use a two-column layout."
 
-**Definition of Done:** Available metrics show real values from `results/`, only YOLO11s is marked pending, detection and operational metrics are clearly separated, and the layout renders cleanly on `streamlit run app.py`.
+**Definition of Done:** Measured metrics show real values from `results/`, detection and operational metrics are clearly separated, any missing-file state is shown only when a measured file is genuinely absent, and the layout renders cleanly on `streamlit run app.py`.
 
 ---
 
@@ -368,27 +369,27 @@ Remaining M3 build work:
 
 ### C10. Baseline & Evaluation Agent
 
-**Purpose:** Maintain the sklearn baselines, the YOLO11n object-detection and operational evaluations, and the model comparison flow. The sklearn baselines, YOLO11n training/detection metrics, the cost-sensitive operational metric framework, and the YOLO11n operational evaluation are all **already complete** — the current job is analysis and the eventual YOLO11s comparison, not re-running finished work.
+**Purpose:** Maintain the sklearn baselines, the YOLO11n and YOLO11s object-detection and operational evaluations, and the model comparison flow. The sklearn baselines, YOLO11n training/detection metrics, the cost-sensitive operational metric framework, the YOLO11n operational evaluation, and the YOLO11s detection + operational evaluations are all **already complete and measured** — the current job is analysis of the YOLO11s-vs-YOLO11n comparison, not re-running finished work.
 
-**When to use:** At M3, when analyzing existing results, extending the comparison display, or evaluating YOLO11s once its checkpoint exists.
+**When to use:** At M3, when analyzing existing measured results or extending the comparison display.
 
-**Inputs:** `src/model.py`, `src/evaluation.py`, `PROJECT_CONTEXT.md` §8 and §12, the existing sklearn result JSONs, `results/baseline_yolo11n.json`, `results/yolo11n_operational_metrics.json`, `results/yolo11n_test_predictions.csv`, YOLO inference pipeline from C9.
+**Inputs:** `src/model.py`, `src/evaluation.py`, `PROJECT_CONTEXT.md` §8 and §12, the existing sklearn result JSONs, `results/baseline_yolo11n.json`, `results/yolo11n_operational_metrics.json`, `results/yolo11n_test_predictions.csv`, `results/baseline_yolo11s.json`, `results/yolo11s_operational_metrics.json`, `results/yolo11s_test_predictions.csv`, YOLO inference pipeline from C9.
 
-**Outputs:** Result analysis, updated comparison display in the Baseline tab, and (later) YOLO11s result JSONs produced the same way as YOLO11n. Full experiment metadata logged for each run.
+**Outputs:** Result analysis and updated comparison display in the Models tab, using the measured YOLO11n and YOLO11s result JSONs. Full experiment metadata logged for each run.
 
 **Responsibilities:**
 - Read the existing sklearn JSON result files (`results/baseline_dummy_classifier.json`, `results/baseline_logistic_regression.json`, `results/baseline_random_forest.json`).
-- Read `results/baseline_yolo11n.json` for YOLO11n object-detection metrics.
-- Read `results/yolo11n_operational_metrics.json` for YOLO11n operational alert + approximate fire-location metrics.
-- Use `results/yolo11n_test_predictions.csv` for per-image failure analysis (false negatives, false positives, hazard subtypes, location errors).
+- Read `results/baseline_yolo11n.json` and `results/baseline_yolo11s.json` for YOLO11n / YOLO11s object-detection metrics.
+- Read `results/yolo11n_operational_metrics.json` and `results/yolo11s_operational_metrics.json` for operational alert + approximate fire-location metrics.
+- Use `results/yolo11s_test_predictions.csv` and `results/yolo11n_test_predictions.csv` for per-image failure analysis (false negatives, false positives, hazard subtypes, location errors).
 - Preserve the `FN=10`, `FP=1` operational cost policy unless explicitly changed.
-- Distinguish **image-level sklearn classifiers** from **YOLO11n object detection** — different tasks, different granularities.
+- Distinguish **image-level sklearn classifiers** from **YOLO11n / YOLO11s object detection** — different tasks, different granularities.
 - Do **not** compare sklearn macro F1 directly against YOLO mAP as though they were the same task.
 - Use **Hazard Recall** as the primary operational decision metric.
 - Use **False Alert Rate** as the main secondary operational metric.
 - Use **Operational Alert Score** as the weighted ranking summary.
 - Treat location metrics as **approximate image-space metrics only** — never precise geolocation.
-- When YOLO11s is ready, evaluate it with the same detection and operational scripts and declare it primary only if it improves mAP@0.5 and recall (and does not regress operational metrics) at acceptable inference speed.
+- YOLO11s is the current selected primary detector: its measured results improve on YOLO11n across detection and operational metrics. A detector is selected only when its measured complete result files exist and it wins by the operational selection rule.
 - Log experiment results with full metadata (model, dataset, split, hyperparameters, metrics, timestamp).
 
 **Must not do:**
@@ -398,7 +399,7 @@ Remaining M3 build work:
 - Change the feature extraction pipeline when comparing classifiers (break comparability).
 - Change the `FN=10`/`FP=1` cost policy without explicit instruction.
 
-**Files to inspect:** `src/model.py`, `src/evaluation.py`, `scripts/evaluate_yolo_alert_metrics.py`, the `results/baseline_*.json` files, `results/yolo11n_operational_metrics.json`, `results/yolo11n_test_predictions.csv`, `PROJECT_CONTEXT.md` §8 and §12.
+**Files to inspect:** `src/model.py`, `src/evaluation.py`, `scripts/evaluate_yolo_alert_metrics.py`, the `results/baseline_*.json` files, `results/yolo11n_operational_metrics.json`, `results/yolo11n_test_predictions.csv`, `results/yolo11s_operational_metrics.json`, `results/yolo11s_test_predictions.csv`, `PROJECT_CONTEXT.md` §8 and §12.
 
 **Skills it depends on:** scikit-learn, pandas, YOLO inference pipeline (C9), Plotly comparison charts.
 
@@ -406,9 +407,11 @@ Remaining M3 build work:
 - Sklearn (2026-06-05): DummyClassifier (Acc 0.47, F1 macro 0.21), Logistic Regression (~0.61 / ~0.62), Random Forest (~0.86 / ~0.85); full D-Fire train 17,221 / test 4,306.
 - YOLO11n detection (2026-06-09, Kaggle): mAP@0.5 0.7470, mAP@0.5:0.95 0.4249, P 0.7397, R 0.6825, F1 0.7099.
 - YOLO11n operational (2026-06-10, Kaggle, evaluation only): Hazard Recall 0.9331, False Alert Rate 0.0209, Operational Alert Score 0.9368; approximate fire-location coverage 0.9148, grid hit rate 0.9559.
+- YOLO11s detection (2026-06-12, Kaggle): mAP@0.5 0.7668, mAP@0.5:0.95 0.4414, P 0.7573, R 0.6967, F1 0.7257.
+- YOLO11s operational (2026-06-12, Kaggle, evaluation only): Hazard Recall 0.9370, False Alert Rate 0.0185, Operational Alert Score 0.9406; approximate fire-location coverage 0.9327, grid hit rate 0.9644. YOLO11s is the current selected primary detector.
 
 **Example prompt:**
-> "Using results/yolo11n_test_predictions.csv, break down YOLO11n false negatives and false positives by hazard subtype (fire-only, smoke-only, fire+smoke) and summarize the approximate fire-location error distribution. Read the metrics from the results/ JSON files — do not re-run the model. Keep detection and operational metrics separate."
+> "Using results/yolo11s_test_predictions.csv and results/yolo11n_test_predictions.csv, break down YOLO11s and YOLO11n false negatives and false positives by hazard subtype (fire-only, smoke-only, fire+smoke), compare confidence-threshold implications, and summarize the approximate fire-location error distribution. Read the metrics from the results/ JSON files — do not re-run the model. Keep detection and operational metrics separate."
 
 **Definition of Done:** The analysis reads from committed `results/` files (no re-training), distinguishes detection from operational metrics, uses Hazard Recall / False Alert Rate / Operational Alert Score correctly, and the comparison renders in the Baseline tab.
 
@@ -721,12 +724,12 @@ M3 submission deadline: **23/06/2026**
 | 6 | Build YOLO11n baseline benchmark | Baseline & Evaluation Agent | `results/baseline_yolo11n.json`, `scripts/YOLO11n_baseline.py` | ✅ Done 2026-06-09 (Kaggle) |
 | 6b | Build cost-sensitive operational metric framework | Baseline & Evaluation Agent | `src/evaluation.py`, `tests/test_evaluation.py` | ✅ Done 2026-06-10 |
 | 6c | YOLO11n operational alert evaluation (evaluation only) | Baseline & Evaluation Agent | `results/yolo11n_operational_metrics.json`, `results/yolo11n_test_predictions.csv` | ✅ Done 2026-06-10 (Kaggle) |
-| 7 | Build YOLO11s inference + fine-tuning | YOLO Inference Agent | Updated `src/detection.py` | Next |
+| 7 | YOLO11s fine-tuning + detection and operational evaluation | YOLO Inference / Baseline & Evaluation Agent | `results/baseline_yolo11s.json`, `results/yolo11s_operational_metrics.json`, `src/inference.py` | ✅ Done 2026-06-12 (Kaggle) |
 | 8 | Build N-frame confirmation logic | Alert Logic Agent | Updated `src/tracking.py` | — |
 | 9 | Build alert record creation | Alert Logic Agent | Updated `src/alerts.py` | — |
 | 10 | Add inference tab to dashboard | YOLO Inference Agent | New inference tab | — |
 | 11 | Add alert log tab | Alert Logic Agent | Alert log display | — |
-| 12 | Add model comparison display (YOLO11s vs YOLO11n) | Baseline & Evaluation Agent | Comparison table | — |
+| 12 | Add model comparison display (YOLO11s vs YOLO11n) | Baseline & Evaluation Agent | Comparison table in the Models tab | ✅ Done 2026-06-12 |
 | 13 | Add basic map + camera metadata | Mapping & Geolocation Agent | Basic map tab | — |
 | 14 | Add image polygon prototype | Mapping & Geolocation Agent | Polygon display | — |
 | 15 | Extend test suite | Testing & QA Agent | Green pytest | — |
@@ -838,7 +841,7 @@ git tag m2-final                    # tag at milestone submission
 
 ---
 
-## 13. Definition of Done for M2
+## 13. Definition of Done for M2 *(HISTORICAL — M2 submitted 2026-06-02; the "awaits M3" placeholder note below describes the M2 state, not the current one)*
 
 M2 is done when all of the following are true:
 
@@ -867,7 +870,7 @@ M3 has started as of 2026-06-05. Prerequisites:
 - [x] `requirements.txt` is verified and complete (in use).
 - [x] All M2 tests pass.
 - [x] DummyClassifier sklearn baseline complete (`results/baseline_dummy_classifier.json`).
-- [ ] The YOLO11s inference path is planned in `src/detection.py` (stub or full).
+- [x] The YOLO11s inference path is implemented in `src/inference.py` (lazy load, fine-tuned checkpoint only).
 - [ ] YOLO11n baseline scope is confirmed: same data, same split, same metrics.
 - [ ] Alert schema in `src/alerts.py` matches `PROJECT_CONTEXT.md` §13.
 - [ ] Deployment target (Streamlit Cloud) is confirmed and accessible.
@@ -879,7 +882,7 @@ M3 has started as of 2026-06-05. Prerequisites:
 Run these in sequence to establish the agent system and assess current state.
 
 1. **Shadow Mentor — current state assessment**
-   > "Use PROJECT_CONTEXT.md, CLAUDE.md, and AI_AGENT_SYSTEM.md as context. M2 is submitted and M3 is active (due 2026-06-23). Sklearn baselines, the YOLO11n object-detection baseline, the cost-sensitive operational metric framework, and the YOLO11n operational alert evaluation are all complete. What is the gap to the M3 deliverable and what should I work on first?"
+   > "Use PROJECT_CONTEXT.md, CLAUDE.md, and AI_AGENT_SYSTEM.md as context. M2 is submitted and M3 is active. Sklearn baselines, the YOLO11n object-detection baseline, the cost-sensitive operational metric framework, the YOLO11n operational alert evaluation, and the measured YOLO11s detection and operational evaluations are all complete — YOLO11s is the current selected primary detector and YOLO11n remains the lightweight baseline/fallback. What is the gap to the M3 deliverable and what should I work on first?"
 
 2. **Scope Guard — check a proposed feature**
    > "Is it in scope for M2 to add a satellite map with fire heatmap overlay? Check against PROJECT_CONTEXT.md §4 and §19."
@@ -899,8 +902,8 @@ Run these in sequence to establish the agent system and assess current state.
 7. **UI Design System Agent — define visual identity**
    > "Define a PyroFinder visual identity for the Streamlit dashboard. Output a color palette, a Plotly chart theme, and 2 reusable metric card snippets."
 
-8. **KPI & Metrics Agent — show real and pending metrics**
-   > "Build the KPI display for the Operations & Learning Dashboard. Show the available sklearn, YOLO11n detection, and YOLO11n operational metrics from the results/ JSON files as real values, keeping detection and operational metrics in separate groups. Mark only the YOLO11s row as pending. Use a two-column layout."
+8. **KPI & Metrics Agent — show measured metrics**
+   > "Build the KPI display for the Operations & Learning Dashboard. Show the measured sklearn, YOLO11n, and YOLO11s detection and operational metrics from the results/ JSON files as real values, keeping detection and operational metrics in separate groups. Use a missing-file state only when a measured result file is genuinely absent. Use a two-column layout."
 
 9. **Testing & QA Agent — verify test suite**
    > "Run python -m pytest and show me the output. Then review tests/test_smoke.py and suggest what unit tests are missing for the current src/ modules."
@@ -1088,11 +1091,13 @@ project-root/
 
 Future additions expected for M3:
 - `pages/` — Streamlit multi-page app pages
-- YOLO11s detection + operational result JSONs (once the checkpoint is trained)
+
+Already added for M3 (measured):
+- YOLO11s detection + operational result JSONs (`results/baseline_yolo11s.json`, `results/yolo11s_operational_metrics.json`, `results/results_yolo11s.csv`, `results/yolo11s_test_predictions.csv`).
 
 ---
 
-*PyroFinder · AI Agent System · Technion Course 016833 · Last updated: 2026-06-12*
+*PyroFinder · AI Agent System · Technion Course 016833 · Last updated: 2026-06-13*
 
 ---
 
