@@ -134,6 +134,20 @@ Approximate fire-location coverage: 0.9148 · 3×3 grid hit rate: 0.9559 (image-
 
 Result files: `results/baseline_yolo11n.json` (detection), `results/yolo11n_operational_metrics.json` and `results/yolo11n_test_predictions.csv` (operational + per-image failure analysis).
 
+### YOLO11s — training in progress
+
+**YOLO11s, the planned primary detector, is currently training on Kaggle. No YOLO11s metrics are available yet, and no synthetic or placeholder values are used anywhere.** The app and model-comparison code are already prepared to load the real YOLO11s outputs as soon as they exist:
+
+```text
+models/yolo11s_dfire_best.pt              — fine-tuned checkpoint (local only, Git-ignored)
+results/baseline_yolo11s.json             — object-detection metrics (mAP, precision, recall, F1)
+results/results_yolo11s.csv               — per-epoch training curves
+results/yolo11s_operational_metrics.json  — operational alert + approximate fire-location metrics
+results/yolo11s_test_predictions.csv      — per-image alert outcome + fire-location error table
+```
+
+Until those files exist, the dashboard shows a clear **Training in progress** state for YOLO11s, never invents metrics, and never selects YOLO11s as the winning detector. The Inference Demo hides the YOLO11s option and shows: *"YOLO11s training is still in progress. Add models/yolo11s_dfire_best.pt after the Kaggle run completes."* When the real files arrive, they are loaded as measured results automatically (see `src/results_loader.py` and `src/inference.py`).
+
 ---
 
 ## Detection, Tracking, and Geolocation Logic

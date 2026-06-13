@@ -1,0 +1,49 @@
+{
+  "model_name": "YOLO11s",
+  "model_family": "object_detection",
+  "evaluation_type": "operational_alert_metrics",
+  "run_date": "2026-06-12",
+  "weights": "/kaggle/working/pyrofinder_yolo11s_results/yolo11s_dfire_best.pt",
+  "confidence_threshold": 0.25,
+  "image_size": 640,
+  "fn_weight": 10,
+  "fp_weight": 1,
+  "dataset": {
+    "name": "D-Fire",
+    "split": "test",
+    "num_images_evaluated": 4306,
+    "class_mapping": {
+      "0": "smoke",
+      "1": "fire"
+    }
+  },
+  "operational_metrics": {
+    "tp_alert": 2156,
+    "fn_alert": 145,
+    "fp_alert": 37,
+    "tn_alert": 1968,
+    "total_hazard_cases": 2301,
+    "total_background_cases": 2005,
+    "hazard_recall": 0.937,
+    "false_alert_rate": 0.0185,
+    "alert_precision": 0.9831,
+    "alert_f1": 0.9595,
+    "weighted_error_cost": 1487,
+    "max_possible_cost": 25015,
+    "operational_alert_score": 0.9406,
+    "fn_weight": 10,
+    "fp_weight": 1
+  },
+  "location_metrics": {
+    "fire_location_error_mean": 0.013499,
+    "fire_location_error_median": 0.005478,
+    "fire_location_grid_hit_rate": 0.9644,
+    "location_coverage_count": 1040,
+    "location_coverage_rate": 0.9327,
+    "gt_fire_image_count": 1115,
+    "grid_size": 3,
+    "anchor": "bottom-center (anchor_x = x_center, anchor_y = y_center + height/2)",
+    "note": "Approximate image-space fire location from class-1 (fire) bottom-center anchors, matched by best IoU per image. Not precise geolocation. Computed only when both ground-truth fire and predicted fire exist."
+  },
+  "notes": "Evaluation only; no training. fire/smoke count as hazard at the alert level; a missed hazard is weighted far more than a false alert. Location metrics are approximate image-space estimates, not precise geolocation."
+}

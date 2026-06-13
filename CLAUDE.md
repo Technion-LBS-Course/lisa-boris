@@ -42,6 +42,7 @@ PyroFinder is a real-time fire outbreak detection and monitoring system using ca
 
 <!-- Updated 2026-06-09: added YOLO11n baseline results, scripts/YOLO11n_baseline.py, models/ (local only) -->
 <!-- Updated 2026-06-10: added src/evaluation.py + cost-sensitive operational alert metrics, scripts/evaluate_yolo_alert_metrics.py, tests/test_evaluation.py -->
+<!-- Updated 2026-06-12: added src/results_loader.py + src/inference.py for ready-but-pending YOLO11s integration (YOLO11s training in progress; no YOLO11s metrics yet) -->
 
 ```
 app.py                              — Streamlit entry point (multi-tab shell)
@@ -55,6 +56,8 @@ src/tracking.py                     — multi-frame confirmation, apparent direc
 src/mapping.py                      — mapping modes, polygon helpers, approximate location formatting
 src/alerts.py                       — alert record creation, status validation
 src/evaluation.py                   — cost-sensitive operational alert metrics (hazard recall, false alert rate, operational alert score) + approximate fire-location helpers; pure stdlib, no ML imports
+src/results_loader.py               — load/classify detection vs operational result JSON (status: ok / training_in_progress / malformed / wrong-kind) + cost-sensitive winner selection; pure stdlib, no ML imports
+src/inference.py                    — lazy YOLO11n/YOLO11s detector loading (ultralytics imported inside functions only) + single-image detection; fine-tuned D-Fire checkpoints only, never pretrained weights; validates fire/smoke-only classes
 scripts/build_dfire_metadata.py     — generates data/dfire_metadata.csv from raw D-Fire root
 scripts/dummy_try.py                — M3 sklearn baseline: full D-Fire loading, feature extraction, DummyClassifier
 scripts/simple_baselines.py         — M3: Logistic Regression and Random Forest classifiers on D-Fire (+ operational_metrics block + prediction CSVs)
@@ -71,6 +74,8 @@ results/predictions_*.csv                  — additional per-image alert predic
 models/                             — local only; Git-ignored. Contains yolo11n_dfire_best.pt.
 tests/test_smoke.py                 — import smoke tests, unit tests for core helpers
 tests/test_evaluation.py            — unit tests for src/evaluation.py (alert confusion, cost weighting, location helpers)
+tests/test_results_loader.py        — unit tests for src/results_loader.py (status classification, winner selection, pending/malformed handling) — temp files only, no weights
+tests/test_inference.py             — unit tests for src/inference.py (checkpoint paths, class validation, missing-checkpoint guard) — no real weights, no ultralytics import
 docs/M2_DATA_EDA.md                 — data workflow, class mapping, cleaning decisions, actual counts
 docs/M2_dashboard.md                — dashboard design notes
 docs/M2_GAP_LIST.md                 — known gaps and open items as of M2
@@ -102,12 +107,39 @@ docs/market_survey_wildfire_existing_sensors.md — competitor / market landscap
 7. ~~YOLO11n baseline benchmark~~ ✓ Done (M3, Kaggle, 2026-06-09) — see M3 YOLO11n section below
 8. ~~Cost-sensitive operational alert metric implementation (`src/evaluation.py` + `tests/test_evaluation.py`)~~ ✓ Done (M3, 2026-06-10)
 9. ~~YOLO11n operational alert evaluation~~ ✓ Done (M3, Kaggle, 2026-06-10) — see M3 YOLO11n Operational Evaluation section below
-10. YOLO11s model loading / fine-tuning — **next** (requires fine-tuned checkpoint on D-Fire)
+10. YOLO11s model loading / fine-tuning — **in progress** (training on Kaggle; app prepared to load real outputs — see "YOLO11s Integration" below)
 11. Alert log from test runs
 12. Camera metadata table
 13. Manual image polygon and map linking placeholders
 
 **Next result-analysis task:** Detailed analysis of YOLO11n false negatives, false positives, hazard subtypes, and location errors before creating `docs/M3_RESULTS_SUMMARY.md`.
+
+### YOLO11s Integration — ready, pending real results (2026-06-12)
+
+YOLO11s is the planned primary detector and is **currently training on Kaggle**. No YOLO11s metrics are available yet, and **no synthetic / placeholder values are used anywhere**. The app and comparison code are already wired to consume the real outputs the moment they exist:
+
+Expected real YOLO11s files (do not create until the Kaggle run produces them):
+
+```text
+models/yolo11s_dfire_best.pt              — fine-tuned checkpoint (local only, Git-ignored)
+results/baseline_yolo11s.json             — object-detection metrics (mAP, P, R, F1)
+results/results_yolo11s.csv               — per-epoch training curves
+results/yolo11s_operational_metrics.json  — operational alert + approximate fire-location metrics
+results/yolo11s_test_predictions.csv      — per-image alert outcome + fire-location error table
+```
+
+Until these files exist:
+
+- The Baseline → object-detection comparison shows a YOLO11s row with status **Training in progress** (no metric values).
+- The operational alert comparison shows a YOLO11s row with status **Training in progress** (no metric values).
+- Winner selection (`src/results_loader.select_operational_winner`) refuses to select YOLO11s while its files are missing/pending; YOLO11n remains the selected detector.
+- The Inference Demo hides/disables the YOLO11s option and shows: `YOLO11s training is still in progress. Add models/yolo11s_dfire_best.pt after the Kaggle run completes.`
+
+When the real files arrive, `src/results_loader.py` loads them as measured (status **Measured**), the comparison tables fill in, and winner selection applies the decision hierarchy: Hazard Recall → False Alert Rate → Operational Alert Score → detection Recall / mAP@0.5 → inference speed (only when measured). Object-detection metrics and operational alert metrics stay in separate tables and are never mixed with sklearn Macro F1. Generate the YOLO11s operational/location metrics (evaluation only, no training) with:
+
+```
+python scripts/evaluate_yolo_alert_metrics.py --raw-root "<path-to-D-Fire-root>" --weights "models/yolo11s_dfire_best.pt" --model-name "YOLO11s" --conf 0.25 --output-json "results/yolo11s_operational_metrics.json" --output-csv "results/yolo11s_test_predictions.csv"
+```
 
 ## Data — M3 Status
 

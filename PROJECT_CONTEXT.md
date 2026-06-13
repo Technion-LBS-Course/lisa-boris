@@ -504,6 +504,40 @@ Key distinctions — the two YOLO11n evaluations are **complementary and must no
 
 The operational location metric uses the **bottom-center anchor** of a class-1 fire bounding box (`anchor_x = x_center`, `anchor_y = y_center + height/2`), not the box centroid. It is an approximate image-space location only — never precise geolocation. Centroids may still be used for tracking, motion analysis, or polygon lookup where appropriate, but the completed operational location metric is bottom-center-anchor-based.
 
+### 12.5 YOLO11s integration — ready, pending real results (2026-06-12)
+
+YOLO11s is the planned primary detector and is **currently training on Kaggle**. No YOLO11s metrics are available yet, and **no synthetic or placeholder performance values are used anywhere** in the app, comparison code, or result files. The dashboard and model-comparison logic are already prepared to load the real YOLO11s outputs as soon as they exist.
+
+Expected real YOLO11s files (must not be created until the Kaggle run produces them):
+
+```text
+models/yolo11s_dfire_best.pt              — fine-tuned checkpoint (local only, Git-ignored)
+results/baseline_yolo11s.json             — object-detection metrics (mAP, precision, recall, F1)
+results/results_yolo11s.csv               — per-epoch training curves
+results/yolo11s_operational_metrics.json  — operational alert + approximate fire-location metrics
+results/yolo11s_test_predictions.csv      — per-image alert outcome + fire-location error table
+```
+
+Until those files exist, the app shows a clear **Training in progress** state for YOLO11s and never displays invented metrics:
+
+- The object-detection comparison table shows a YOLO11s row with status **Training in progress**.
+- The operational alert comparison table shows a YOLO11s row with status **Training in progress**.
+- Winner selection refuses to mark YOLO11s as the selected detector while its measured files are missing or pending; YOLO11n remains the selected detector. Selection is gated on existing files, measured values, a non-synthetic/non-pending status, and non-null required metrics.
+- The Inference Demo hides or disables the YOLO11s option and shows: `YOLO11s training is still in progress. Add models/yolo11s_dfire_best.pt after the Kaggle run completes.`
+
+When the real files arrive they are loaded as measured, the tables fill in, and the winner is chosen by the decision hierarchy: Hazard Recall → False Alert Rate → Operational Alert Score → detection Recall / mAP@0.5 → inference speed (only when a measured value exists). Object-detection metrics and operational alert metrics remain in separate tables and are never compared against sklearn Macro F1.
+
+Implementation: `src/results_loader.py` (load/classify detection vs operational JSON + winner selection; pure stdlib, no ML imports) and `src/inference.py` (lazy YOLO11n/YOLO11s loading + single-image detection; fine-tuned D-Fire checkpoints only, never pretrained weights). Tests: `tests/test_results_loader.py`, `tests/test_inference.py` (temporary files only; no model weights required). The same evaluation-only runner used for YOLO11n produces the YOLO11s operational/location metrics:
+
+```bash
+python scripts/evaluate_yolo_alert_metrics.py \
+  --raw-root "<path-to-D-Fire-root>" \
+  --weights "models/yolo11s_dfire_best.pt" \
+  --model-name "YOLO11s" --conf 0.25 \
+  --output-json "results/yolo11s_operational_metrics.json" \
+  --output-csv "results/yolo11s_test_predictions.csv"
+```
+
 ---
 
 ## 13. Detection, Tracking, and Alert Logic

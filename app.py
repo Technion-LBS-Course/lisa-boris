@@ -26,6 +26,19 @@ from src.eda import (
 from src.viz import draw_yolo_boxes
 from src.ui import inject_pyrofinder_theme, apply_chart_theme, CAT_COLORS, PYRO_COLORS, SPLIT_COLORS, CLASS_COLORS
 
+
+@st.cache_resource(show_spinner=False)
+def load_detector_cached(model_name: str):
+    """Load and cache a fine-tuned YOLO detector by name.
+
+    Heavy ML libraries are imported lazily inside src.inference, so models are
+    only loaded when inference is explicitly requested — never at import time.
+    Cached per model name so each checkpoint loads once per session.
+    """
+    from src.inference import load_detector
+    return load_detector(model_name)
+
+
 st.set_page_config(page_title="PyroFinder", layout="wide")
 inject_pyrofinder_theme(
     background_video_path=Path("design_images") / "Nordic_Forest_LowPolymp_.mp4",
@@ -1389,69 +1402,94 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
 
                 st.divider()
 
-                # ── C. Object-detection baseline ─────────────────────────────
-                st.subheader("Object-detection baseline")
-                st.caption(
-                    "YOLO11n is evaluated with detection metrics (mAP, precision, recall). "
-                    "These are not the same as classification accuracy and should not be compared directly."
+                # ── C. Object-detection baselines (YOLO11n + YOLO11s) ─────────
+                from src.results_loader import (
+                    load_detection_result as _load_det,
+                    status_label as _status_label,
+                    STATUS_OK as _STATUS_OK,
                 )
 
-                if _yolo_data:
-                    _yolo_rows = []
-                    for _yn, _yd in _yolo_data.items():
-                        _ym = _yd.get("metrics", {})
-                        def _fv(v):
-                            return round(v, 4) if v is not None else "—"
-                        _yolo_rows.append({
-                            "Model":        _short_model_label(_yn),
-                            "mAP@0.5":      _fv(_ym.get("map50")),
-                            "mAP@0.5:0.95": _fv(_ym.get("map50_95")),
-                            "Precision":    _fv(_ym.get("precision")),
-                            "Recall":       _fv(_ym.get("recall")),
-                            "F1":           _fv(_ym.get("f1")),
-                            "Run date":     _yd.get("run_date") or "—",
-                        })
-                    st.dataframe(
-                        pd.DataFrame(_yolo_rows), use_container_width=True, hide_index=True
-                    )
+                st.subheader("Object-detection comparison")
+                st.caption(
+                    "YOLO11n (baseline / fallback) and YOLO11s (planned primary detector) "
+                    "are evaluated with detection metrics (mAP, precision, recall, F1). "
+                    "These are not classification accuracy and must not be compared to the "
+                    "sklearn baselines. YOLO11s shows **Training in progress** until its "
+                    "measured result file exists — no values are invented."
+                )
 
-                    # Radar chart for YOLO11n if metrics are available
-                    _y_first = next(iter(_yolo_data.values()))
-                    _ym_first = _y_first.get("metrics", {})
-                    if all(_ym_first.get(k) is not None for k in ["map50", "map50_95", "precision", "recall", "f1"]):
-                        st.subheader("YOLO11n detection radar")
-                        _yolo_radar_cats = ["mAP@0.5", "mAP@0.5:0.95", "Precision", "Recall", "F1"]
-                        _yolo_radar_vals = [
-                            _ym_first["map50"],
-                            _ym_first["map50_95"],
-                            _ym_first["precision"],
-                            _ym_first["recall"],
-                            _ym_first["f1"],
-                        ]
-                        _yolo_radar_fig = go.Figure(go.Scatterpolar(
-                            r=_yolo_radar_vals + [_yolo_radar_vals[0]],
-                            theta=_yolo_radar_cats + [_yolo_radar_cats[0]],
-                            fill="toself",
-                            fillcolor="rgba(224,123,57,0.18)",
-                            line=dict(color="#e07b39", width=2),
-                            name="YOLO11n",
-                        ))
-                        _yolo_radar_fig.update_layout(
-                            polar=dict(
-                                radialaxis=dict(range=[0, 1], tickfont=dict(size=10)),
-                                bgcolor="rgba(0,0,0,0)",
-                            ),
-                            paper_bgcolor="rgba(0,0,0,0)",
-                            font=dict(color="#cccccc"),
-                            height=380,
-                            margin=dict(l=60, r=60, t=50, b=40),
-                        )
-                        st.plotly_chart(_yolo_radar_fig, use_container_width=True, key="baseline_yolo_radar")
-                else:
-                    st.info(
-                        "YOLO11n results not available yet. "
-                        "Run: `python scripts/YOLO11n_baseline.py --train`"
+                # Expected detection result files. YOLO11s is loaded the same way;
+                # while its training is in progress the file is absent and the loader
+                # reports training_in_progress instead of fabricating metrics.
+                _det_specs = [
+                    ("YOLO11n", "results/baseline_yolo11n.json"),
+                    ("YOLO11s", "results/baseline_yolo11s.json"),
+                ]
+
+                def _fv(v):
+                    return round(v, 4) if v is not None else "—"
+
+                _det_rows = []
+                _det_loaded = {}
+                for _dname, _dpath in _det_specs:
+                    _loaded = _load_det(_dpath)
+                    _det_loaded[_dname] = _loaded
+                    _dm = (_loaded["data"] or {}).get("metrics", {}) if _loaded["status"] == _STATUS_OK else {}
+                    _det_rows.append({
+                        "Model":        _dname,
+                        "mAP@0.5":      _fv(_dm.get("map50")),
+                        "mAP@0.5:0.95": _fv(_dm.get("map50_95")),
+                        "Precision":    _fv(_dm.get("precision")),
+                        "Recall":       _fv(_dm.get("recall")),
+                        "F1":           _fv(_dm.get("f1")),
+                        "Status":       _status_label(_loaded["status"]),
+                    })
+                st.dataframe(
+                    pd.DataFrame(_det_rows)[
+                        ["Model", "mAP@0.5", "mAP@0.5:0.95", "Precision", "Recall", "F1", "Status"]
+                    ],
+                    use_container_width=True, hide_index=True,
+                )
+
+                # Radar chart for any measured detector (YOLO11n now; YOLO11s once ready).
+                _radar_colors = {"YOLO11n": "#e07b39", "YOLO11s": "#4fc3f7"}
+                _det_radar_fig = go.Figure()
+                _radar_cats = ["mAP@0.5", "mAP@0.5:0.95", "Precision", "Recall", "F1"]
+                _any_measured = False
+                for _dname, _loaded in _det_loaded.items():
+                    if _loaded["status"] != _STATUS_OK:
+                        continue
+                    _dm = (_loaded["data"] or {}).get("metrics", {})
+                    if not all(_dm.get(k) is not None for k in ["map50", "map50_95", "precision", "recall", "f1"]):
+                        continue
+                    _any_measured = True
+                    _vals = [_dm["map50"], _dm["map50_95"], _dm["precision"], _dm["recall"], _dm["f1"]]
+                    _det_radar_fig.add_trace(go.Scatterpolar(
+                        r=_vals + [_vals[0]],
+                        theta=_radar_cats + [_radar_cats[0]],
+                        fill="toself",
+                        line=dict(color=_radar_colors.get(_dname, "#81c784"), width=2),
+                        name=_dname,
+                    ))
+                if _any_measured:
+                    st.subheader("Detection radar — measured detectors")
+                    _det_radar_fig.update_layout(
+                        polar=dict(
+                            radialaxis=dict(range=[0, 1], tickfont=dict(size=10)),
+                            bgcolor="rgba(0,0,0,0)",
+                        ),
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#cccccc"),
+                        height=380,
+                        margin=dict(l=60, r=60, t=50, b=40),
                     )
+                    st.plotly_chart(_det_radar_fig, use_container_width=True, key="baseline_yolo_radar")
+
+                st.caption(
+                    "YOLO11s is the planned primary detector. It is selected as the main model "
+                    "only after its measured detection and operational result files exist and "
+                    "improve on YOLO11n — never while training is in progress."
+                )
 
                 st.divider()
 
@@ -1460,6 +1498,13 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
             def _render_operational_alert_metrics(results_data):
                 from src.evaluation import (
                     operational_alert_metrics_from_confusion_matrix as _op_from_cm,
+                )
+                from src.results_loader import (
+                    load_operational_result as _load_op,
+                    is_selectable_operational as _is_selectable,
+                    select_operational_winner as _select_winner,
+                    status_label as _status_label,
+                    STATUS_OK as _STATUS_OK,
                 )
 
                 st.subheader("Operational Alert Metrics")
@@ -1485,6 +1530,15 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                 def _fmt(v):
                     return f"{v:.3f}" if isinstance(v, (int, float)) else "N/A"
 
+                # Expected YOLO operational result files. YOLO11s reports
+                # "Training in progress" until its measured file exists.
+                _op_specs = [
+                    ("YOLO11n", "results/yolo11n_operational_metrics.json",
+                     "results/baseline_yolo11n.json"),
+                    ("YOLO11s", "results/yolo11s_operational_metrics.json",
+                     "results/baseline_yolo11s.json"),
+                ]
+
                 rows, chart_data = [], []
 
                 # ── sklearn rows (image-level classifiers — no localization) ──
@@ -1497,44 +1551,56 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                     _label = _short_model_label(_n)
                     rows.append({
                         "Model": _label,
-                        "Type": "Image-level classifier",
                         "Hazard Recall": _fmt(_om.get("hazard_recall")),
                         "False Alert Rate": _fmt(_om.get("false_alert_rate")),
                         "Alert Precision": _fmt(_om.get("alert_precision")),
                         "Alert F1": _fmt(_om.get("alert_f1")),
                         "Operational Alert Score": _fmt(_om.get("operational_alert_score")),
-                        "Location Grid Hit": "N/A",
+                        "Location Coverage": "N/A",
                         "Mean Location Error": "N/A",
-                        "Notes": "Image-level baseline — no bounding boxes / localization.",
+                        "3x3 Grid Hit Rate": "N/A",
+                        "Status": "Measured (image-level)",
                     })
                     chart_data.append({"Model": _label, "Metric": "Hazard Recall",
                                        "Value": _om.get("hazard_recall", 0)})
                     chart_data.append({"Model": _label, "Metric": "Operational Alert Score",
                                        "Value": _om.get("operational_alert_score", 0)})
 
-                # ── YOLO operational row (from the dedicated operational JSON) ──
-                _yolo_op_path = Path("results/yolo11n_operational_metrics.json")
-                _yolo_op = None
-                if _yolo_op_path.exists():
-                    try:
-                        _yolo_op = _json.loads(_yolo_op_path.read_text(encoding="utf-8"))
-                    except Exception:
-                        _yolo_op = None
-                if _yolo_op:
-                    _om = _yolo_op.get("operational_metrics", {})
-                    _lm = _yolo_op.get("location_metrics", {}) or {}
-                    _label = _yolo_op.get("model_name", "YOLO11n")
+                # ── YOLO operational rows (dedicated operational JSON per model) ──
+                _missing_yolo_op = []
+                for _mname, _op_path, _det_path in _op_specs:
+                    _loaded = _load_op(_op_path)
+                    if _loaded["status"] != _STATUS_OK:
+                        # No measured file yet → explicit status row, no invented values.
+                        _missing_yolo_op.append((_mname, _op_path, _loaded["status"]))
+                        rows.append({
+                            "Model": _mname,
+                            "Hazard Recall": "—",
+                            "False Alert Rate": "—",
+                            "Alert Precision": "—",
+                            "Alert F1": "—",
+                            "Operational Alert Score": "—",
+                            "Location Coverage": "—",
+                            "Mean Location Error": "—",
+                            "3x3 Grid Hit Rate": "—",
+                            "Status": _status_label(_loaded["status"]),
+                        })
+                        continue
+                    _data = _loaded["data"] or {}
+                    _om = _data.get("operational_metrics", {})
+                    _lm = _data.get("location_metrics", {}) or {}
+                    _label = _data.get("model_name", _mname)
                     rows.append({
                         "Model": _label,
-                        "Type": "Object detector",
                         "Hazard Recall": _fmt(_om.get("hazard_recall")),
                         "False Alert Rate": _fmt(_om.get("false_alert_rate")),
                         "Alert Precision": _fmt(_om.get("alert_precision")),
                         "Alert F1": _fmt(_om.get("alert_f1")),
                         "Operational Alert Score": _fmt(_om.get("operational_alert_score")),
-                        "Location Grid Hit": _fmt(_lm.get("fire_location_grid_hit_rate")),
+                        "Location Coverage": _fmt(_lm.get("location_coverage_rate")),
                         "Mean Location Error": _fmt(_lm.get("fire_location_error_mean")),
-                        "Notes": "Detects + localizes fire/smoke (approximate image-space location).",
+                        "3x3 Grid Hit Rate": _fmt(_lm.get("fire_location_grid_hit_rate")),
+                        "Status": "Measured" if _is_selectable(_loaded) else "Measured (incomplete)",
                     })
                     chart_data.append({"Model": _label, "Metric": "Hazard Recall",
                                        "Value": _om.get("hazard_recall", 0)})
@@ -1542,9 +1608,10 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                                        "Value": _om.get("operational_alert_score", 0)})
 
                 _table_cols = [
-                    "Model", "Type", "Hazard Recall", "False Alert Rate",
+                    "Model", "Hazard Recall", "False Alert Rate",
                     "Alert Precision", "Alert F1", "Operational Alert Score",
-                    "Location Grid Hit", "Mean Location Error", "Notes",
+                    "Location Coverage", "Mean Location Error", "3x3 Grid Hit Rate",
+                    "Status",
                 ]
                 if rows:
                     st.dataframe(
@@ -1553,6 +1620,25 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                     )
                 else:
                     st.info("No operational alert metrics available in `results/` yet.")
+
+                # ── Winner selection (YOLO detectors only; pending never wins) ──
+                _winner = _select_winner(
+                    [(m, op) for m, op, _ in _op_specs],
+                    detection_items=[(m, det) for m, _, det in _op_specs],
+                )
+                if _winner:
+                    st.success(
+                        f"**Selected detector: {_winner}** — chosen by Hazard Recall, then "
+                        "False Alert Rate, then Operational Alert Score (object-detection "
+                        "recall / mAP@0.5 as supporting metrics). Selection uses only models "
+                        "with measured, complete result files."
+                    )
+                else:
+                    st.info(
+                        "No detector selected yet: a model is chosen only when its measured "
+                        "operational result file exists with complete metrics. YOLO11s cannot "
+                        "be selected while its training is in progress."
+                    )
 
                 # Compact chart: Hazard Recall + Operational Alert Score per model
                 if chart_data:
@@ -1571,18 +1657,19 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                     st.plotly_chart(_fig_op, use_container_width=True, key="baseline_operational_bar")
 
                 # ── Missing YOLO operational metrics → show generation command ──
-                if not _yolo_op:
+                for _mname, _op_path, _ in _missing_yolo_op:
+                    _weights = f"models/{_mname.lower()}_dfire_best.pt"
+                    _csv = _op_path.replace("operational_metrics.json", "test_predictions.csv")
                     st.info(
-                        "YOLO11n operational alert metrics not found "
-                        "(`results/yolo11n_operational_metrics.json`). "
+                        f"{_mname} operational alert metrics not found (`{_op_path}`). "
                         "Generate them (evaluation only, no training) with:\n\n"
                         "```\n"
                         "py scripts/evaluate_yolo_alert_metrics.py "
                         "--raw-root \"<path-to-D-Fire-root>\" "
-                        "--weights \"models/yolo11n_dfire_best.pt\" "
-                        "--model-name \"YOLO11n\" --conf 0.25 "
-                        "--output-json \"results/yolo11n_operational_metrics.json\" "
-                        "--output-csv \"results/yolo11n_test_predictions.csv\"\n"
+                        f"--weights \"{_weights}\" "
+                        f"--model-name \"{_mname}\" --conf 0.25 "
+                        f"--output-json \"{_op_path}\" "
+                        f"--output-csv \"{_csv}\"\n"
                         "```"
                     )
 
@@ -1632,26 +1719,100 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
 
     # ── Inference Demo ───────────────────────────────────────────────────────
     with tab_inference:
-        st.info(
-            "**Coming in Lecture 6–7 (M3):** "
-            "Upload an image or video, run NN object detection model inference, "
-            "and display bounding-box overlays with fire/smoke class labels and confidence scores."
-        )
-        st.progress(0, text="M3 progress: 0%")
-        st.markdown(f"""
-**Settings active:**
-- Confidence threshold: `{confidence_threshold}`
-- Confirmation frames: `{confirmation_frames}`
-- Primary model: `{model_plan['primary_model']}`
-        """)
+        from src import inference as _inf
 
-        uploaded = st.file_uploader(
-            "Upload image or video (placeholder — inference not yet wired)",
-            type=["jpg", "jpeg", "png", "mp4", "avi"],
-            disabled=False,
+        st.header("Inference Demo — YOLO11n / YOLO11s")
+        st.caption(
+            "Upload one image and run the fine-tuned D-Fire detectors. Models load only "
+            "when you click **Run inference** — never at import time — and only the "
+            "fine-tuned `fire`/`smoke` checkpoints are used. Pretrained weights are never "
+            "substituted. Inference time is measured during the run; no value is estimated."
         )
-        if uploaded:
-            st.warning("Model not loaded yet. Inference will be wired in M3.")
+
+        _n_available = _inf.checkpoint_exists("YOLO11n")
+        _s_available = _inf.checkpoint_exists("YOLO11s")
+
+        # YOLO11s is the planned primary detector; until its checkpoint exists the
+        # side-by-side / YOLO11s options are simply not offered.
+        if not _s_available:
+            st.warning(_inf.MISSING_YOLO11S_MESSAGE)
+        if not _n_available:
+            st.warning(
+                "YOLO11n checkpoint not found. Add `models/yolo11n_dfire_best.pt` "
+                "(e.g. `python scripts/YOLO11n_baseline.py --train`) to enable YOLO11n inference."
+            )
+
+        _options = []
+        if _n_available:
+            _options.append("YOLO11n only")
+        if _s_available:
+            _options.append("YOLO11s only")
+        if _n_available and _s_available:
+            _options.append("Side-by-side comparison")
+
+        if not _options:
+            st.info(
+                "No fine-tuned checkpoints available yet. Add at least one of "
+                "`models/yolo11n_dfire_best.pt` or `models/yolo11s_dfire_best.pt` to run inference."
+            )
+        else:
+            _choice = st.radio("Detector", _options, horizontal=True)
+            _uploaded = st.file_uploader("Upload one image", type=["jpg", "jpeg", "png"])
+            _run = st.button(
+                "Run inference", type="primary", disabled=_uploaded is None
+            )
+
+            if _uploaded is not None and _run:
+                from PIL import Image as _PILImage
+
+                _image = _PILImage.open(_uploaded).convert("RGB")
+                if _choice == "Side-by-side comparison":
+                    _models_to_run = ["YOLO11n", "YOLO11s"]
+                elif _choice == "YOLO11s only":
+                    _models_to_run = ["YOLO11s"]
+                else:
+                    _models_to_run = ["YOLO11n"]
+
+                _cols = st.columns(len(_models_to_run))
+                for _col, _mname in zip(_cols, _models_to_run):
+                    with _col:
+                        st.subheader(_mname)
+                        try:
+                            with st.spinner(f"Loading {_mname} and running inference..."):
+                                _model = load_detector_cached(_mname)
+                                _res = _inf.run_detection(
+                                    _model, _image, conf=confidence_threshold
+                                )
+                            st.image(
+                                _res["annotated_png"],
+                                caption=f"{_mname} — {_res['total_detections']} detection(s)",
+                                use_container_width=True,
+                            )
+                            _ic1, _ic2 = st.columns(2)
+                            _ic1.metric("Fire detections", _res["fire_count"])
+                            _ic2.metric("Smoke detections", _res["smoke_count"])
+                            _ic3, _ic4 = st.columns(2)
+                            _hc = _res["max_confidence"]
+                            _ic3.metric(
+                                "Highest confidence",
+                                f"{_hc:.2f}" if _hc is not None else "—",
+                            )
+                            _ic4.metric("Inference time", f"{_res['inference_ms']:.0f} ms")
+                        except FileNotFoundError:
+                            st.warning(
+                                _inf.MISSING_YOLO11S_MESSAGE if _mname == "YOLO11s"
+                                else f"{_mname} checkpoint not found. Add its fine-tuned D-Fire checkpoint."
+                            )
+                        except ValueError as _ve:
+                            st.error(str(_ve))
+                        except Exception as _exc:
+                            st.error(f"{_mname} inference failed: {_exc}")
+
+        st.caption(
+            f"Active confidence threshold: `{confidence_threshold}` · "
+            f"Confirmation frames (N) for alert logic: `{confirmation_frames}` · "
+            f"Classes: fire, smoke only."
+        )
 
     # ── Mapping Setup ────────────────────────────────────────────────────────
     with tab_mapping:
