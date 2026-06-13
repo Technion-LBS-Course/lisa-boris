@@ -164,6 +164,16 @@ Result files: `models/yolo11s_dfire_best.pt` (local only, Git-ignored), `results
 
 YOLO11s is the **selected detector** because its measured detection and operational result files exist and it wins by the operational selection rule (higher hazard recall, lower false alert rate, higher operational alert score). Detection metrics and operational metrics are kept separate and are never compared against the sklearn baselines. YOLO11n remains the lightweight speed baseline / fallback. The dashboard loads these files as measured results automatically (see `src/results_loader.py` and `src/inference.py`).
 
+To run the inference demo, the fine-tuned checkpoint must be placed at `models/yolo11s_dfire_best.pt` (Git-ignored; YOLO11n's `models/yolo11n_dfire_best.pt` enables the fallback).
+
+### M3 failure-analysis summary
+
+The detailed YOLO11s-vs-YOLO11n failure analysis is available in [`docs/M3_RESULTS_SUMMARY.md`](docs/M3_RESULTS_SUMMARY.md).
+
+YOLO11s remains the selected detector because it wins across the documented operational selection hierarchy: higher Hazard Recall, lower False Alert Rate, higher Operational Alert Score, and stronger supporting object-detection metrics. The operational margin is modest — 9 fewer missed hazards, 5 fewer false alerts, and +0.0038 Operational Alert Score — but the improvement is consistent. The detection-quality gain is clearer, especially mAP@0.5: 0.7668 for YOLO11s versus 0.7470 for YOLO11n (+1.98 pp), with consistent gains across mAP@0.5:0.95, Precision, Recall, and F1.
+
+The main remaining weakness is smoke-only imagery. Most missed hazards for both detectors are smoke-only cases, which are visually difficult because smoke can resemble clouds, fog, haze, dust, or bright sky. Approximate fire-location metrics are practically tied on central tendency; YOLO11s has slightly better coverage and 3×3 grid-hit rate. These are image-space estimates only, not precise geolocation. (Sklearn Macro F1 is never compared directly with YOLO mAP; detection, operational, and location metrics are kept separate.)
+
 ---
 
 ## Detection, Tracking, and Geolocation Logic

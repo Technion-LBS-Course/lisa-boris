@@ -1724,6 +1724,29 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
                         "missing or incomplete result files cannot be selected."
                     )
 
+                # ── M3 failure-analysis summary (how YOLO11s wins + open weakness) ──
+                st.info(
+                    "YOLO11s is selected, but the operational gain over YOLO11n is modest and "
+                    "consistent, not large. The detection-quality gain is clearer, especially "
+                    "mAP@0.5. Smoke-only images remain the dominant failure mode for both "
+                    "detectors."
+                )
+                with st.expander("M3 failure-analysis notes", expanded=False):
+                    st.markdown(
+                        "- 9 fewer missed hazards (FN 145 vs 154).\n"
+                        "- 5 fewer false alerts (FP 37 vs 42).\n"
+                        "- +0.0038 Operational Alert Score (0.9406 vs 0.9368).\n"
+                        "- +1.98 pp mAP@0.5 (0.7668 vs 0.7470), with consistent gains on "
+                        "mAP@0.5:0.95, Precision, Recall, and F1.\n"
+                        "- Smoke-only imagery is the main bottleneck (most misses for both "
+                        "detectors); the paired comparison shows partial complementarity — "
+                        "YOLO11s does not beat YOLO11n on every individual image.\n"
+                        "- Approximate fire-location metrics are practically tied; YOLO11s has "
+                        "slightly better coverage and 3x3 grid-hit rate. Location outputs are "
+                        "approximate image-space estimates only, never precise geolocation.\n\n"
+                        "Full analysis: `docs/M3_RESULTS_SUMMARY.md`."
+                    )
+
                 # Compact chart: Hazard Recall + Operational Alert Score per model
                 if chart_data:
                     _fig_op = px.bar(
