@@ -13,8 +13,7 @@ def render():
     st.header("Model comparison (KPI)")
     st.caption(
         "Operational, classification, and object-detection metrics are kept in separate "
-        "sub-tabs and are never mixed. All values come from the measured result files in "
-        "`results/`."
+        "sub-tabs. All values come from the measured result files in `results/`."
     )
     results_data = mh.load_model_results()
     if not results_data:

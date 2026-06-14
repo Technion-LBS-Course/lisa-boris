@@ -166,14 +166,16 @@ def operational_alert_metrics_from_confusion(
     """Cost-sensitive operational metrics from alert-level confusion counts.
 
     Metrics:
-        hazard_recall           = TP / (TP + FN)        — primary decision metric
-        false_alert_rate        = FP / (FP + TN)        — secondary metric
+        hazard_recall           = TP / (TP + FN)        — component of the score (driven by FN)
+        false_alert_rate        = FP / (FP + TN)        — component of the score (driven by FP)
         alert_precision         = TP / (TP + FP)
         alert_f1                = harmonic mean of alert_precision and hazard_recall
         weighted_error_cost     = fn_weight * FN + fp_weight * FP
         max_possible_cost       = fn_weight * hazard_cases + fp_weight * bg_cases
         operational_alert_score = 1 - weighted_error_cost / max_possible_cost
-                                  (final ranking metric; higher is better)
+                                  (primary decision metric; higher is better — it
+                                  already encodes Hazard Recall (FN) and False Alert
+                                  Rate (FP) at the documented 10:1 weight)
     """
     tp = confusion["tp_alert"]
     fn = confusion["fn_alert"]

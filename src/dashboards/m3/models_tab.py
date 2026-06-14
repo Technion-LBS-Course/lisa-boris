@@ -15,8 +15,7 @@ def render():
     st.caption(
         "Five models: the sklearn image-level classifiers (DummyClassifier, Logistic "
         "Regression, Random Forest) and the YOLO11 object detectors (YOLO11n baseline / "
-        "fallback, YOLO11s current primary detector). Image-level classification and "
-        "object detection are kept clearly separate and are never mixed."
+        "fallback, YOLO11s current primary detector)."
     )
     results_data = mh.load_model_results()
     if not results_data:

@@ -515,8 +515,7 @@ def _render_yolo_detection_model(
             "class labels, and confidence scores for fire and smoke — but it is the "
             "larger model that delivers the best detection quality. "
             "YOLO11n remains the lightweight speed baseline / fallback; YOLO11s is "
-            "compared against it using detection metrics (mAP, precision, recall), "
-            "never against the sklearn image-level classifiers."
+            "compared against it using detection metrics (mAP, precision, recall)."
         )
     else:
         st.info(
@@ -525,7 +524,7 @@ def _render_yolo_detection_model(
             "it predicts bounding boxes, class labels, and confidence scores for fire and smoke. "
             "This makes it the correct baseline for the YOLO11s current primary detector, because "
             "PyroFinder needs localization for approximate map-based alerts. "
-            "YOLO11n is a speed-oriented baseline, not an equal parallel model to YOLO11s."
+            "YOLO11n is a speed-oriented baseline."
         )
 
     if _r.get("run_date"):
@@ -693,9 +692,9 @@ def _render_yolo_detection_model(
                     apply_chart_theme(_map_fig)
                     st.plotly_chart(_map_fig, use_container_width=True, key=f"yolo_map_curve_{_slug}")
 
-                _n_epochs_done = int(_tc_df[_epoch_col].max()) + 1
+                _n_epochs_done = len(_tc_df)
                 st.caption(
-                    f"Showing {_n_epochs_done} epoch(s) completed so far · "
+                    f"Showing {_n_epochs_done} epoch(s) completed · "
                     f"solid lines = train · dashed lines = val · "
                     f"source: `{_runs_csv}`"
                 )
@@ -899,13 +898,6 @@ def render_object_detection_comparison(results_data):
     )
 
     st.subheader("Object-detection comparison")
-    st.caption(
-        "YOLO11n (baseline / fallback) and YOLO11s (current primary detector) "
-        "are evaluated with detection metrics (mAP, precision, recall, F1). "
-        "These are not classification accuracy and must not be compared to the "
-        "sklearn baselines. A detector row shows a missing-file status until its "
-        "measured result file exists — no values are invented."
-    )
 
     # Expected detection result files. Each detector is loaded the same way;
     # if a measured file is absent the loader reports a missing-file status
@@ -940,13 +932,20 @@ def render_object_detection_comparison(results_data):
         use_container_width=True, hide_index=True,
     )
 
-    # Radar chart for any measured detector.
-    _radar_colors = {"YOLO11n": "#e07b39", "YOLO11s": "#4fc3f7"}
+    # Radar chart for any measured detector. YOLO11s is drawn first and YOLO11n
+    # last so the YOLO11n shape stays visible in front, and both fills are
+    # translucent so neither trace hides the other where they overlap.
+    _radar_line_colors = {"YOLO11n": "#e07b39", "YOLO11s": "#4fc3f7"}
+    _radar_fill_colors = {
+        "YOLO11n": "rgba(224,123,57,0.25)",
+        "YOLO11s": "rgba(79,195,247,0.25)",
+    }
     _det_radar_fig = go.Figure()
     _radar_cats = ["mAP@0.5", "mAP@0.5:0.95", "Precision", "Recall", "F1"]
     _any_measured = False
-    for _dname, _loaded in _det_loaded.items():
-        if _loaded["status"] != _STATUS_OK:
+    for _dname in ("YOLO11s", "YOLO11n"):
+        _loaded = _det_loaded.get(_dname)
+        if not _loaded or _loaded["status"] != _STATUS_OK:
             continue
         _dm = (_loaded["data"] or {}).get("metrics", {})
         if not all(_dm.get(k) is not None for k in ["map50", "map50_95", "precision", "recall", "f1"]):
@@ -957,7 +956,8 @@ def render_object_detection_comparison(results_data):
             r=_vals + [_vals[0]],
             theta=_radar_cats + [_radar_cats[0]],
             fill="toself",
-            line=dict(color=_radar_colors.get(_dname, "#81c784"), width=2),
+            fillcolor=_radar_fill_colors.get(_dname, "rgba(129,199,132,0.25)"),
+            line=dict(color=_radar_line_colors.get(_dname, "#81c784"), width=2),
             name=_dname,
         ))
     if _any_measured:
@@ -973,12 +973,6 @@ def render_object_detection_comparison(results_data):
             margin=dict(l=60, r=60, t=50, b=40),
         )
         st.plotly_chart(_det_radar_fig, use_container_width=True, key="baseline_yolo_radar")
-
-    st.caption(
-        "YOLO11s is the current primary detector. A detector is selected as the main "
-        "model only when its measured detection and operational result files exist and "
-        "it wins the operational selection rule — never from missing or incomplete files."
-    )
 
     st.divider()
 
@@ -1001,8 +995,9 @@ def render_operational_alert_metrics(results_data):
         "Cost-sensitive comparison at the alert level: fire/smoke = hazard, "
         "background = no hazard. A missed hazard (false negative) is weighted "
         "**10×** a false alert (false positive). "
-        "**Primary decision metric: Hazard Recall.** Secondary: False Alert Rate. "
-        "Final ranking: Operational Alert Score (FN weight 10, FP weight 1)."
+        "**Primary decision metric: Operational Alert Score** — the cost-sensitive "
+        "summary (FN weight 10, FP weight 1) that already encodes Hazard Recall and "
+        "False Alert Rate, which are shown alongside it as its components."
     )
 
     def _op_for(d):
@@ -1117,10 +1112,10 @@ def render_operational_alert_metrics(results_data):
     )
     if _winner:
         st.success(
-            f"**Selected detector: {_winner}** — chosen by Hazard Recall, then "
-            "False Alert Rate, then Operational Alert Score (object-detection "
-            "recall / mAP@0.5 as supporting metrics). Selection uses only models "
-            "with measured, complete result files."
+            f"**Selected detector: {_winner}.** Selected by the **Operational Alert Score** "
+            "— the primary, cost-sensitive metric (FN weight 10, FP weight 1) that already "
+            "encodes Hazard Recall and False Alert Rate — with object-detection Recall and "
+            "mAP@0.5 as supporting detection-quality evidence."
         )
     else:
         st.info(
@@ -1185,11 +1180,3 @@ def render_operational_alert_metrics(results_data):
             "```"
         )
 
-    st.caption(
-        "Location metrics apply only to object detectors (YOLO11n / YOLO11s). "
-        "The sklearn models are **image-level baselines only** and cannot replace "
-        "YOLO11s, the current primary detector. YOLO11n is the lightweight "
-        "object-detection baseline / fallback. Both YOLO models solve the real "
-        "detection + localization task PyroFinder needs; the sklearn classifiers "
-        "produce no bounding boxes."
-    )

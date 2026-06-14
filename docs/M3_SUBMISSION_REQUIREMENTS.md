@@ -230,11 +230,10 @@ background  → no hazard
 
 ### 10.2 Metric priorities (decision order)
 
-1. **Hazard Recall** — primary operational decision metric.
-2. **False Alert Rate** — main secondary operational metric.
-3. **Operational Alert Score** — cost-sensitive ranking summary.
-4. **Object-detection Recall and mAP@0.5** — supporting detection-quality metrics.
-5. **Inference speed** — supporting metric only when measured under documented and comparable conditions.
+1. **Operational Alert Score** — primary, cost-sensitive decision metric. Because it is `1 - (10*FN + FP) / max_cost`, it already encodes Hazard Recall (driven by false negatives) and False Alert Rate (driven by false positives) at the documented 10:1 weight.
+2. **Hazard Recall** and **False Alert Rate** — reported components/diagnostics of the Operational Alert Score, not separate higher-priority ranking tiers.
+3. **Object-detection Recall and mAP@0.5** — supporting detection-quality metrics.
+4. **Inference speed** — supporting metric only when measured under documented and comparable conditions.
 
 ### 10.3 Cost weights and score formula (source of truth: `src/evaluation.py`)
 
@@ -256,22 +255,20 @@ Higher Operational Alert Score is better. (Verified against the YOLO11n operatio
 ### 10.4 Final detector-selection hierarchy
 
 1. Require **complete, measured, non-synthetic** operational result files.
-2. Prefer **higher Hazard Recall**.
-3. When Hazard Recall is effectively tied, prefer **lower False Alert Rate**.
-4. Then prefer **higher Operational Alert Score**.
-5. Use **detection Recall and mAP@0.5** as supporting evidence.
-6. Use **measured inference speed** only as an additional practical consideration.
-7. **Do not choose YOLO11s merely because it is the designated primary detector** — selection must follow the measured KPI hierarchy.
-8. Keep **YOLO11n as the selected fallback** when YOLO11s has not been measured or does not show a justified improvement.
+2. Prefer **higher Operational Alert Score** — the primary cost-sensitive metric, which already encodes Hazard Recall (false negatives) and False Alert Rate (false positives) at the documented 10:1 weight. **Hazard Recall** and **False Alert Rate** are reported as its components/diagnostics, not as separate higher-priority tiers.
+3. Use **detection Recall and mAP@0.5** as supporting evidence.
+4. Use **measured inference speed** only as an additional practical consideration.
+5. **Do not choose YOLO11s merely because it is the designated primary detector** — selection must follow the measured KPI hierarchy.
+6. Keep **YOLO11n as the selected fallback** when YOLO11s has not been measured or does not show a justified improvement.
 
 ### 10.5 Interim detector vs final winner
 
 - **Eligible measured detectors:** both **YOLO11n** and **YOLO11s** now have complete measured detection and operational results.
-- **Selected detector:** the detector chosen by the KPI hierarchy from those measured results. Today this is **YOLO11s** (it wins on Hazard Recall, False Alert Rate, and Operational Alert Score; see §15).
+- **Selected detector:** the detector chosen by the KPI hierarchy from those measured results. Today this is **YOLO11s** (it wins on the primary Operational Alert Score, and leads on its components Hazard Recall and False Alert Rate; see §15).
 
-> **Important:** YOLO11s is selected **only because** its measured detection and operational result files exist and it wins the operational selection rule over YOLO11n. If those measured files were absent, YOLO11s would not be selectable and YOLO11n would remain the interim selected detector.
+> **Important:** Complete measured detection and operational result files make YOLO11s *eligible*; what *selects* it is winning the measured operational comparison against YOLO11n (primary metric: the Operational Alert Score). If those measured files were absent, YOLO11s would not be eligible and YOLO11n would remain the interim selected detector.
 
-**Repository evidence (today):** `src/results_loader.select_operational_winner` implements this hierarchy via `_rank_candidates` (sort by `-hazard_recall`, then `false_alert_rate`, then `-operational_alert_score`, then `-detection_recall`, `-map50`, then `inference_ms`). With both detectors measured, the winner resolves to `YOLO11s`. The unit test `test_pending_yolo11s_does_not_beat_measured_yolo11n` still locks the absent-file fallback (a detector with missing result files never wins).
+**Repository evidence (today):** `src/results_loader.select_operational_winner` implements this hierarchy via `_rank_candidates` (sort by `-operational_alert_score`, then `-detection_recall`, then `-map50`, then `inference_ms`; Hazard Recall and False Alert Rate are kept per candidate for display/selectability as components of the score, not as separate ranking tiers). With both detectors measured, the winner resolves to `YOLO11s`. The unit test `test_pending_yolo11s_does_not_beat_measured_yolo11n` still locks the absent-file fallback (a detector with missing result files never wins).
 
 ---
 
@@ -427,7 +424,7 @@ Classifications are conservative: a requirement is **Complete** only with credib
 | sklearn comparison table | Complete | `src/dashboards/model_helpers.py` `render_classification_comparison`: per-class metrics, distributions, model-comparison view | — |
 | Object-detection comparison table | Complete | `src/dashboards/model_helpers.py` `render_object_detection_comparison`: YOLO11n and YOLO11s both measured | — |
 | Operational comparison table | Complete | `src/dashboards/model_helpers.py` `render_operational_alert_metrics`: sklearn + YOLO11n + YOLO11s measured | — |
-| Final detector winner selection | Complete | `select_operational_winner` selects YOLO11s from measured, complete files (wins Hazard Recall, FAR, Operational Alert Score) | — |
+| Final detector winner selection | Complete | `select_operational_winner` selects YOLO11s from measured, complete files (wins the primary Operational Alert Score; leads on its components Hazard Recall and FAR) | — |
 | Winner justification (written) | Complete | KPI hierarchy documented (§10); YOLO11s vs YOLO11n measured differences cited in PROJECT_CONTEXT §12.5 and README | — |
 | Uploaded-image inference UI | Complete | Inference demo upload + Run inference button (`src/dashboards/m3/inference_demo_tab.py`, `src/dashboards/operations_learning.py`); Streamlit boots cleanly headless | — |
 | Fine-tuned YOLO11n inference availability | Complete | `models/yolo11n_dfire_best.pt` present locally; `checkpoint_exists("YOLO11n")` true | Note: weight is Git-ignored; README must state placement |

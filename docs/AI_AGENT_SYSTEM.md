@@ -385,9 +385,9 @@ Remaining M3 build work:
 - Preserve the `FN=10`, `FP=1` operational cost policy unless explicitly changed.
 - Distinguish **image-level sklearn classifiers** from **YOLO11n / YOLO11s object detection** — different tasks, different granularities.
 - Do **not** compare sklearn macro F1 directly against YOLO mAP as though they were the same task.
-- Use **Hazard Recall** as the primary operational decision metric.
-- Use **False Alert Rate** as the main secondary operational metric.
-- Use **Operational Alert Score** as the weighted ranking summary.
+- Use **Operational Alert Score** as the primary operational decision metric — the cost-sensitive summary (FN weight 10, FP weight 1) that already encodes Hazard Recall and False Alert Rate.
+- Treat **Hazard Recall** (driven by false negatives) and **False Alert Rate** (driven by false positives) as reported components/diagnostics of the Operational Alert Score, not as separate higher-priority ranking tiers.
+- Use object-detection **Recall** and **mAP@0.5** as supporting evidence behind the Operational Alert Score.
 - Treat location metrics as **approximate image-space metrics only** — never precise geolocation.
 - YOLO11s is the current selected primary detector: its measured results improve on YOLO11n across detection and operational metrics. A detector is selected only when its measured complete result files exist and it wins by the operational selection rule.
 - Log experiment results with full metadata (model, dataset, split, hyperparameters, metrics, timestamp).

@@ -119,10 +119,9 @@ Careful wording:
 
 **YOLO11s remains the selected detector.** It wins by the documented operational selection hierarchy:
 
-1. higher **Hazard Recall** (0.9370 vs 0.9331),
-2. lower **False Alert Rate** (0.0185 vs 0.0209),
-3. higher **Operational Alert Score** (0.9406 vs 0.9368),
-4. stronger supporting **detection metrics** (mAP@0.5 0.7668 vs 0.7470; Recall 0.6967 vs 0.6825).
+1. higher **Operational Alert Score** (0.9406 vs 0.9368) — the primary, cost-sensitive metric that already encodes Hazard Recall and False Alert Rate at the 10:1 weight,
+2. confirmed by its components: higher **Hazard Recall** (0.9370 vs 0.9331) and lower **False Alert Rate** (0.0185 vs 0.0209),
+3. stronger supporting **detection metrics** (mAP@0.5 0.7668 vs 0.7470; Recall 0.6967 vs 0.6825).
 
 The **operational lead is small, but consistent** across every step of the hierarchy — YOLO11s is never behind on any metric or tiebreak. The **detection-quality lead is clearer** (≈ +2 pp mAP@0.5). **YOLO11n remains the lightweight baseline/fallback**, not an equal parallel model.
 

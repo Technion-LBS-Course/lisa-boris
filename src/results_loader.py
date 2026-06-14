@@ -148,11 +148,16 @@ def _rank_candidates(candidates: list[dict]) -> Optional[str]:
     """Return the winning model name from pre-built candidate dicts, or None.
 
     Decision hierarchy (higher is better unless noted):
-        1. Hazard Recall            — primary operational metric.
-        2. False Alert Rate         — secondary (lower is better).
-        3. Operational Alert Score  — weighted summary.
-        4. Detection Recall, mAP@0.5 — supporting object-detection metrics.
-        5. Inference speed          — only when a measured value exists.
+        1. Operational Alert Score  — primary, cost-sensitive ranking metric. It is
+                                       ``1 - (10*FN + FP) / max_cost``, so it already
+                                       encodes Hazard Recall (FN) and False Alert Rate
+                                       (FP) at the documented 10:1 weight.
+        2. Detection Recall, mAP@0.5 — supporting object-detection metrics.
+        3. Inference speed          — only when a measured value exists.
+
+    Hazard Recall and False Alert Rate are kept on each candidate for display and
+    selectability, but they are components of the Operational Alert Score and are
+    not separate ranking tiers.
     """
     eligible = [c for c in candidates if c.get("selectable")]
     if not eligible:
@@ -160,8 +165,6 @@ def _rank_candidates(candidates: list[dict]) -> Optional[str]:
 
     def sort_key(c: dict):
         return (
-            -(c.get("hazard_recall") or 0.0),
-            c.get("false_alert_rate") if c.get("false_alert_rate") is not None else float("inf"),
             -(c.get("operational_alert_score") or 0.0),
             -(c.get("detection_recall") or 0.0),
             -(c.get("map50") or 0.0),

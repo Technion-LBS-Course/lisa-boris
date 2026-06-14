@@ -1,10 +1,10 @@
 """M3 Dashboard — Overview tab.
 
 Summarizes the model-selection story: which models were compared, the KPI-based
-selection criterion, and that YOLO11s is selected only because measured result
-files exist and it wins the documented operational hierarchy. YOLO11n stays the
-lightweight baseline / fallback. Location outputs are approximate, never precise
-geolocation. The selected detector is pulled live; no metric values are invented.
+selection criterion, and that YOLO11s is the selected primary detector because it has
+the better Operational Alert Score than YOLO11n in the measured M3 comparison. YOLO11n
+stays the lightweight baseline / fallback. Location outputs are approximate. The
+selected detector is pulled live; no metric values are invented.
 """
 import streamlit as st
 
@@ -12,9 +12,8 @@ import streamlit as st
 def render():
     st.header("Overview — model comparison and selection")
     st.caption(
-        "How PyroFinder chose its detector for M3. PyroFinder detects fire and smoke "
-        "on existing cameras and produces approximate, image-space location estimates "
-        "only — never precise geolocation."
+        "PyroFinder detects fire and smoke on existing cameras and produces "
+        "approximate location."
     )
 
     st.subheader("Models compared")
@@ -35,22 +34,21 @@ def render():
         "Selection follows a cost-sensitive operational rule, because missing a real "
         "fire/smoke hazard is far more costly than raising a false alarm (false negative "
         "weight 10, false positive weight 1):\n\n"
-        "1. **Hazard Recall** (primary) — higher is better.\n"
-        "2. **False Alert Rate** (secondary) — lower is better.\n"
-        "3. **Operational Alert Score** (ranking summary).\n"
-        "4. Object-detection **Recall** and **mAP@0.5** as supporting evidence.\n"
-        "5. Measured **inference speed** as a practical consideration."
+        "1. **Operational Alert Score** (primary decision metric — the cost-sensitive summary "
+        "that already encodes Hazard Recall and False Alert Rate as its components).\n"
+        "2. Object-detection **Recall** and **mAP@0.5** as supporting evidence.\n"
+        "3. Measured **inference speed** as a practical consideration."
     )
 
     st.subheader("Selected detector")
     winner = _operational_winner()
     if winner:
         st.success(
-            f"**Selected detector: {winner}.** YOLO11s is selected **only because** its "
-            "measured detection and operational result files exist and it wins the "
-            "documented operational rule — higher Hazard Recall, lower False Alert Rate, "
-            "then higher Operational Alert Score, with stronger supporting detection "
-            "Recall / mAP@0.5. Without those measured files it would not be selectable."
+            f"**Selected detector: {winner}.** Among the measured object detectors, "
+            f"{winner} is selected because it has the better **Operational Alert Score** "
+            "than YOLO11n in the M3 comparison (0.9406 vs 0.9368) — the cost-sensitive "
+            "summary that weights a missed hazard 10× a false alert — with stronger "
+            "object-detection Recall and mAP@0.5 as supporting evidence."
         )
     else:
         st.info(

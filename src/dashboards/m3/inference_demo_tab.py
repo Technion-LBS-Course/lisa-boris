@@ -6,8 +6,8 @@ demand (lazy), only fine-tuned `fire`/`smoke` checkpoints are used, pretrained
 weights are never substituted, and missing checkpoints show a clear message.
 
 Classification inference is offered only if a persisted, runnable sklearn artifact
-exists; none do today, so a clear missing-artifact notice is shown. No classifier
-inference is faked and no model is trained inside the app.
+exists; none do today. No classifier inference is faked and no model is trained
+inside the app.
 """
 import streamlit as st
 
@@ -18,12 +18,6 @@ def render(confidence_threshold, confirmation_frames):
     from src import inference as _inf
 
     st.header("Inference Demo")
-    st.caption(
-        "Upload one image and run the available fine-tuned D-Fire detectors. Models load "
-        "only when you click **Run inference** — never at import time — and only the "
-        "fine-tuned `fire`/`smoke` checkpoints are used. Pretrained weights are never "
-        "substituted. Inference time is measured during the run; no value is estimated."
-    )
 
     available = _inf.available_detectors()
     missing = [d for d in _inf.CHECKPOINTS if d not in available]
@@ -41,13 +35,7 @@ def render(confidence_threshold, confirmation_frames):
             )
 
     if not classifiers:
-        st.info(
-            "**Classification model inference is unavailable:** no runnable classifier "
-            "artifacts were found. The sklearn baselines (DummyClassifier, Logistic "
-            "Regression, Random Forest) report measured metrics from `results/`, but no "
-            "persisted model artifact exists to run live image-level classification. "
-            "Classification inference is not faked and no model is trained inside the app."
-        )
+        st.info("Upload one image and run")
 
     if not available:
         st.info(

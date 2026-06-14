@@ -181,30 +181,38 @@ def test_malformed_operational_json(tmp_path):
 
 # ── 6. Measured YOLO11n + YOLO11s compare without mixing metric families ─────────
 
-def test_winner_uses_hazard_recall_first(tmp_path):
-    # YOLO11s has higher hazard recall → it wins despite identical other fields.
+def test_winner_uses_operational_alert_score_first(tmp_path):
+    # Operational Alert Score is the primary decision metric: the model with the
+    # higher score wins even if the other has a higher raw hazard recall (the score
+    # already encodes Hazard Recall and False Alert Rate at the 10:1 weight).
     n_op = _write(
         tmp_path / "yolo11n_operational_metrics.json",
-        _operational_doc("YOLO11n", hazard_recall=0.90),
+        _operational_doc("YOLO11n", hazard_recall=0.95, score=0.92),
     )
     s_op = _write(
         tmp_path / "yolo11s_operational_metrics.json",
-        _operational_doc("YOLO11s", hazard_recall=0.95),
+        _operational_doc("YOLO11s", hazard_recall=0.90, score=0.95),
     )
     assert select_operational_winner([("YOLO11n", n_op), ("YOLO11s", s_op)]) == "YOLO11s"
 
 
-def test_winner_tiebreak_false_alert_rate(tmp_path):
-    # Equal hazard recall → lower false alert rate wins.
+def test_winner_tiebreak_detection_recall(tmp_path):
+    # Equal Operational Alert Score → higher supporting object-detection recall wins.
     n_op = _write(
         tmp_path / "yolo11n_operational_metrics.json",
-        _operational_doc("YOLO11n", hazard_recall=0.93, far=0.05),
+        _operational_doc("YOLO11n", score=0.94),
     )
     s_op = _write(
         tmp_path / "yolo11s_operational_metrics.json",
-        _operational_doc("YOLO11s", hazard_recall=0.93, far=0.02),
+        _operational_doc("YOLO11s", score=0.94),
     )
-    assert select_operational_winner([("YOLO11n", n_op), ("YOLO11s", s_op)]) == "YOLO11s"
+    n_det = _write(tmp_path / "baseline_yolo11n.json", _detection_doc("YOLO11n", recall=0.68))
+    s_det = _write(tmp_path / "baseline_yolo11s.json", _detection_doc("YOLO11s", recall=0.72))
+    winner = select_operational_winner(
+        [("YOLO11n", n_op), ("YOLO11s", s_op)],
+        detection_items=[("YOLO11n", n_det), ("YOLO11s", s_det)],
+    )
+    assert winner == "YOLO11s"
 
 
 def test_detection_and_operational_files_do_not_cross_contaminate(tmp_path):

@@ -332,7 +332,7 @@ These datasets are candidates only. Before use, labels must be verified and norm
 - False Alarm Rate, measured as false positives per hour or per 1,000 sampled frames
 - Inference speed, measured in FPS or milliseconds per frame
 
-**Primary KPI statement:** This is a two-class object-detection model. The primary operational KPI / model-selection metric is **Hazard Recall**, because missing a real fire or smoke hazard is more costly than triggering a false alarm. **False Alert Rate** is the main secondary operational metric, and **Operational Alert Score** (FN weight 10, FP weight 1) is the weighted ranking summary. Detection Recall and mAP@0.5 are supporting object-detection quality metrics, distinct from Hazard Recall (see §12.3).
+**Primary KPI statement:** This is a two-class object-detection model. The primary operational KPI / model-selection metric is the **Operational Alert Score** (FN weight 10, FP weight 1), the cost-sensitive summary that already encodes its components — **Hazard Recall** (driven by false negatives, since missing a real fire or smoke hazard is more costly than triggering a false alarm) and **False Alert Rate** (driven by false positives) — at the documented 10:1 weight. Hazard Recall and False Alert Rate are therefore reported as components / diagnostics of the Operational Alert Score, not as separate higher-priority ranking tiers. Detection Recall and mAP@0.5 are supporting object-detection quality metrics, distinct from Hazard Recall (see §12.3).
 
 **Split:** Use D-Fire's provided train/test split. If a different dataset has no split, use a reproducible stratified split by image category.
 
@@ -422,9 +422,9 @@ Standard detection/classification metrics do not capture PyroFinder's real opera
 
 A **missed hazard** (false negative) is the worst failure and is weighted **10×** a **false alert** (false positive). Decision metrics:
 
-- **Primary decision metric: Hazard Recall** = TP / (TP + FN)
-- **Secondary metric: False Alert Rate** = FP / (FP + TN)
-- **Final ranking metric: Operational Alert Score** = 1 − weighted_error_cost / max_possible_cost, with FN weight 10 and FP weight 1 (higher is better)
+- **Primary decision metric: Operational Alert Score** = 1 − weighted_error_cost / max_possible_cost, with FN weight 10 and FP weight 1 (higher is better) — the cost-sensitive summary that already encodes Hazard Recall and False Alert Rate at the documented 10:1 weight
+- **Component / diagnostic: Hazard Recall** = TP / (TP + FN) (driven by false negatives)
+- **Component / diagnostic: False Alert Rate** = FP / (FP + TN) (driven by false positives)
 
 **Location metrics apply only to object detectors** (YOLO11n / YOLO11s). They use the fire-box (class 1) **bottom-center anchor** (`anchor_x = x_center`, `anchor_y = y_center + height/2`) as an approximate image-space event point (normalized location error + 3×3 grid hit). Image-level sklearn classifiers produce no boxes, so their location metrics are N/A. All location outputs are approximate, never precise geolocation. Smoke-only images are never treated as a fire epicenter.
 
@@ -550,7 +550,7 @@ Approximate fire-location metrics (bottom-center anchor of class-1 fire boxes; i
 
 #### Selection outcome
 
-YOLO11s is now the **selected detector** — **only because its measured detection and operational result files exist** and it wins by the operational selection rule. Applying the decision hierarchy (Hazard Recall → False Alert Rate → Operational Alert Score → detection Recall / mAP@0.5 → inference speed when measured), YOLO11s beats YOLO11n on every primary operational metric: higher Hazard Recall (0.9370 vs 0.9331), lower False Alert Rate (0.0185 vs 0.0209), and higher Operational Alert Score (0.9406 vs 0.9368), with stronger supporting detection mAP@0.5 (0.7668 vs 0.7470) and Recall (0.6967 vs 0.6825). Selection (`src/results_loader.select_operational_winner`) is gated on existing files, measured values, a non-synthetic/non-pending status, and non-null required metrics; if the YOLO11s files were absent it would not be selectable. Object-detection metrics and operational alert metrics remain in separate tables and are never compared against sklearn Macro F1.
+YOLO11s is now the **selected detector**. Complete measured detection and operational result files make it *eligible*; what *selects* it is winning the measured operational comparison. Applying the decision ranking (Operational Alert Score → detection Recall / mAP@0.5 → inference speed when measured, where the Operational Alert Score already encodes its component Hazard Recall and False Alert Rate at the documented 10:1 weight), YOLO11s wins on the primary metric — higher Operational Alert Score (0.9406 vs 0.9368) — and also leads on its components (Hazard Recall 0.9370 vs 0.9331, False Alert Rate 0.0185 vs 0.0209), with stronger supporting detection mAP@0.5 (0.7668 vs 0.7470) and Recall (0.6967 vs 0.6825). Eligibility (`src/results_loader.select_operational_winner`) is gated on existing files, measured values, a non-synthetic/non-pending status, and non-null required metrics; if the YOLO11s files were absent it would not be eligible — eligibility alone does not select it, the measured comparison does. Object-detection metrics and operational alert metrics remain in separate tables and are never compared against sklearn Macro F1.
 
 Implementation: `src/results_loader.py` (load/classify detection vs operational JSON + winner selection; pure stdlib, no ML imports) and `src/inference.py` (lazy YOLO11n/YOLO11s loading + single-image detection; fine-tuned D-Fire checkpoints only, never pretrained weights). Tests: `tests/test_results_loader.py`, `tests/test_inference.py` (temporary files only; no model weights required). The YOLO11s operational/location metrics are reproducible (evaluation only, no training) with:
 
