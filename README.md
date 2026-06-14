@@ -325,7 +325,7 @@ project-root/
 ├── requirements.txt
 ├── .gitignore
 ├── .env.example
-├── app.py
+├── app.py               ← thin Streamlit shell: sidebar mode select + dispatch to src/dashboards/
 ├── src/
 │   ├── __init__.py
 │   ├── data.py          ← dataset loading, inspection, Data Card utilities
@@ -337,7 +337,15 @@ project-root/
 │   ├── tracking.py      ← multi-frame confirmation, apparent direction estimation
 │   ├── mapping.py       ← mapping modes, polygon helpers, location formatting
 │   ├── alerts.py        ← alert record creation, status validation
-│   └── evaluation.py    ← cost-sensitive operational alert metrics + approximate fire-location helpers (pure stdlib)
+│   ├── evaluation.py    ← cost-sensitive operational alert metrics + approximate fire-location helpers (pure stdlib)
+│   └── dashboards/      ← dashboard renderers dispatched by app.py
+│       ├── model_helpers.py        ← shared model/comparison rendering helpers + cached detector loader (lazy ML)
+│       ├── operations_learning.py  ← Operations & Learning dashboard
+│       ├── central_control.py      ← Central Control dashboard (placeholder)
+│       ├── m2_dashboard.py         ← M2 dashboard orchestrator → m2/
+│       ├── m2/                     ← M2 tab modules (problem, literature, market, dataset_eda)
+│       ├── m3_dashboard.py         ← M3 dashboard orchestrator → m3/
+│       └── m3/                     ← M3 tab modules (overview, models, model_comparison, inference_demo)
 ├── scripts/
 │   ├── build_dfire_metadata.py  ← generates data/dfire_metadata.csv from raw D-Fire
 │   ├── dummy_try.py             ← M3 sklearn baseline: D-Fire loading, feature extraction, DummyClassifier
@@ -382,7 +390,8 @@ project-root/
 │   └── 01_eda.ipynb
 └── tests/
     ├── test_smoke.py
-    └── test_evaluation.py   ← unit tests for src/evaluation.py (alert confusion, cost weighting, location helpers)
+    ├── test_evaluation.py   ← unit tests for src/evaluation.py (alert confusion, cost weighting, location helpers)
+    └── test_dashboards_smoke.py  ← dashboard import smoke tests (no ultralytics/torch at import)
 ```
 
 ---
@@ -393,6 +402,12 @@ project-root/
 pip install -r requirements.txt
 streamlit run app.py
 ```
+
+The app opens on the **M3 Dashboard** (the first sidebar option) — four tabs: **Overview**,
+**Models**, **Model comparison (KPI)**, and **Inference Demo**. The **M2 Dashboard**,
+**Operations & Learning Dashboard**, and **Central Control Dashboard** are also selectable
+from the sidebar. `app.py` is a thin shell; each dashboard is rendered by a module under
+`src/dashboards/`.
 
 ---
 

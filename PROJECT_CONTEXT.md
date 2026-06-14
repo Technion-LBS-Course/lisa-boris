@@ -713,7 +713,7 @@ Allowed detection classes are only `fire` and `smoke`.
 ## 17. Current Repository Structure
 
 ```text
-app.py
+app.py                    # thin Streamlit shell: page config, theme, sidebar mode select, dispatch to dashboards
 requirements.txt
 README.md
 CLAUDE.md
@@ -733,6 +733,14 @@ src/
   mapping.py
   alerts.py
   evaluation.py           # cost-sensitive operational alert metrics + approximate fire-location helpers; pure stdlib, no ML imports
+  dashboards/             # dashboard renderers; app.py dispatches one render() per dashboard mode
+    model_helpers.py      # shared model/comparison rendering helpers + cached detector loader (ML imports lazy)
+    operations_learning.py # Operations & Learning dashboard renderer
+    central_control.py    # Central Control dashboard renderer (placeholder)
+    m2_dashboard.py       # M2 dashboard orchestrator -> m2/
+    m2/                   # M2 tab modules: problem_understanding, literature_review, market_review, dataset_eda
+    m3_dashboard.py       # M3 dashboard orchestrator -> m3/
+    m3/                   # M3 tab modules: overview, models, model_comparison, inference_demo
 
 scripts/
   build_dfire_metadata.py
@@ -774,7 +782,10 @@ docs/
 tests/
   test_smoke.py
   test_evaluation.py      # unit tests for src/evaluation.py (alert confusion, cost weighting, location helpers)
+  test_dashboards_smoke.py # dashboard import smoke tests (no ultralytics/torch imported at module import)
 ```
+
+The Streamlit app opens on the **M3 Dashboard** (first sidebar option), which has four tabs — **Overview**, **Models**, **Model comparison (KPI)**, and **Inference Demo** — reorganized from the Operations & Learning Dashboard content. The **M2 Dashboard**, **Operations & Learning Dashboard**, and **Central Control Dashboard** remain selectable from the same sidebar. `app.py` only builds the sidebar and dispatches; each dashboard is rendered by a module under `src/dashboards/`.
 
 Important note: `ASSISTANT_WORKING_RULES.md` should be kept at the repository root next to `PROJECT_CONTEXT.md`, `CLAUDE.md`, and `README.md`, because it is a source-of-truth instruction file for all future AI sessions.
 

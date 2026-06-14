@@ -46,7 +46,7 @@ PyroFinder is a real-time fire outbreak detection and monitoring system using ca
 <!-- Updated 2026-06-13: YOLO11s fine-tuning + detection/operational evaluation complete; measured YOLO11s result files added; YOLO11s is now the selected primary detector -->
 
 ```
-app.py                              — Streamlit entry point (multi-tab shell)
+app.py                              — Streamlit entry point (thin shell: page config, theme, sidebar mode select, dispatch to dashboard renderers)
 src/data.py                         — dataset loading, inspection, Data Card utilities
 src/eda.py                          — EDA helpers: summary metrics, category/split counts, bbox stats, pixel stats, spatial analysis
 src/viz.py                          — on-the-fly YOLO box annotation (D-Fire class map: 0=smoke, 1=fire)
@@ -59,6 +59,14 @@ src/alerts.py                       — alert record creation, status validation
 src/evaluation.py                   — cost-sensitive operational alert metrics (hazard recall, false alert rate, operational alert score) + approximate fire-location helpers; pure stdlib, no ML imports
 src/results_loader.py               — load/classify detection vs operational result JSON (status: ok / training_in_progress / malformed / wrong-kind) + cost-sensitive winner selection; pure stdlib, no ML imports
 src/inference.py                    — lazy YOLO11n/YOLO11s detector loading (ultralytics imported inside functions only) + single-image detection; fine-tuned D-Fire checkpoints only, never pretrained weights; validates fire/smoke-only classes
+src/dashboards/                     — dashboard renderers; app.py dispatches one render() per dashboard mode
+src/dashboards/model_helpers.py     — shared model/comparison rendering helpers (per-model views, classification/object-detection/operational comparisons) + cached detector loader; ML imports stay lazy
+src/dashboards/operations_learning.py — Operations & Learning dashboard renderer (6 tabs)
+src/dashboards/central_control.py   — Central Control dashboard renderer (placeholder)
+src/dashboards/m2_dashboard.py      — M2 dashboard orchestrator (delegates to src/dashboards/m2/)
+src/dashboards/m2/                  — M2 tab modules: problem_understanding, literature_review, market_review, dataset_eda
+src/dashboards/m3_dashboard.py      — M3 dashboard orchestrator (delegates to src/dashboards/m3/)
+src/dashboards/m3/                  — M3 tab modules: overview, models, model_comparison, inference_demo
 scripts/build_dfire_metadata.py     — generates data/dfire_metadata.csv from raw D-Fire root
 scripts/dummy_try.py                — M3 sklearn baseline: full D-Fire loading, feature extraction, DummyClassifier
 scripts/simple_baselines.py         — M3: Logistic Regression and Random Forest classifiers on D-Fire (+ operational_metrics block + prediction CSVs)
@@ -81,6 +89,7 @@ tests/test_smoke.py                 — import smoke tests, unit tests for core 
 tests/test_evaluation.py            — unit tests for src/evaluation.py (alert confusion, cost weighting, location helpers)
 tests/test_results_loader.py        — unit tests for src/results_loader.py (status classification, winner selection, pending/malformed handling) — temp files only, no weights
 tests/test_inference.py             — unit tests for src/inference.py (checkpoint paths, class validation, missing-checkpoint guard) — no real weights, no ultralytics import
+tests/test_dashboards_smoke.py      — dashboard import smoke tests (render() present; no ultralytics/torch imported at module import)
 docs/M2_DATA_EDA.md                 — data workflow, class mapping, cleaning decisions, actual counts
 docs/M2_dashboard.md                — dashboard design notes
 docs/M2_GAP_LIST.md                 — known gaps and open items as of M2

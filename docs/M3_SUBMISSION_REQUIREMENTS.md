@@ -292,7 +292,7 @@ Location-metric constraints (must be stated wherever location metrics appear):
 - Outputs are **approximate image-space estimates**.
 - These are **not precise geographic coordinates**.
 
-**Repository evidence (today):** `src/evaluation.py` implements the bottom-center anchor (`anchor_x = x_center`, `anchor_y = y_center + height/2`), `best_iou_fire_match` (single best-IoU pair per image), `fire_location_error` (returns `None` when no GT fire or no predicted fire), and the 3×3 grid hit logic. The operational comparison in `app.py` shows location columns as `N/A` for sklearn rows.
+**Repository evidence (today):** `src/evaluation.py` implements the bottom-center anchor (`anchor_x = x_center`, `anchor_y = y_center + height/2`), `best_iou_fire_match` (single best-IoU pair per image), `fire_location_error` (returns `None` when no GT fire or no predicted fire), and the 3×3 grid hit logic. The operational comparison in `src/dashboards/model_helpers.py` shows location columns as `N/A` for sklearn rows.
 
 ---
 
@@ -383,7 +383,7 @@ The final repository must provide evidence for:
 - model-evaluation code;
 - operational evaluation code (`scripts/evaluate_yolo_alert_metrics.py`, `src/evaluation.py`);
 - result JSON / CSV files;
-- Streamlit inference code (`app.py`, `src/inference.py`);
+- Streamlit inference code (`src/dashboards/m3/inference_demo_tab.py`, `src/dashboards/operations_learning.py`, `src/inference.py`);
 - dependency declarations (`requirements.txt`);
 - run instructions;
 - model-result summary;
@@ -423,13 +423,13 @@ Classifications are conservative: a requirement is **Complete** only with credib
 | YOLO11s object-detection evaluation | Complete | `results/baseline_yolo11s.json`: mAP@0.5 0.7668, mAP@0.5:0.95 0.4414, P 0.7573, R 0.6967, F1 0.7257 | — |
 | YOLO11s operational evaluation | Complete | `results/yolo11s_operational_metrics.json`: TP 2156/FN 145/FP 37/TN 1968, Hazard Recall 0.9370, FAR 0.0185, Score 0.9406 | — |
 | YOLO11s per-image prediction evidence | Complete | `results/yolo11s_test_predictions.csv` present (per-image alert outcome + fire-location error table) | — |
-| Same-task detector comparison (YOLO11n vs YOLO11s) | Complete | Both detectors measured under equivalent conditions; comparison rendered in `app.py` / `results_loader.py` | — |
-| sklearn comparison table | Complete | `app.py` renders per-class metrics, distributions, and a model-comparison sub-tab | — |
-| Object-detection comparison table | Complete | `app.py` "Object-detection comparison": YOLO11n and YOLO11s both measured | — |
-| Operational comparison table | Complete | `app.py` `_render_operational_alert_metrics`: sklearn + YOLO11n + YOLO11s measured | — |
+| Same-task detector comparison (YOLO11n vs YOLO11s) | Complete | Both detectors measured under equivalent conditions; comparison rendered in `src/dashboards/model_helpers.py` / `src/results_loader.py` | — |
+| sklearn comparison table | Complete | `src/dashboards/model_helpers.py` `render_classification_comparison`: per-class metrics, distributions, model-comparison view | — |
+| Object-detection comparison table | Complete | `src/dashboards/model_helpers.py` `render_object_detection_comparison`: YOLO11n and YOLO11s both measured | — |
+| Operational comparison table | Complete | `src/dashboards/model_helpers.py` `render_operational_alert_metrics`: sklearn + YOLO11n + YOLO11s measured | — |
 | Final detector winner selection | Complete | `select_operational_winner` selects YOLO11s from measured, complete files (wins Hazard Recall, FAR, Operational Alert Score) | — |
 | Winner justification (written) | Complete | KPI hierarchy documented (§10); YOLO11s vs YOLO11n measured differences cited in PROJECT_CONTEXT §12.5 and README | — |
-| Uploaded-image inference UI | Complete | `tab_inference` upload + Run inference button; Streamlit boots cleanly headless | — |
+| Uploaded-image inference UI | Complete | Inference demo upload + Run inference button (`src/dashboards/m3/inference_demo_tab.py`, `src/dashboards/operations_learning.py`); Streamlit boots cleanly headless | — |
 | Fine-tuned YOLO11n inference availability | Complete | `models/yolo11n_dfire_best.pt` present locally; `checkpoint_exists("YOLO11n")` true | Note: weight is Git-ignored; README must state placement |
 | Fine-tuned YOLO11s inference availability | Complete (local) | `models/yolo11s_dfire_best.pt` produced by the Kaggle run; weight is Git-ignored | Note: weight is Git-ignored; README must state placement |
 | Selected winner running in Streamlit | Complete | Selected detector (YOLO11s) runs end-to-end in the demo when its checkpoint is present; YOLO11n available as fallback | Note: YOLO11s weight is Git-ignored; README must state placement |
@@ -603,7 +603,7 @@ python scripts/evaluate_yolo_alert_metrics.py \
 | `src/evaluation.py` | Source of truth for cost weights, operational score formula, and location helpers. |
 | `src/results_loader.py` | Result loading, status classification, selectability, and winner selection. |
 | `src/inference.py` | Lazy detector loading, fine-tuned-only checkpoints, exact fire/smoke class validation. |
-| `app.py` | Streamlit dashboard: separate comparison tables, operational metrics, inference demo. |
+| `app.py` / `src/dashboards/` | Streamlit shell + dashboard renderers: separate comparison tables, operational metrics, inference demo (comparison/operational in `model_helpers.py`; inference in `m3/inference_demo_tab.py`). |
 | `scripts/simple_baselines.py`, `scripts/YOLO11n_baseline.py`, `scripts/evaluate_yolo_alert_metrics.py` | Training and evaluation code. |
 | `results/baseline_*.json`, `results/results_yolo11n.csv`, `results/yolo11n_operational_metrics.json`, `results/yolo11n_test_predictions.csv` | Measured result artifacts. |
 | `tests/test_results_loader.py`, `tests/test_inference.py`, `tests/test_evaluation.py` | Tests locking the result-loading, inference-guard, and metric behaviors. |

@@ -1042,7 +1042,7 @@ project-root/
 ├── PROJECT_CONTEXT.md          ← product scope, ML problem, datasets
 ├── requirements.txt
 ├── .gitignore
-├── app.py                      ← Streamlit entry point (multi-tab shell)
+├── app.py                      ← Streamlit entry point (thin shell: sidebar mode select + dispatch to src/dashboards/)
 ├── src/
 │   ├── __init__.py
 │   ├── data.py                 ← dataset loading, metadata helpers
@@ -1054,7 +1054,13 @@ project-root/
 │   ├── tracking.py             ← multi-frame confirmation, direction estimation
 │   ├── mapping.py              ← mapping modes, polygon helpers, location formatting
 │   ├── alerts.py               ← alert record creation, status validation
-│   └── evaluation.py           ← cost-sensitive operational alert metrics + approximate fire-location helpers (pure stdlib)
+│   ├── evaluation.py           ← cost-sensitive operational alert metrics + approximate fire-location helpers (pure stdlib)
+│   └── dashboards/             ← dashboard renderers; app.py dispatches one render() per mode (tabs no longer live in app.py)
+│       ├── model_helpers.py        ← shared model/comparison rendering helpers + cached detector loader (lazy ML)
+│       ├── operations_learning.py  ← Operations & Learning dashboard
+│       ├── central_control.py      ← Central Control dashboard (placeholder)
+│       ├── m2_dashboard.py         ← M2 dashboard orchestrator → m2/ (problem, literature, market, dataset_eda)
+│       └── m3_dashboard.py         ← M3 dashboard orchestrator → m3/ (overview, models, model_comparison, inference_demo)
 ├── scripts/
 │   ├── build_dfire_metadata.py ← generates data/dfire_metadata.csv
 │   ├── dummy_try.py            ← M3 sklearn baseline: DummyClassifier on full D-Fire
