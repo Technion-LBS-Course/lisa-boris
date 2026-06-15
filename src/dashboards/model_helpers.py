@@ -769,21 +769,31 @@ YOLO11n is the correct object-detection baseline for PyroFinder. YOLO11s should 
 
 # ── Helper: build comparison dataframe ───────────────────────────
 def _build_comparison_df(results_data):
+    # Macro F2 is the macro-average of per-class F2 (F-beta, beta = 2), the same
+    # way Macro F1 averages per-class F1. f_beta_score lives in src/evaluation.py
+    # (pure stdlib, no ML imports).
+    from src.evaluation import f_beta_score as _f_beta
+
     _cmp_rows = []
     for _n, _d in results_data.items():
         _m = _d.get("metrics", {})
         _cr = _m.get("classification_report", {})
         _ma = _m.get("macro_avg", {})
+        _f2_per_class = [
+            _f_beta(_cr[_c].get("precision", 0), _cr[_c].get("recall", 0), beta=2)
+            for _c in ("background", "fire", "smoke") if _c in _cr
+        ]
+        _macro_f2 = sum(_f2_per_class) / len(_f2_per_class) if _f2_per_class else 0
         _cmp_rows.append({
             "Model":             _short_model_label(_n),
             "Accuracy":          round(_m.get("accuracy", 0), 2),
             "Macro Precision":   round(_ma.get("precision", 0), 2),
             "Macro Recall":      round(_ma.get("recall", 0), 2),
             "Macro F1":          round(_ma.get("f1", 0), 2),
+            "Macro F2":          round(_macro_f2, 2),
             "Fire Recall":       round(_cr.get("fire", {}).get("recall", 0), 2),
             "Smoke Recall":      round(_cr.get("smoke", {}).get("recall", 0), 2),
             "Background Recall": round(_cr.get("background", {}).get("recall", 0), 2),
-            "Run date":          _d.get("run_date", "—"),
         })
     return pd.DataFrame(_cmp_rows)
 
@@ -893,9 +903,9 @@ def render_object_detection_comparison(results_data):
     # ── Object-detection baselines (YOLO11n + YOLO11s) ─────────
     from src.results_loader import (
         load_detection_result as _load_det,
-        status_label as _status_label,
         STATUS_OK as _STATUS_OK,
     )
+    from src.evaluation import f_beta_score as _f_beta
 
     st.subheader("Object-detection comparison")
 
@@ -910,6 +920,20 @@ def render_object_detection_comparison(results_data):
     def _fv(v):
         return round(v, 4) if v is not None else "—"
 
+    def _f2_of(_dm):
+        # Overall F2 (F-beta, beta = 2) from measured precision & recall.
+        _p, _r = _dm.get("precision"), _dm.get("recall")
+        if _p is None or _r is None:
+            return "—"
+        return round(_f_beta(_p, _r, beta=2), 4)
+
+    # Recall is split per class. Object detection has only two classes (smoke,
+    # fire) and no background class, so there is no background recall to show.
+    # Per-class numbers are read from the measured ``per_class`` block; a
+    # detector whose result file has no per-class data shows "—".
+    def _class_recall(_dm, _cls):
+        return _fv((_dm.get("per_class", {}) or {}).get(_cls, {}).get("recall"))
+
     _det_rows = []
     _det_loaded = {}
     for _dname, _dpath in _det_specs:
@@ -921,13 +945,15 @@ def render_object_detection_comparison(results_data):
             "mAP@0.5":      _fv(_dm.get("map50")),
             "mAP@0.5:0.95": _fv(_dm.get("map50_95")),
             "Precision":    _fv(_dm.get("precision")),
-            "Recall":       _fv(_dm.get("recall")),
+            "Smoke Recall": _class_recall(_dm, "smoke"),
+            "Fire Recall":  _class_recall(_dm, "fire"),
             "F1":           _fv(_dm.get("f1")),
-            "Status":       _status_label(_loaded["status"]),
+            "F2":           _f2_of(_dm),
         })
     st.dataframe(
         pd.DataFrame(_det_rows)[
-            ["Model", "mAP@0.5", "mAP@0.5:0.95", "Precision", "Recall", "F1", "Status"]
+            ["Model", "mAP@0.5", "mAP@0.5:0.95", "Precision",
+             "Smoke Recall", "Fire Recall", "F1", "F2"]
         ],
         use_container_width=True, hide_index=True,
     )
@@ -941,17 +967,27 @@ def render_object_detection_comparison(results_data):
         "YOLO11s": "rgba(79,195,247,0.25)",
     }
     _det_radar_fig = go.Figure()
-    _radar_cats = ["mAP@0.5", "mAP@0.5:0.95", "Precision", "Recall", "F1"]
+    _radar_cats = ["mAP@0.5", "mAP@0.5:0.95", "Precision",
+                   "Smoke Recall", "Fire Recall", "F1", "F2"]
     _any_measured = False
     for _dname in ("YOLO11s", "YOLO11n"):
         _loaded = _det_loaded.get(_dname)
         if not _loaded or _loaded["status"] != _STATUS_OK:
             continue
         _dm = (_loaded["data"] or {}).get("metrics", {})
-        if not all(_dm.get(k) is not None for k in ["map50", "map50_95", "precision", "recall", "f1"]):
+        _pc = _dm.get("per_class", {}) or {}
+        _smoke_r = _pc.get("smoke", {}).get("recall")
+        _fire_r = _pc.get("fire", {}).get("recall")
+        # Per-class recall axes need measured per-class numbers; a detector
+        # without them is skipped from the radar rather than plotted with gaps.
+        if not all(_dm.get(k) is not None for k in ["map50", "map50_95", "precision", "f1"]):
+            continue
+        if _smoke_r is None or _fire_r is None:
             continue
         _any_measured = True
-        _vals = [_dm["map50"], _dm["map50_95"], _dm["precision"], _dm["recall"], _dm["f1"]]
+        _f2 = _f_beta(_dm["precision"], _dm["recall"], beta=2) if _dm.get("recall") is not None else 0
+        _vals = [_dm["map50"], _dm["map50_95"], _dm["precision"],
+                 _smoke_r, _fire_r, _dm["f1"], _f2]
         _det_radar_fig.add_trace(go.Scatterpolar(
             r=_vals + [_vals[0]],
             theta=_radar_cats + [_radar_cats[0]],
@@ -984,9 +1020,7 @@ def render_operational_alert_metrics(results_data):
     )
     from src.results_loader import (
         load_operational_result as _load_op,
-        is_selectable_operational as _is_selectable,
         select_operational_winner as _select_winner,
-        status_label as _status_label,
         STATUS_OK as _STATUS_OK,
     )
 
@@ -1038,7 +1072,6 @@ def render_operational_alert_metrics(results_data):
             "Location Coverage": "N/A",
             "Mean Location Error": "N/A",
             "3x3 Grid Hit Rate": "N/A",
-            "Status": "Measured (image-level)",
         })
         chart_data.append({"Model": _label, "Metric": "Recall",
                            "Value": _om.get("hazard_recall", 0)})
@@ -1062,7 +1095,6 @@ def render_operational_alert_metrics(results_data):
                 "Location Coverage": "—",
                 "Mean Location Error": "—",
                 "3x3 Grid Hit Rate": "—",
-                "Status": _status_label(_loaded["status"]),
             })
             continue
         _data = _loaded["data"] or {}
@@ -1079,7 +1111,6 @@ def render_operational_alert_metrics(results_data):
             "Location Coverage": _fmt(_lm.get("location_coverage_rate")),
             "Mean Location Error": _fmt(_lm.get("fire_location_error_mean")),
             "3x3 Grid Hit Rate": _fmt(_lm.get("fire_location_grid_hit_rate")),
-            "Status": "Measured" if _is_selectable(_loaded) else "Measured (incomplete)",
         })
         chart_data.append({"Model": _label, "Metric": "Recall",
                            "Value": _om.get("hazard_recall", 0)})
@@ -1090,7 +1121,6 @@ def render_operational_alert_metrics(results_data):
         "Model", "Recall", "False Alert Rate",
         "Precision", "F1 Score", "F2 Score",
         "Location Coverage", "Mean Location Error", "3x3 Grid Hit Rate",
-        "Status",
     ]
     if rows:
         st.dataframe(
