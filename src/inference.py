@@ -142,13 +142,14 @@ def run_detection(model, pil_image, conf: float = 0.25, imgsz: int = 640) -> dic
     import io
     import time
 
-    import numpy as np
     from PIL import Image
 
     rgb = pil_image.convert("RGB")
     start = time.perf_counter()
+    # Pass the PIL Image directly so Ultralytics handles BGR conversion internally.
+    # Passing np.array(rgb) would give an RGB array treated as BGR, swapping R↔B.
     results = model.predict(
-        source=np.array(rgb), conf=conf, imgsz=imgsz, verbose=False
+        source=rgb, conf=conf, imgsz=imgsz, verbose=False
     )
     inference_ms = (time.perf_counter() - start) * 1000.0
 
