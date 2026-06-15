@@ -1035,19 +1035,19 @@ def render_operational_alert_metrics(results_data):
         _label = _short_model_label(_n)
         rows.append({
             "Model": _label,
-            "Hazard Recall": _fmt(_om.get("hazard_recall")),
+            "Recall": _fmt(_om.get("hazard_recall")),
             "False Alert Rate": _fmt(_om.get("false_alert_rate")),
-            "Alert Precision": _fmt(_om.get("alert_precision")),
-            "Alert F1": _fmt(_om.get("alert_f1")),
-            "Alert F2": _fmt(_om.get("alert_f2")),
+            "Precision": _fmt(_om.get("alert_precision")),
+            "F1 Score": _fmt(_om.get("alert_f1")),
+            "F2 Score": _fmt(_om.get("alert_f2")),
             "Location Coverage": "N/A",
             "Mean Location Error": "N/A",
             "3x3 Grid Hit Rate": "N/A",
             "Status": "Measured (image-level)",
         })
-        chart_data.append({"Model": _label, "Metric": "Hazard Recall",
+        chart_data.append({"Model": _label, "Metric": "Recall",
                            "Value": _om.get("hazard_recall", 0)})
-        chart_data.append({"Model": _label, "Metric": "Alert F2",
+        chart_data.append({"Model": _label, "Metric": "F2 Score",
                            "Value": _om.get("alert_f2", 0)})
 
     # ── YOLO operational rows (dedicated operational JSON per model) ──
@@ -1059,11 +1059,11 @@ def render_operational_alert_metrics(results_data):
             _missing_yolo_op.append((_mname, _op_path, _loaded["status"]))
             rows.append({
                 "Model": _mname,
-                "Hazard Recall": "—",
+                "Recall": "—",
                 "False Alert Rate": "—",
                 "Alert Precision": "—",
-                "Alert F1": "—",
-                "Alert F2": "—",
+                "F1 Score": "—",
+                "F2 Score": "—",
                 "Location Coverage": "—",
                 "Mean Location Error": "—",
                 "3x3 Grid Hit Rate": "—",
@@ -1076,24 +1076,24 @@ def render_operational_alert_metrics(results_data):
         _label = _data.get("model_name", _mname)
         rows.append({
             "Model": _label,
-            "Hazard Recall": _fmt(_om.get("hazard_recall")),
+            "Recall": _fmt(_om.get("hazard_recall")),
             "False Alert Rate": _fmt(_om.get("false_alert_rate")),
             "Alert Precision": _fmt(_om.get("alert_precision")),
-            "Alert F1": _fmt(_om.get("alert_f1")),
-            "Alert F2": _fmt(_om.get("alert_f2")),
+            "F1 Score": _fmt(_om.get("alert_f1")),
+            "F2 Score": _fmt(_om.get("alert_f2")),
             "Location Coverage": _fmt(_lm.get("location_coverage_rate")),
             "Mean Location Error": _fmt(_lm.get("fire_location_error_mean")),
             "3x3 Grid Hit Rate": _fmt(_lm.get("fire_location_grid_hit_rate")),
             "Status": "Measured" if _is_selectable(_loaded) else "Measured (incomplete)",
         })
-        chart_data.append({"Model": _label, "Metric": "Hazard Recall",
+        chart_data.append({"Model": _label, "Metric": "Recall",
                            "Value": _om.get("hazard_recall", 0)})
-        chart_data.append({"Model": _label, "Metric": "Alert F2",
+        chart_data.append({"Model": _label, "Metric": "F2 Score",
                            "Value": _om.get("alert_f2", 0)})
 
     _table_cols = [
-        "Model", "Hazard Recall", "False Alert Rate",
-        "Alert Precision", "Alert F1", "Alert F2",
+        "Model", "Recall", "False Alert Rate",
+        "Precision", "F1 Score", "F2 Score",
         "Location Coverage", "Mean Location Error", "3x3 Grid Hit Rate",
         "Status",
     ]
@@ -1112,9 +1112,9 @@ def render_operational_alert_metrics(results_data):
     )
     if _winner:
         st.success(
-            f"**Selected detector: {_winner}.** Selected by the **Alert F2-score** "
-            "— the primary metric (F-beta, beta = 2) that combines Alert Precision and "
-            "Hazard Recall while weighting recall higher — with object-detection Recall "
+            f"**Selected detector: {_winner}.** Selected by the **F2-score** "
+            "— the primary metric (F-beta, beta = 2) that combines Precision and "
+            "Recall while weighting recall higher — with object-detection Recall "
             "and mAP@0.5 as supporting detection-quality evidence."
         )
     else:
@@ -1153,11 +1153,11 @@ def render_operational_alert_metrics(results_data):
             pd.DataFrame(chart_data),
             x="Model", y="Value", color="Metric", barmode="group",
             color_discrete_map={
-                "Hazard Recall": "#e07b39",
-                "Alert F2": "#4fc3f7",
+                "Recall": "#e07b39",
+                "F2 Score": "#4fc3f7",
             },
             labels={"Value": "Score (0–1, higher is better)"},
-            title="Hazard Recall vs Alert F2 (beta = 2, recall weighted above precision)",
+            title="Recall vs F2 Score (beta = 2, recall weighted above precision)",
         )
         _fig_op.update_layout(yaxis_range=[0, 1], bargap=0.25, height=360)
         apply_chart_theme(_fig_op)
