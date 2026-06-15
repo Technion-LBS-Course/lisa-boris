@@ -123,9 +123,9 @@
     "false_alert_rate": 0.5037,
     "alert_precision": 0.6473,
     "alert_f1": 0.7179,
+    "alert_f2": 0.7681,
     "weighted_error_cost": 5480,
     "max_possible_cost": 25015,
-    "operational_alert_score": 0.7809,
     "fn_weight": 10,
     "fp_weight": 1,
     "location_metrics": null

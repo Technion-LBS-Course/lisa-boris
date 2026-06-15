@@ -379,7 +379,7 @@ def main() -> int:
     print(f"  False alert rate         : {operational['false_alert_rate']:.4f}")
     print(f"  Alert precision          : {operational['alert_precision']:.4f}")
     print(f"  Alert F1                 : {operational['alert_f1']:.4f}")
-    print(f"  Operational alert score  : {operational['operational_alert_score']:.4f}")
+    print(f"  Alert F2 (primary)       : {operational['alert_f2']:.4f}")
     print(f"  Fire location coverage   : {covered}/{gt_fire_image_count} "
           f"({location_metrics['location_coverage_rate']})")
     print(f"  Mean fire location error : {location_metrics['fire_location_error_mean']}")

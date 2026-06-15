@@ -26,8 +26,10 @@ from src.evaluation import (
     bbox_iou,
     best_iou_fire_match,
     fire_location_error,
+    f_beta_score,
     DEFAULT_FN_WEIGHT,
     DEFAULT_FP_WEIGHT,
+    DEFAULT_FBETA,
 )
 
 
@@ -143,9 +145,9 @@ def test_weighted_error_cost_formula():
     assert m["weighted_error_cost"] == 10 * 2 + 1 * 3
 
 
-# ── operational_alert_score: missed hazard hurts more than a false alert ────────
+# ── alert F2 (primary metric): missed hazard hurts more than a false alert ──────
 
-def test_operational_score_drops_more_for_missed_hazard_than_false_alert():
+def test_f2_drops_more_for_missed_hazard_than_false_alert():
     base_true = ["fire", "fire", "background", "background"]
 
     perfect = compute_operational_alert_metrics(base_true, base_true)
@@ -156,32 +158,53 @@ def test_operational_score_drops_more_for_missed_hazard_than_false_alert():
         base_true, ["fire", "fire", "fire", "background"]
     )
 
-    assert perfect["operational_alert_score"] == 1.0
-    # A single missed hazard pulls the score down further than a single false alert.
-    assert missed["operational_alert_score"] < false_alert["operational_alert_score"]
-    # The underlying cost penalty is exactly 10x (FN weight 10 vs FP weight 1).
-    assert missed["weighted_error_cost"] == 10 * false_alert["weighted_error_cost"]
-    # Same ground truth -> same denominator, so the score drop is ~10x as large
-    # (abs tolerance absorbs 4-decimal rounding of the score).
-    drop_missed = perfect["operational_alert_score"] - missed["operational_alert_score"]
-    drop_false = perfect["operational_alert_score"] - false_alert["operational_alert_score"]
-    assert drop_missed == pytest.approx(10 * drop_false, abs=2e-3)
+    assert perfect["alert_f2"] == 1.0
+    # F2 weights recall above precision, so a single missed hazard (lower recall)
+    # pulls F2 down further than a single false alert (lower precision).
+    assert missed["alert_f2"] < false_alert["alert_f2"]
+    drop_missed = perfect["alert_f2"] - missed["alert_f2"]
+    drop_false = perfect["alert_f2"] - false_alert["alert_f2"]
+    assert drop_missed > drop_false
 
 
-def test_operational_score_bounds_and_perfect_and_worst():
-    # Perfect predictions -> score 1.0
+def test_f2_bounds_and_perfect_and_worst():
+    # Perfect predictions -> F2 1.0
     perfect = compute_operational_alert_metrics(["fire", "background"], ["fire", "background"])
-    assert perfect["operational_alert_score"] == 1.0
+    assert perfect["alert_f2"] == 1.0
     assert perfect["hazard_recall"] == 1.0
     assert perfect["false_alert_rate"] == 0.0
 
-    # Worst case: every hazard missed AND every background false-alarmed -> score 0.0
+    # Worst case: every hazard missed AND every background false-alarmed -> F2 0.0
     worst = compute_operational_alert_metrics(
         ["fire", "smoke", "background"], ["background", "background", "fire"]
     )
-    assert worst["operational_alert_score"] == 0.0
+    assert worst["alert_f2"] == 0.0
     assert worst["hazard_recall"] == 0.0
     assert worst["false_alert_rate"] == 1.0
+
+
+def test_f_beta_score_weights_recall_above_precision():
+    assert DEFAULT_FBETA == 2.0
+    # F2 closed form: 5*P*R / (4*P + R).
+    assert f_beta_score(0.8, 0.6) == pytest.approx(5 * 0.8 * 0.6 / (4 * 0.8 + 0.6))
+    # With beta=2, given the same imbalance, higher recall scores better than higher
+    # precision (recall is the favoured term).
+    recall_favoured = f_beta_score(0.6, 0.9)
+    precision_favoured = f_beta_score(0.9, 0.6)
+    assert recall_favoured > precision_favoured
+    # Zero precision and recall -> 0.0 (undefined denominator handled safely).
+    assert f_beta_score(0.0, 0.0) == 0.0
+
+
+def test_alert_f2_matches_closed_form_from_confusion():
+    # 3 hazards, 2 detected (recall 2/3); 2 TP + 1 FP (precision 2/3).
+    m = compute_operational_alert_metrics(
+        ["fire", "smoke", "fire", "background"],
+        ["fire", "smoke", "background", "fire"],
+    )
+    tp, fn, fp = m["tp_alert"], m["fn_alert"], m["fp_alert"]
+    expected = 5 * tp / (5 * tp + 4 * fn + fp)
+    assert m["alert_f2"] == pytest.approx(expected, abs=1e-4)
 
 
 def test_hazard_recall_and_precision_values():
@@ -196,11 +219,12 @@ def test_hazard_recall_and_precision_values():
     assert m["false_alert_rate"] == 1.0
 
 
-def test_no_cases_gives_vacuous_perfect_score():
+def test_no_cases_gives_zero_cost_and_zero_f2():
     m = compute_operational_alert_metrics([], [])
-    assert m["operational_alert_score"] == 1.0
+    # No cases -> no error cost; F2 is 0.0 (no true positives, undefined P/R).
     assert m["weighted_error_cost"] == 0
     assert m["max_possible_cost"] == 0
+    assert m["alert_f2"] == 0.0
 
 
 def test_custom_weights_change_cost():

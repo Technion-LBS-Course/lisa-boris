@@ -2,9 +2,9 @@
 
 Summarizes the model-selection story: which models were compared, the KPI-based
 selection criterion, and that YOLO11s is the selected primary detector because it has
-the better Operational Alert Score than YOLO11n in the measured M3 comparison. YOLO11n
-stays the lightweight baseline / fallback. Location outputs are approximate. The
-selected detector is pulled live; no metric values are invented.
+the better Alert F2-score than YOLO11n in the measured M3 comparison. YOLO11n stays
+the lightweight baseline / fallback. Location outputs are approximate. The selected
+detector is pulled live; no metric values are invented.
 """
 import streamlit as st
 
@@ -31,11 +31,11 @@ def render():
 
     st.subheader("Selection criterion (KPI hierarchy)")
     st.markdown(
-        "Selection follows a cost-sensitive operational rule, because missing a real "
-        "fire/smoke hazard is far more costly than raising a false alarm (false negative "
-        "weight 10, false positive weight 1):\n\n"
-        "1. **Operational Alert Score** (primary decision metric — the cost-sensitive summary "
-        "that already encodes Hazard Recall and False Alert Rate as its components).\n"
+        "Selection follows the **Alert F2-score**, because missing a real fire/smoke "
+        "hazard is more costly than raising a false alarm — but too many false alerts "
+        "erode customer trust, so precision still matters:\n\n"
+        "1. **Alert F2-score** (primary decision metric — the F-beta score with beta = 2 "
+        "that combines Alert Precision and Hazard Recall, weighting recall higher).\n"
         "2. Object-detection **Recall** and **mAP@0.5** as supporting evidence.\n"
         "3. Measured **inference speed** as a practical consideration."
     )
@@ -45,9 +45,9 @@ def render():
     if winner:
         st.success(
             f"**Selected detector: {winner}.** Among the measured object detectors, "
-            f"{winner} is selected because it has the better **Operational Alert Score** "
-            "than YOLO11n in the M3 comparison (0.9406 vs 0.9368) — the cost-sensitive "
-            "summary that weights a missed hazard 10× a false alert — with stronger "
+            f"{winner} is selected because it has the better **Alert F2-score** "
+            "than YOLO11n in the M3 comparison (0.9459 vs 0.9423) — the F-beta score "
+            "(beta = 2) that weights recall above precision — with stronger "
             "object-detection Recall and mAP@0.5 as supporting evidence."
         )
     else:

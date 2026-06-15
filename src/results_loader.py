@@ -56,7 +56,7 @@ _NON_MEASURED_STATUS_KEYWORDS = ("synthetic", "placeholder", "pending", "trainin
 _REQUIRED_OPERATIONAL_KEYS = (
     "hazard_recall",
     "false_alert_rate",
-    "operational_alert_score",
+    "alert_f2",
 )
 
 
@@ -148,16 +148,16 @@ def _rank_candidates(candidates: list[dict]) -> Optional[str]:
     """Return the winning model name from pre-built candidate dicts, or None.
 
     Decision hierarchy (higher is better unless noted):
-        1. Operational Alert Score  — primary, cost-sensitive ranking metric. It is
-                                       ``1 - (10*FN + FP) / max_cost``, so it already
-                                       encodes Hazard Recall (FN) and False Alert Rate
-                                       (FP) at the documented 10:1 weight.
+        1. Alert F2-score           — primary ranking metric. F-beta (beta = 2) of
+                                       alert precision and hazard recall, weighting
+                                       recall above precision so a missed hazard hurts
+                                       more than a false alert.
         2. Detection Recall, mAP@0.5 — supporting object-detection metrics.
         3. Inference speed          — only when a measured value exists.
 
     Hazard Recall and False Alert Rate are kept on each candidate for display and
-    selectability, but they are components of the Operational Alert Score and are
-    not separate ranking tiers.
+    selectability, but they are components of the Alert F2-score and are not
+    separate ranking tiers.
     """
     eligible = [c for c in candidates if c.get("selectable")]
     if not eligible:
@@ -165,7 +165,7 @@ def _rank_candidates(candidates: list[dict]) -> Optional[str]:
 
     def sort_key(c: dict):
         return (
-            -(c.get("operational_alert_score") or 0.0),
+            -(c.get("alert_f2") or 0.0),
             -(c.get("detection_recall") or 0.0),
             -(c.get("map50") or 0.0),
             c.get("inference_ms") if c.get("inference_ms") is not None else float("inf"),
@@ -200,7 +200,7 @@ def build_operational_candidates(operational_items, detection_items=None) -> lis
             "selectable": is_selectable_operational(loaded),
             "hazard_recall": metrics.get("hazard_recall"),
             "false_alert_rate": metrics.get("false_alert_rate"),
-            "operational_alert_score": metrics.get("operational_alert_score"),
+            "alert_f2": metrics.get("alert_f2"),
             "detection_recall": det.get("recall"),
             "map50": det.get("map50"),
             # Inference speed is only used when a measured value exists; we have

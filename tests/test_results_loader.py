@@ -57,7 +57,7 @@ def _operational_doc(model_name, hazard_recall=0.93, far=0.02, score=0.94, statu
             "false_alert_rate": far,
             "alert_precision": 0.98,
             "alert_f1": 0.95,
-            "operational_alert_score": score,
+            "alert_f2": score,
         },
         "location_metrics": {
             "fire_location_error_mean": 0.013,
@@ -181,10 +181,10 @@ def test_malformed_operational_json(tmp_path):
 
 # ── 6. Measured YOLO11n + YOLO11s compare without mixing metric families ─────────
 
-def test_winner_uses_operational_alert_score_first(tmp_path):
-    # Operational Alert Score is the primary decision metric: the model with the
-    # higher score wins even if the other has a higher raw hazard recall (the score
-    # already encodes Hazard Recall and False Alert Rate at the 10:1 weight).
+def test_winner_uses_alert_f2_first(tmp_path):
+    # Alert F2-score is the primary decision metric: the model with the higher F2
+    # wins even if the other has a higher raw hazard recall (F2 combines Alert
+    # Precision and Hazard Recall, weighting recall higher).
     n_op = _write(
         tmp_path / "yolo11n_operational_metrics.json",
         _operational_doc("YOLO11n", hazard_recall=0.95, score=0.92),
@@ -197,7 +197,7 @@ def test_winner_uses_operational_alert_score_first(tmp_path):
 
 
 def test_winner_tiebreak_detection_recall(tmp_path):
-    # Equal Operational Alert Score → higher supporting object-detection recall wins.
+    # Equal Alert F2-score → higher supporting object-detection recall wins.
     n_op = _write(
         tmp_path / "yolo11n_operational_metrics.json",
         _operational_doc("YOLO11n", score=0.94),

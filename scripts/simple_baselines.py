@@ -392,16 +392,16 @@ if __name__ == "__main__":
         RESULTS_DIR / "predictions_random_forest.csv", test_names, y_test, rf_pred
     )
 
-    print("\nOperational alert metrics (FN weight 10, FP weight 1):")
+    print("\nOperational alert metrics (primary metric: Alert F2, beta=2):")
     print(
         f"  Logistic Regression : hazard_recall={lr_operational['hazard_recall']:.4f}  "
         f"false_alert_rate={lr_operational['false_alert_rate']:.4f}  "
-        f"operational_alert_score={lr_operational['operational_alert_score']:.4f}"
+        f"alert_f2={lr_operational['alert_f2']:.4f}"
     )
     print(
         f"  Random Forest       : hazard_recall={rf_operational['hazard_recall']:.4f}  "
         f"false_alert_rate={rf_operational['false_alert_rate']:.4f}  "
-        f"operational_alert_score={rf_operational['operational_alert_score']:.4f}"
+        f"alert_f2={rf_operational['alert_f2']:.4f}"
     )
 
     print("\nDone.")

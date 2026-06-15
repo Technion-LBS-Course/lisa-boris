@@ -992,12 +992,12 @@ def render_operational_alert_metrics(results_data):
 
     st.subheader("Operational Alert Metrics")
     st.caption(
-        "Cost-sensitive comparison at the alert level: fire/smoke = hazard, "
-        "background = no hazard. A missed hazard (false negative) is weighted "
-        "**10×** a false alert (false positive). "
-        "**Primary decision metric: Operational Alert Score** — the cost-sensitive "
-        "summary (FN weight 10, FP weight 1) that already encodes Hazard Recall and "
-        "False Alert Rate, which are shown alongside it as its components."
+        "Comparison at the alert level: fire/smoke = hazard, background = no hazard. "
+        "**Primary decision metric: Alert F2-score** — the F-beta score (beta = 2) of "
+        "Alert Precision and Hazard Recall. It weights recall above precision, because "
+        "missing a real fire or smoke event is more costly than a false alarm, while "
+        "still penalizing too many false alerts (which erode customer trust). Hazard "
+        "Recall and Alert Precision are shown alongside it as its components."
     )
 
     def _op_for(d):
@@ -1039,7 +1039,7 @@ def render_operational_alert_metrics(results_data):
             "False Alert Rate": _fmt(_om.get("false_alert_rate")),
             "Alert Precision": _fmt(_om.get("alert_precision")),
             "Alert F1": _fmt(_om.get("alert_f1")),
-            "Operational Alert Score": _fmt(_om.get("operational_alert_score")),
+            "Alert F2": _fmt(_om.get("alert_f2")),
             "Location Coverage": "N/A",
             "Mean Location Error": "N/A",
             "3x3 Grid Hit Rate": "N/A",
@@ -1047,8 +1047,8 @@ def render_operational_alert_metrics(results_data):
         })
         chart_data.append({"Model": _label, "Metric": "Hazard Recall",
                            "Value": _om.get("hazard_recall", 0)})
-        chart_data.append({"Model": _label, "Metric": "Operational Alert Score",
-                           "Value": _om.get("operational_alert_score", 0)})
+        chart_data.append({"Model": _label, "Metric": "Alert F2",
+                           "Value": _om.get("alert_f2", 0)})
 
     # ── YOLO operational rows (dedicated operational JSON per model) ──
     _missing_yolo_op = []
@@ -1063,7 +1063,7 @@ def render_operational_alert_metrics(results_data):
                 "False Alert Rate": "—",
                 "Alert Precision": "—",
                 "Alert F1": "—",
-                "Operational Alert Score": "—",
+                "Alert F2": "—",
                 "Location Coverage": "—",
                 "Mean Location Error": "—",
                 "3x3 Grid Hit Rate": "—",
@@ -1080,7 +1080,7 @@ def render_operational_alert_metrics(results_data):
             "False Alert Rate": _fmt(_om.get("false_alert_rate")),
             "Alert Precision": _fmt(_om.get("alert_precision")),
             "Alert F1": _fmt(_om.get("alert_f1")),
-            "Operational Alert Score": _fmt(_om.get("operational_alert_score")),
+            "Alert F2": _fmt(_om.get("alert_f2")),
             "Location Coverage": _fmt(_lm.get("location_coverage_rate")),
             "Mean Location Error": _fmt(_lm.get("fire_location_error_mean")),
             "3x3 Grid Hit Rate": _fmt(_lm.get("fire_location_grid_hit_rate")),
@@ -1088,12 +1088,12 @@ def render_operational_alert_metrics(results_data):
         })
         chart_data.append({"Model": _label, "Metric": "Hazard Recall",
                            "Value": _om.get("hazard_recall", 0)})
-        chart_data.append({"Model": _label, "Metric": "Operational Alert Score",
-                           "Value": _om.get("operational_alert_score", 0)})
+        chart_data.append({"Model": _label, "Metric": "Alert F2",
+                           "Value": _om.get("alert_f2", 0)})
 
     _table_cols = [
         "Model", "Hazard Recall", "False Alert Rate",
-        "Alert Precision", "Alert F1", "Operational Alert Score",
+        "Alert Precision", "Alert F1", "Alert F2",
         "Location Coverage", "Mean Location Error", "3x3 Grid Hit Rate",
         "Status",
     ]
@@ -1112,10 +1112,10 @@ def render_operational_alert_metrics(results_data):
     )
     if _winner:
         st.success(
-            f"**Selected detector: {_winner}.** Selected by the **Operational Alert Score** "
-            "— the primary, cost-sensitive metric (FN weight 10, FP weight 1) that already "
-            "encodes Hazard Recall and False Alert Rate — with object-detection Recall and "
-            "mAP@0.5 as supporting detection-quality evidence."
+            f"**Selected detector: {_winner}.** Selected by the **Alert F2-score** "
+            "— the primary metric (F-beta, beta = 2) that combines Alert Precision and "
+            "Hazard Recall while weighting recall higher — with object-detection Recall "
+            "and mAP@0.5 as supporting detection-quality evidence."
         )
     else:
         st.info(
@@ -1135,7 +1135,7 @@ def render_operational_alert_metrics(results_data):
         st.markdown(
             "- 9 fewer missed hazards (FN 145 vs 154).\n"
             "- 5 fewer false alerts (FP 37 vs 42).\n"
-            "- +0.0038 Operational Alert Score (0.9406 vs 0.9368).\n"
+            "- +0.0036 Alert F2 (0.9459 vs 0.9423).\n"
             "- +1.98 pp mAP@0.5 (0.7668 vs 0.7470), with consistent gains on "
             "mAP@0.5:0.95, Precision, Recall, and F1.\n"
             "- Smoke-only imagery is the main bottleneck (most misses for both "
@@ -1147,17 +1147,17 @@ def render_operational_alert_metrics(results_data):
             "Full analysis: `docs/M3_RESULTS_SUMMARY.md`."
         )
 
-    # Compact chart: Hazard Recall + Operational Alert Score per model
+    # Compact chart: Hazard Recall + Alert F2 per model
     if chart_data:
         _fig_op = px.bar(
             pd.DataFrame(chart_data),
             x="Model", y="Value", color="Metric", barmode="group",
             color_discrete_map={
                 "Hazard Recall": "#e07b39",
-                "Operational Alert Score": "#4fc3f7",
+                "Alert F2": "#4fc3f7",
             },
             labels={"Value": "Score (0–1, higher is better)"},
-            title="Hazard Recall vs Operational Alert Score (FN weight 10, FP weight 1)",
+            title="Hazard Recall vs Alert F2 (beta = 2, recall weighted above precision)",
         )
         _fig_op.update_layout(yaxis_range=[0, 1], bargap=0.25, height=360)
         apply_chart_theme(_fig_op)

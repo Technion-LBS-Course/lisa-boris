@@ -1,10 +1,17 @@
-"""Cost-sensitive operational evaluation metrics for PyroFinder model comparison.
+"""Operational evaluation metrics for PyroFinder model comparison.
 
 PyroFinder's most important failure is a MISSED HAZARD: ground-truth fire and/or
 smoke is present, but the model raises no fire/smoke detection. At the alert level
-this is a false negative, and it is treated as far more costly than a FALSE ALERT
-(background ground truth, but the model predicts fire or smoke). Default cost
-weights reflect this: false_negative_weight = 10, false_positive_weight = 1.
+this is a false negative, and it matters more than a FALSE ALERT (background ground
+truth, but the model predicts fire or smoke).
+
+The primary decision metric is the **alert-level F2-score** (`alert_f2`): the
+F-beta score with beta = 2, which combines alert precision and hazard recall but
+weights recall higher than precision. This directly encodes "missing a real fire or
+smoke event is more costly than a false alarm" while still penalizing excessive
+false alerts (which erode customer trust). The cost weights below remain available
+as supporting diagnostics (weighted error cost), but they are no longer the
+ranking metric.
 
 For alert-level evaluation, `fire` and `smoke` both count as "hazard":
     hazard_present  = ground truth has fire OR smoke
@@ -32,8 +39,25 @@ from typing import Optional, Sequence
 HAZARD_LABELS = {"fire", "smoke"}
 
 # Default operational cost weights: a missed hazard is 10x worse than a false alert.
+# Used only for the supporting weighted-error-cost diagnostic, not for ranking.
 DEFAULT_FN_WEIGHT = 10
 DEFAULT_FP_WEIGHT = 1
+
+# F2 (beta = 2): the primary decision metric. Beta > 1 weights recall above
+# precision, matching "a missed hazard costs more than a false alert".
+DEFAULT_FBETA = 2.0
+
+
+def f_beta_score(precision: float, recall: float, beta: float = DEFAULT_FBETA) -> float:
+    """F-beta score from precision and recall.
+
+    ``beta`` controls the recall/precision trade-off: beta > 1 weights recall more
+    heavily (beta = 2 for PyroFinder's F2). Returns 0.0 when both precision and
+    recall are 0 (undefined denominator).
+    """
+    b2 = beta * beta
+    denominator = b2 * precision + recall
+    return _safe_div((1.0 + b2) * precision * recall, denominator)
 
 
 def to_hazard_label(label: str) -> bool:
@@ -166,16 +190,16 @@ def operational_alert_metrics_from_confusion(
     """Cost-sensitive operational metrics from alert-level confusion counts.
 
     Metrics:
-        hazard_recall           = TP / (TP + FN)        — component of the score (driven by FN)
-        false_alert_rate        = FP / (FP + TN)        — component of the score (driven by FP)
-        alert_precision         = TP / (TP + FP)
-        alert_f1                = harmonic mean of alert_precision and hazard_recall
-        weighted_error_cost     = fn_weight * FN + fp_weight * FP
-        max_possible_cost       = fn_weight * hazard_cases + fp_weight * bg_cases
-        operational_alert_score = 1 - weighted_error_cost / max_possible_cost
-                                  (primary decision metric; higher is better — it
-                                  already encodes Hazard Recall (FN) and False Alert
-                                  Rate (FP) at the documented 10:1 weight)
+        hazard_recall       = TP / (TP + FN)        — recall component of F2 (driven by FN)
+        false_alert_rate    = FP / (FP + TN)        — driven by FP
+        alert_precision     = TP / (TP + FP)        — precision component of F2
+        alert_f1            = harmonic mean of alert_precision and hazard_recall
+        alert_f2            = F-beta (beta = 2) of alert_precision and hazard_recall
+                              (PRIMARY decision metric; higher is better — recall is
+                              weighted above precision so a missed hazard hurts more
+                              than a false alert)
+        weighted_error_cost = fn_weight * FN + fp_weight * FP   (supporting diagnostic)
+        max_possible_cost   = fn_weight * hazard_cases + fp_weight * bg_cases (diagnostic)
     """
     tp = confusion["tp_alert"]
     fn = confusion["fn_alert"]
@@ -190,14 +214,10 @@ def operational_alert_metrics_from_confusion(
     alert_f1 = _safe_div(
         2 * alert_precision * hazard_recall, alert_precision + hazard_recall
     )
+    alert_f2 = f_beta_score(alert_precision, hazard_recall, beta=DEFAULT_FBETA)
 
     weighted_error_cost = fn_weight * fn + fp_weight * fp
     max_possible_cost = fn_weight * total_hazard + fp_weight * total_background
-    # No cases at all -> no possible cost -> treat as a perfect (vacuous) score.
-    operational_alert_score = (
-        1.0 if max_possible_cost == 0
-        else 1.0 - weighted_error_cost / max_possible_cost
-    )
 
     return {
         "tp_alert": int(tp),
@@ -210,9 +230,9 @@ def operational_alert_metrics_from_confusion(
         "false_alert_rate": round(false_alert_rate, 4),
         "alert_precision": round(alert_precision, 4),
         "alert_f1": round(alert_f1, 4),
+        "alert_f2": round(alert_f2, 4),
         "weighted_error_cost": _maybe_int(weighted_error_cost),
         "max_possible_cost": _maybe_int(max_possible_cost),
-        "operational_alert_score": round(operational_alert_score, 4),
         "fn_weight": _maybe_int(fn_weight),
         "fp_weight": _maybe_int(fp_weight),
     }

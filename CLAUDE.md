@@ -56,8 +56,8 @@ src/detection.py                    — DetectionResult dataclass, class validat
 src/tracking.py                     — multi-frame confirmation, apparent direction estimation
 src/mapping.py                      — mapping modes, polygon helpers, approximate location formatting
 src/alerts.py                       — alert record creation, status validation
-src/evaluation.py                   — cost-sensitive operational alert metrics (hazard recall, false alert rate, operational alert score) + approximate fire-location helpers; pure stdlib, no ML imports
-src/results_loader.py               — load/classify detection vs operational result JSON (status: ok / training_in_progress / malformed / wrong-kind) + cost-sensitive winner selection; pure stdlib, no ML imports
+src/evaluation.py                   — operational alert metrics (hazard recall, false alert rate, alert precision, alert F1, alert F2 [primary]) + approximate fire-location helpers; pure stdlib, no ML imports
+src/results_loader.py               — load/classify detection vs operational result JSON (status: ok / training_in_progress / malformed / wrong-kind) + Alert F2-based winner selection; pure stdlib, no ML imports
 src/inference.py                    — lazy YOLO11n/YOLO11s detector loading (ultralytics imported inside functions only) + single-image detection; fine-tuned D-Fire checkpoints only, never pretrained weights; validates fire/smoke-only classes
 src/dashboards/                     — dashboard renderers; app.py dispatches one render() per dashboard mode
 src/dashboards/model_helpers.py     — shared model/comparison rendering helpers (per-model views, classification/object-detection/operational comparisons) + cached detector loader; ML imports stay lazy
@@ -152,14 +152,14 @@ results/yolo11s_test_predictions.csv      — per-image alert outcome + fire-loc
 - F1: 0.7257 (YOLO11n 0.7099)
 - Per-class: smoke — mAP@0.5 0.8222 / mAP@0.5:0.95 0.5054 / P 0.8028 / R 0.7563 / F1 0.7789; fire — mAP@0.5 0.7115 / mAP@0.5:0.95 0.3774 / P 0.7119 / R 0.6370 / F1 0.6724.
 
-**YOLO11s operational alert metrics (D-Fire test split, evaluation only — no training; confidence 0.25, FN weight 10, FP weight 1, 4,306 images):**
+**YOLO11s operational alert metrics (D-Fire test split, evaluation only — no training; confidence 0.25, 4,306 images):**
 
 - Alert-level confusion: TP 2,156 · FN 145 · FP 37 · TN 1,968
 - Hazard Recall: **0.9370** (YOLO11n 0.9331)
 - False Alert Rate: 0.0185 (YOLO11n 0.0209)
 - Alert Precision: 0.9831 (YOLO11n 0.9808)
 - Alert F1: 0.9595 (YOLO11n 0.9563)
-- Operational Alert Score: **0.9406** (YOLO11n 0.9368)
+- Alert F2-score (primary decision metric; F-beta with beta=2): **0.9459** (YOLO11n 0.9423)
 - Approximate fire-location (bottom-center anchor of class-1 fire boxes; image-space only, never precise geolocation): coverage 1,040 / 1,115 (rate 0.9327) · mean error 0.013499 · median 0.005478 · 3×3 grid hit rate 0.9644.
 
 **Selection outcome:** YOLO11s is the **selected detector**. Complete measured detection and operational result files make it *eligible*; what *selects* it is winning the measured operational comparison (`src/results_loader.select_operational_winner`): the primary decision metric is the higher Operational Alert Score, which already encodes its component Hazard Recall (driven by false negatives) and False Alert Rate (driven by false positives) at the documented 10:1 weight; YOLO11s also leads on those components (higher Hazard Recall, lower False Alert Rate) and on supporting detection Recall / mAP@0.5. Eligibility is gated on existing files, measured values, a non-synthetic/non-pending status, and non-null required metrics; without these files YOLO11s would not be eligible — but eligibility alone does not select it, the measured comparison does.
