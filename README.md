@@ -100,7 +100,7 @@ Candidate libraries (no paid provider required): Folium, pydeck, GeoPandas, Shap
 
 **Metrics:** mAP@0.5, mAP@0.5:0.95, Precision, Recall, F1-score (object-detection quality metrics); False Alarm Rate (FP per hour or per 1,000 sampled frames); Inference speed (FPS or ms/frame).
 
-**KPI:** This is a two-class object-detection task. The primary operational KPI / model-selection metric is the **Operational Alert Score** (FN weight 10, FP weight 1), the cost-sensitive summary that already encodes its components — **Hazard Recall** (driven by false negatives, since missing a real fire or smoke hazard is far more costly than a false alarm) and **False Alert Rate** (driven by false positives) — at the documented 10:1 weight. Hazard Recall and False Alert Rate are therefore reported as components / diagnostics of the Operational Alert Score, not as separate higher-priority ranking tiers. Detection Recall and mAP@0.5 are supporting object-detection quality metrics, not the same as Hazard Recall.
+**KPI:** The model is an object detector, the metric is F2-score, because it combines recall and precision while giving more weight to recall, since missing a real fire or smoke event is more costly than a false alarm, but too many false alerts reduce customer trust.
 
 **Split:** D-Fire's provided split where available; otherwise reproducible 70/15/15 stratified by image category.
 
