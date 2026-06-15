@@ -16,8 +16,13 @@ from src import inference
 
 
 def test_checkpoint_paths_are_finetuned_dfire_weights():
-    assert inference.checkpoint_path("YOLO11n") == Path("models/yolo11n_dfire_best.pt")
-    assert inference.checkpoint_path("YOLO11s") == Path("models/yolo11s_dfire_best.pt")
+    # Paths are resolved against the repo root (not the CWD) so inference works
+    # regardless of where the process is launched, e.g. Streamlit Community Cloud.
+    n_path = inference.checkpoint_path("YOLO11n")
+    s_path = inference.checkpoint_path("YOLO11s")
+    assert n_path.is_absolute() and s_path.is_absolute()
+    assert n_path.parent.name == "models" and n_path.name == "yolo11n_dfire_best.pt"
+    assert s_path.parent.name == "models" and s_path.name == "yolo11s_dfire_best.pt"
 
 
 def test_unknown_detector_raises():

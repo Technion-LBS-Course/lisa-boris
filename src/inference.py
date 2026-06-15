@@ -22,10 +22,17 @@ from pathlib import Path
 # The only two classes PyroFinder detects.
 VALID_DETECTION_CLASSES = {"fire", "smoke"}
 
-# Fine-tuned D-Fire checkpoints (local only; Git-ignored).
+# Repository root (two levels up from this file: src/inference.py -> repo root).
+# Checkpoint paths are resolved against this, not the current working directory,
+# so inference works regardless of where the process is launched (e.g. Streamlit
+# Community Cloud, where the CWD is not guaranteed to be the repo root).
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Fine-tuned D-Fire checkpoints. The two committed checkpoints ship in the repo
+# (gitignore exceptions) so the public Streamlit app runs on a fresh clone.
 CHECKPOINTS: dict[str, Path] = {
-    "YOLO11n": Path("models/yolo11n_dfire_best.pt"),
-    "YOLO11s": Path("models/yolo11s_dfire_best.pt"),
+    "YOLO11n": _REPO_ROOT / "models" / "yolo11n_dfire_best.pt",
+    "YOLO11s": _REPO_ROOT / "models" / "yolo11s_dfire_best.pt",
 }
 
 # Shown when the local YOLO11s checkpoint file is absent (weights are Git-ignored,
