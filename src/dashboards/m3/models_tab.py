@@ -13,9 +13,7 @@ from src.dashboards import model_helpers as mh
 def render():
     st.header("Models")
     st.caption(
-        "Five models: the sklearn image-level classifiers (DummyClassifier, Logistic "
-        "Regression, Random Forest) and the YOLO11 object detectors (YOLO11n baseline / "
-        "fallback, YOLO11s current primary detector)."
+        "Five models: 1 dummy, 2 classifiers and 2 object detectors"
     )
     results_data = mh.load_model_results()
     if not results_data:

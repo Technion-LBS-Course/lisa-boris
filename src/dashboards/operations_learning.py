@@ -654,7 +654,7 @@ def render(confidence_threshold, confirmation_frames):
     with tab_models:
         st.header("Models")
         st.caption(
-            "Sklearn image-level classifiers (color features), the YOLO11n object-detection "
+            "Image-level classifiers (color features), the YOLO11n object-detection "
             "baseline / fallback, and the YOLO11s current primary detector · "
             "D-Fire dataset · fire / smoke / background"
         )
@@ -729,7 +729,7 @@ def render(confidence_threshold, confirmation_frames):
                         st.subheader(_mname)
                         try:
                             with st.spinner(f"Loading {_mname} and running inference..."):
-                                _model = load_detector_cached(_mname)
+                                _model = _inf.load_detector_cached(_mname)
                                 _res = _inf.run_detection(
                                     _model, _image, conf=confidence_threshold
                                 )

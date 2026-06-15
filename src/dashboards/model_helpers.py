@@ -177,8 +177,8 @@ def _model_summary_text(name):
         )
     if "Logistic" in name:
         return (
-            "Logistic Regression is the first real learning baseline. It uses the 60 handcrafted "
-            "color features and improves Macro F1 to about 0.62, with real recall for both fire "
+            "Logistic Regression is the first real learning baseline. It uses the color features "
+            "and improves Macro F1 to about 0.62, with real recall for both fire "
             "and smoke. This proves that simple color information contains useful signal, but the "
             "model still creates many false alarms by confusing background images with fire or smoke."
         )
@@ -190,7 +190,7 @@ def _model_summary_text(name):
             "that tree-based models capture these patterns much better than a linear classifier."
         )
     return (
-        "This baseline is an image-level sklearn classifier using handcrafted color features. "
+        "This baseline is an image-level classifier using 60 color features. "
         "It should be compared using Macro F1 and fire/smoke recall, not accuracy alone."
     )
 
@@ -254,13 +254,13 @@ Logistic Regression proves that handcrafted color features are useful, but it is
 """
     if "Random Forest" in name:
         return """
-Random Forest is a non-linear classical ML baseline using the same 60 handcrafted color features as Logistic Regression.
+Random Forest is a non-linear classical ML baseline using the same 60 color features as Logistic Regression.
 
 ---
 
 #### What the result means
 
-Random Forest performs much better than the other sklearn baselines. It reaches about 86% accuracy and Macro F1 around 0.85, with strong recall for background, fire, and smoke.
+Random Forest performs much better than the other ML baselines. It reaches about 86% accuracy and Macro F1 around 0.85, with strong recall for background, fire, and smoke.
 
 ---
 
@@ -278,10 +278,10 @@ The strong improvement over Logistic Regression suggests that the relationship b
 
 #### Main conclusion
 
-Random Forest is the strongest classical ML baseline. It should be used as the main simple sklearn baseline, but it is still only an image-level classifier. It cannot replace YOLO11s, because PyroFinder needs object detection, bounding boxes, and approximate location support.
+Random Forest is the strongest classical ML baseline. It should be used as the main simple baseline, but it is still only an image-level classifier. It cannot replace YOLO11s, because PyroFinder needs object detection, bounding boxes, and approximate location support.
 """
     return """
-This is an image-level sklearn classifier using handcrafted color features.
+This is an image-level classifier using color features.
 
 ---
 
@@ -305,7 +305,7 @@ Compare against DummyClassifier (Macro F1 = 0.21) as the minimum bar and against
 
 #### Main conclusion
 
-Any sklearn baseline is an image-level classifier. It cannot replace YOLO11s object detection, which is needed for bounding boxes, confidence scores, and approximate location support.
+Any baseline is an image-level classifier. It cannot replace YOLO11s object detection, which is needed for bounding boxes, confidence scores, and approximate location support.
 """
 
 # ── Helper: render one model tab ─────────────────────────────────
@@ -472,7 +472,7 @@ def _render_single_baseline_model(model_name, result_dict):
 # ── Helper: render a YOLO object-detection model tab ─────────────
 # One generic renderer shared by YOLO11n and YOLO11s so their tabs
 # stay identical. It shows object-detection metrics and training
-# curves only — never sklearn classification metrics. Real values are
+# curves only — never classification metrics. Real values are
 # read from ``result_dict``; when it is missing/empty a clear pending
 # state is shown and no metric values are invented.
 def _render_yolo_detection_model(
@@ -520,7 +520,7 @@ def _render_yolo_detection_model(
     else:
         st.info(
             "YOLO11n is the lightweight object-detection **baseline / fallback** for PyroFinder. "
-            "Unlike the sklearn baselines, it does not classify the whole image only — "
+            "Unlike the baselines models, it does not classify the whole image only — "
             "it predicts bounding boxes, class labels, and confidence scores for fire and smoke. "
             "This makes it the correct baseline for the YOLO11s current primary detector, because "
             "PyroFinder needs localization for approximate map-based alerts. "
@@ -730,7 +730,7 @@ This evaluation tests whether D-Fire annotations let the larger YOLO11s model le
 
 #### What it tells us about the model
 
-YOLO11s is heavier than YOLO11n and is expected to be more accurate. It should be compared against YOLO11n using detection metrics (mAP@0.5, recall), never against the sklearn image-level classifiers.
+YOLO11s is heavier than YOLO11n and is expected to be more accurate. It should be compared against YOLO11n using detection metrics (mAP@0.5, recall), never against the image-level classifiers.
 
 ---
 
@@ -740,7 +740,7 @@ YOLO11s is selected as the main detector only if it improves detection quality �
 """)
         else:
             st.markdown("""
-YOLO11n is different from the sklearn baselines. The sklearn models classify an entire image as background, fire, or smoke using handcrafted color features. YOLO11n performs object detection: it predicts **where** fire or smoke appears in the frame.
+YOLO11n is different from the classification models. They classify an entire image as background, fire, or smoke using 60 color features. YOLO11n performs object detection: it predicts **where** fire or smoke appears in the frame.
 
 ---
 
@@ -792,13 +792,13 @@ def _render_model_comparison(results_data):
     # ── A. Conclusion text ────────────────────────────────────────
     st.info(
         "**Comparison conclusion:** "
-        "The sklearn baselines test whether simple image-level color features can separate "
+        "The classification baselines test whether simple image-level color features can separate "
         "background, fire, and smoke. DummyClassifier is only a minimum bar, Logistic Regression "
         "proves that color features contain signal, and Random Forest is the strongest classical "
         "image-level baseline. "
         "YOLO11n is different: it is the first object-detection baseline. It should be judged by "
         "mAP, precision, and recall because it predicts bounding boxes, not just image labels. "
-        "The final YOLO11s model should be compared mainly against YOLO11n, not against the sklearn "
+        "The final YOLO11s model should be compared mainly against YOLO11n, not against the classification "
         "models, because both YOLO models solve the real PyroFinder task: detecting and localizing "
         "fire/smoke."
     )
@@ -810,17 +810,17 @@ def _render_model_comparison(results_data):
 
 
 def render_classification_comparison(results_data):
-    """Image-level sklearn classification comparison (accuracy / Macro F1 / recall).
+    """Image-level classification comparison (accuracy / Macro F1 / recall).
 
-    Kept separate from the object-detection comparison so sklearn Macro F1 is
+    Kept separate from the object-detection comparison so classification Macro F1 is
     never placed in a direct ranking against YOLO11 mAP.
     """
     _sklearn_data = {n: d for n, d in results_data.items() if _is_sklearn_result(d)}
 
-    # ── Sklearn classification baselines ──────────────────────
-    st.subheader("Image-level sklearn classification baselines")
+    # ── Classification baselines ──────────────────────
+    st.subheader("Image-level classification baselines")
     st.caption(
-        "These baselines classify the whole image using 60 handcrafted color features. "
+        "These baselines classify the whole image using 60 color features. "
         "They are evaluated with image-level classification metrics (accuracy, Macro F1, recall)."
     )
 
@@ -831,15 +831,15 @@ def render_classification_comparison(results_data):
 
         st.divider()
 
-        # Macro F1 bar chart — sklearn only
-        st.subheader("Macro F1 comparison — sklearn baselines")
+        # Macro F1 bar chart — Classification only
+        st.subheader("Macro F1 comparison — classification baselines")
         _fig_cmp = px.bar(
             _cmp_df,
             x="Model", y="Macro F1",
             color="Model",
             text="Macro F1",
             color_discrete_sequence=px.colors.qualitative.Set2,
-            title="Macro F1 — sklearn image-level baselines",
+            title="Macro F1 — classification baselines",
             labels={"Macro F1": "F1 macro (higher is better)"},
         )
         _fig_cmp.update_layout(yaxis_range=[0, 1], showlegend=False)
@@ -848,8 +848,8 @@ def render_classification_comparison(results_data):
 
         st.divider()
 
-        # Radar chart — sklearn only
-        st.subheader("Macro average radar — sklearn baselines")
+        # Radar chart — classification only
+        st.subheader("Macro average radar — classification baselines")
         _radar_cats = ["Macro Precision", "Macro Recall", "Macro F1", "Accuracy"]
         _radar_colors = px.colors.qualitative.Set2
         _radar_fig = go.Figure()
@@ -886,7 +886,7 @@ def render_classification_comparison(results_data):
 def render_object_detection_comparison(results_data):
     """YOLO11n vs YOLO11s object-detection comparison (mAP / precision / recall / F1).
 
-    Detection metrics only — never compared against the sklearn classification
+    Detection metrics only — never compared against the classification
     baselines. A detector row shows a missing-file status until its measured
     result file exists; no values are invented.
     """
@@ -992,12 +992,7 @@ def render_operational_alert_metrics(results_data):
 
     st.subheader("Operational Alert Metrics")
     st.caption(
-        "Comparison at the alert level: fire/smoke = hazard, background = no hazard. "
-        "**Primary decision metric: Alert F2-score** — the F-beta score (beta = 2) of "
-        "Alert Precision and Hazard Recall. It weights recall above precision, because "
-        "missing a real fire or smoke event is more costly than a false alarm, while "
-        "still penalizing too many false alerts (which erode customer trust). Hazard "
-        "Recall and Alert Precision are shown alongside it as its components."
+        "Comparison at the alert level: fire/smoke = **hazard**, background = no hazard. "
     )
 
     def _op_for(d):

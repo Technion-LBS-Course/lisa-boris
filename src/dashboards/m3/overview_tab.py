@@ -19,8 +19,7 @@ def render():
     st.subheader("Models compared")
     st.markdown(
         "- **DummyClassifier**, **Logistic Regression**, **Random Forest** — image-level "
-        "sklearn classifiers using 60 handcrafted color features. They predict a single "
-        "label per image (background / fire / smoke), not bounding boxes.\n"
+        "sklearn classifiers. They predict a single label per image (background / fire / smoke), not bounding boxes.\n"
         "- **YOLO11n** — the lightweight object-detection **baseline / fallback**.\n"
         "- **YOLO11s** — the larger object detector, the **current primary detector**.\n\n"
         "Image-level classification and object detection are different predictive tasks. "

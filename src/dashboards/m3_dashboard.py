@@ -4,7 +4,7 @@ Builds the four M3 tabs and delegates each to its own module in
 ``src.dashboards.m3``:
 
   1. Overview              — the model-selection story (which models, KPI rule, why YOLO11s)
-  2. Models                — the five models (sklearn classifiers + YOLO11 detectors)
+  2. Models                — the five models (classifiers + YOLO11 detectors)
   3. Model comparison (KPI) — KPI / operational, classification, object-detection (separated)
   4. Demo                  — upload an image and run the available fine-tuned detectors
 
