@@ -84,7 +84,7 @@ results/results_yolo11s.csv                — YOLO11s per-epoch training curves
 results/yolo11s_operational_metrics.json   — YOLO11s operational alert + location metrics (Kaggle, 2026-06-12; measured)
 results/yolo11s_test_predictions.csv       — YOLO11s per-image alert outcome + fire-location error table (D-Fire test, used for failure analysis)
 results/predictions_*.csv                  — additional per-image alert prediction tables generated on demand
-models/                             — local only; Git-ignored. Contains yolo11n_dfire_best.pt and yolo11s_dfire_best.pt.
+models/                             — yolo11n_dfire_best.pt (~5 MB) and yolo11s_dfire_best.pt (~19 MB) are committed (gitignore exceptions) so the public Streamlit Cloud app runs inference on a fresh clone. All other weights / *.pt files stay Git-ignored.
 tests/test_smoke.py                 — import smoke tests, unit tests for core helpers
 tests/test_evaluation.py            — unit tests for src/evaluation.py (alert confusion, cost weighting, location helpers)
 tests/test_results_loader.py        — unit tests for src/results_loader.py (status classification, winner selection, pending/malformed handling) — temp files only, no weights
@@ -136,7 +136,7 @@ YOLO11s is the **current primary detector**. Fine-tuning and evaluation are **co
 Measured result files:
 
 ```text
-models/yolo11s_dfire_best.pt              — fine-tuned checkpoint (local only, Git-ignored)
+models/yolo11s_dfire_best.pt              — fine-tuned checkpoint (committed via gitignore exception, ~19 MB)
 results/baseline_yolo11s.json             — object-detection metrics (mAP, P, R, F1)
 results/results_yolo11s.csv               — per-epoch training curves
 results/yolo11s_operational_metrics.json  — operational alert + approximate fire-location metrics
@@ -212,7 +212,7 @@ Evaluation uses detection metrics: mAP@0.5, mAP@0.5:0.95, Precision, Recall, F1.
   - F1: 0.7099
 - Result JSON: `results/baseline_yolo11n.json`
 - Training curve CSV: `results/results_yolo11n.csv`
-- Local ignored checkpoint: `models/yolo11n_dfire_best.pt`
+- Committed checkpoint (gitignore exception, ~5 MB): `models/yolo11n_dfire_best.pt`
 - Reproducible runner: `scripts/YOLO11n_baseline.py`
 
 YOLO11n is the **baseline / fallback**. YOLO11s is now the measured, selected primary detector (see M3 YOLO11s section below).

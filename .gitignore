@@ -91,3 +91,13 @@ wandb/
 dist/
 build/
 *.egg-info/
+
+# Exception: the two small fine-tuned D-Fire checkpoints are committed so the
+# public Streamlit Cloud app (https://pyrofinder.streamlit.app/) can run inference
+# on a fresh clone (~24 MB total, well under GitHub's 100 MB/file limit). All other
+# weights / *.pt files stay ignored. These rules come last so they win over the
+# earlier `models/` and `*.pt` excludes (last matching pattern wins).
+!models/
+models/*
+!models/yolo11n_dfire_best.pt
+!models/yolo11s_dfire_best.pt
