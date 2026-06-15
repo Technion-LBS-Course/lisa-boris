@@ -11,6 +11,11 @@ from src.dashboards import model_helpers as mh
 
 def render():
     st.header("Model comparison (KPI)")
+    st.markdown(
+        "The model is an object detector, the metric is F2-score, because it combines recall "
+        "and precision while giving more weight to recall, since missing a real fire or smoke "
+        "event is more costly than a false alarm, but too many false alerts reduce customer trust."
+    )
     st.caption(
         "Operational, classification, and object-detection metrics are kept in separate "
         "sub-tabs. All values come from the measured result files in `results/`."
