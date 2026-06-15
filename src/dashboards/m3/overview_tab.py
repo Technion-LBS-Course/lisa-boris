@@ -31,11 +31,11 @@ def render():
 
     st.subheader("Selection criterion (KPI hierarchy)")
     st.markdown(
-        "Selection follows the **Alert F2-score**, because missing a real fire/smoke "
+        "Selection follows the **F2-score**, because missing a real fire/smoke "
         "hazard is more costly than raising a false alarm — but too many false alerts "
         "erode customer trust, so precision still matters:\n\n"
-        "1. **Alert F2-score** (primary decision metric — the F-beta score with beta = 2 "
-        "that combines Alert Precision and Hazard Recall, weighting recall higher).\n"
+        "1. **F2-score** (primary decision metric — the F-beta score with beta = 2 "
+        "that combines Precision and Recall, weighting recall higher).\n"
         "2. Object-detection **Recall** and **mAP@0.5** as supporting evidence.\n"
         "3. Measured **inference speed** as a practical consideration."
     )
@@ -45,7 +45,7 @@ def render():
     if winner:
         st.success(
             f"**Selected detector: {winner}.** Among the measured object detectors, "
-            f"{winner} is selected because it has the better **Alert F2-score** "
+            f"{winner} is selected because it has the better **F2-score** "
             "than YOLO11n in the M3 comparison (0.9459 vs 0.9423) — the F-beta score "
             "(beta = 2) that weights recall above precision — with stronger "
             "object-detection Recall and mAP@0.5 as supporting evidence."

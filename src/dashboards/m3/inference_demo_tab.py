@@ -1,4 +1,4 @@
-"""M3 Dashboard — Inference Demo tab.
+"""M3 Dashboard — Demo tab.
 
 Upload one image and run the available fine-tuned D-Fire detectors. The detector
 multiselect defaults to all available runnable detectors. Models load only on
@@ -14,10 +14,29 @@ import streamlit as st
 from src.dashboards import model_helpers as mh
 
 
+_OP_JSON = {
+    "YOLO11n": "results/yolo11n_operational_metrics.json",
+    "YOLO11s": "results/yolo11s_operational_metrics.json",
+}
+
+
+def _model_f2(model_name: str) -> str:
+    """Return the measured Alert F2-score for a detector, or '—' if unavailable."""
+    import json
+    from pathlib import Path
+    path = Path(_OP_JSON.get(model_name, ""))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        v = data.get("operational_metrics", {}).get("alert_f2")
+        return f"{v:.4f}" if v is not None else "—"
+    except Exception:
+        return "—"
+
+
 def render(confidence_threshold, confirmation_frames):
     from src import inference as _inf
 
-    st.header("Inference Demo")
+    st.header("Demo")
 
     available = _inf.available_detectors()
     missing = [d for d in _inf.CHECKPOINTS if d not in available]
@@ -48,7 +67,7 @@ def render(confidence_threshold, confirmation_frames):
     selected = st.multiselect("Detectors to run", available, default=available)
     uploaded = st.file_uploader("Upload one image", type=["jpg", "jpeg", "png"])
     run = st.button(
-        "Run inference", type="primary",
+        "Run demo", type="primary",
         disabled=(uploaded is None or not selected),
     )
 
@@ -72,10 +91,11 @@ def render(confidence_threshold, confirmation_frames):
                     ic1, ic2 = st.columns(2)
                     ic1.metric("Fire detections", res["fire_count"])
                     ic2.metric("Smoke detections", res["smoke_count"])
-                    ic3, ic4 = st.columns(2)
+                    ic3, ic4, ic5 = st.columns(3)
                     hc = res["max_confidence"]
                     ic3.metric("Highest confidence", f"{hc:.2f}" if hc is not None else "—")
                     ic4.metric("Inference time", f"{res['inference_ms']:.0f} ms")
+                    ic5.metric("F2 Score", _model_f2(mname))
                 except FileNotFoundError:
                     st.warning(
                         _inf.MISSING_YOLO11S_MESSAGE if mname == "YOLO11s"

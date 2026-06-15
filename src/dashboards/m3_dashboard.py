@@ -6,7 +6,7 @@ Builds the four M3 tabs and delegates each to its own module in
   1. Overview              — the model-selection story (which models, KPI rule, why YOLO11s)
   2. Models                — the five models (sklearn classifiers + YOLO11 detectors)
   3. Model comparison (KPI) — KPI / operational, classification, object-detection (separated)
-  4. Inference Demo        — upload an image and run the available fine-tuned detectors
+  4. Demo                  — upload an image and run the available fine-tuned detectors
 
 Shared model-rendering logic lives in ``src.dashboards.model_helpers``. No metric
 values are invented; everything comes from the measured result files in ``results/``.
@@ -27,7 +27,7 @@ def render(confidence_threshold, confirmation_frames):
         "Overview",
         "Models",
         "Model comparison (KPI)",
-        "Inference Demo",
+        "Demo",
     ])
 
     with tab_overview:

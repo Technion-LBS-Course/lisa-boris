@@ -17,7 +17,7 @@ def render():
         "event is more costly than a false alarm, but too many false alerts reduce customer trust."
     )
     st.caption(
-        "The primary decision metric is the **Alert F2-score** (KPI / Operational sub-tab). "
+        "The primary decision metric is the **F2-score** (KPI / Operational sub-tab). "
         "Operational, classification, and object-detection metrics are kept in separate "
         "sub-tabs. All values come from the measured result files in `results/`."
     )
