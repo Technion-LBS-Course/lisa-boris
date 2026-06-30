@@ -12,3 +12,4 @@ folium>=0.17
 streamlit-folium>=0.22
 streamlit-image-coordinates>=0.1.9
 shapely>=2.0
+groq>=0.11
