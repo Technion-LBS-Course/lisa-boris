@@ -59,10 +59,11 @@ src/alerts.py                       — alert record creation, status validation
 src/evaluation.py                   — operational alert metrics (hazard recall, false alert rate, alert precision, alert F1, alert F2 [primary]) + approximate fire-location helpers; pure stdlib, no ML imports
 src/results_loader.py               — load/classify detection vs operational result JSON (status: ok / training_in_progress / malformed / wrong-kind) + Alert F2-based winner selection; pure stdlib, no ML imports
 src/inference.py                    — lazy YOLO11n/YOLO11s detector loading (ultralytics imported inside functions only) + single-image detection; fine-tuned D-Fire checkpoints only, never pretrained weights; validates fire/smoke-only classes
+src/llm.py                          — Groq LLM helper for operational TEXT only (NOT detection); reads GROQ_API_KEY from st.secrets/env, uses OS cert store via truststore; extract_zones() turns free-text area descriptions into structured image-zone records (name/type/priority/alert-label) and NEVER returns coordinates; sanitize_zone_records() is pure/testable. Groq imported lazily by callers.
 src/dashboards/                     — dashboard renderers; app.py dispatches one render() per dashboard mode
 src/dashboards/model_helpers.py     — shared model/comparison rendering helpers (per-model views, classification/object-detection/operational comparisons) + cached detector loader; ML imports stay lazy
 src/dashboards/operations_learning.py — Operations & Learning dashboard renderer (6 tabs)
-src/dashboards/central_control.py   — Central Control dashboard renderer (placeholder)
+src/dashboards/central_control.py   — Central Control dashboard renderer (camera metadata, map reference points, image zones, export). Image Zones default to AI-assisted (src/llm.extract_zones structures a free-text description into named zones + priorities; user draws each polygon) with a "Switch to manual drawing" button for the original click-to-draw flow. No ML imports.
 src/dashboards/m2_dashboard.py      — M2 dashboard orchestrator (delegates to src/dashboards/m2/)
 src/dashboards/m2/                  — M2 tab modules: problem_understanding, literature_review, market_review, dataset_eda
 src/dashboards/m3_dashboard.py      — M3 dashboard orchestrator (delegates to src/dashboards/m3/)
@@ -89,6 +90,7 @@ tests/test_smoke.py                 — import smoke tests, unit tests for core 
 tests/test_evaluation.py            — unit tests for src/evaluation.py (alert confusion, cost weighting, location helpers)
 tests/test_results_loader.py        — unit tests for src/results_loader.py (status classification, winner selection, pending/malformed handling) — temp files only, no weights
 tests/test_inference.py             — unit tests for src/inference.py (checkpoint paths, class validation, missing-checkpoint guard) — no real weights, no ultralytics import
+tests/test_llm.py                   — unit tests for src/llm.sanitize_zone_records (type-mapping, priority clamp/default, dropping unnamed/non-dict entries) — pure, no network/Groq call
 tests/test_dashboards_smoke.py      — dashboard import smoke tests (render() present; no ultralytics/torch imported at module import)
 docs/M2_DATA_EDA.md                 — data workflow, class mapping, cleaning decisions, actual counts
 docs/M2_dashboard.md                — dashboard design notes

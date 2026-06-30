@@ -560,45 +560,80 @@ def _render_reference_table() -> None:
 
 def _tab_image_zones() -> None:
     st.subheader("Image Zones")
-    st.caption(
-        "Click points on the image to outline a named zone (4 points recommended). "
-        "When a detection falls inside a zone, the alert can name it, "
-        "e.g. 'Fire detected in East Barn.'"
-    )
+
+    if "cc_zone_use_ai" not in st.session_state:
+        st.session_state.cc_zone_use_ai = True
+    if "cc_zone_drafts" not in st.session_state:
+        st.session_state.cc_zone_drafts = []
+    use_ai = st.session_state.cc_zone_use_ai
+
+    head_l, head_r = st.columns([3, 1])
+    with head_l:
+        if use_ai:
+            st.caption(
+                "AI-assisted (default): describe the areas and their priority in plain "
+                "text and the model structures them into named zones. You then draw each "
+                "polygon on the image — the model never guesses coordinates."
+            )
+        else:
+            st.caption(
+                "Manual: click points on the image to outline a named zone (4 points "
+                "recommended), then fill in its details. When a detection falls inside a "
+                "zone, the alert can name it, e.g. 'Fire detected in East Barn.'"
+            )
+    with head_r:
+        if use_ai and st.button("Switch to manual drawing", use_container_width=True):
+            st.session_state.cc_zone_use_ai = False
+            st.rerun()
+        if not use_ai and st.button("Switch to AI-assisted", use_container_width=True):
+            st.session_state.cc_zone_use_ai = True
+            st.rerun()
 
     if not st.session_state.cc_uploaded_image:
         st.info("Upload a camera frame above to draw zones.")
         return
 
-    col_img, col_form = st.columns([1, 1])
+    if use_ai:
+        _image_zones_ai_panel()
+    else:
+        _image_zones_manual_panel()
 
+    _render_zone_table()
+
+
+def _zone_vertex_editor(img_key: str, horizon_key: str) -> None:
+    """Image click-to-vertex editor shared by the manual and AI-assisted panels."""
+    horizon = _horizon_y_px(horizon_key)
+    composite = _composite_image(
+        st.session_state.cc_uploaded_image,
+        zones=st.session_state.cc_image_zones,
+        pending_vertices=st.session_state.cc_pending_vertices,
+        horizon_y_px=horizon,
+    )
+    click = _consume_image_click(composite, key=img_key)
+    if click:
+        st.session_state.cc_pending_vertices.append([click[0], click[1]])
+        st.rerun()
+    if not IMG_CLICK_AVAILABLE:
+        _manual_vertex_input()
+    n = len(st.session_state.cc_pending_vertices)
+    st.caption(f"Vertices picked: {n}" + (" (need ≥3)" if n < 3 else ""))
+    b1, b2 = st.columns(2)
+    with b1:
+        if st.button("Undo last point", key=f"{img_key}_undo", disabled=n == 0):
+            st.session_state.cc_pending_vertices.pop()
+            st.rerun()
+    with b2:
+        if st.button("Clear points", key=f"{img_key}_clear", disabled=n == 0):
+            st.session_state.cc_pending_vertices = []
+            st.rerun()
+
+
+def _image_zones_manual_panel() -> None:
+    col_img, col_form = st.columns([1, 1])
     with col_img:
         st.markdown("**Click to add polygon vertices**")
-        horizon = _horizon_y_px("cc_zone_horizon")
-        composite = _composite_image(
-            st.session_state.cc_uploaded_image,
-            zones=st.session_state.cc_image_zones,
-            pending_vertices=st.session_state.cc_pending_vertices,
-            horizon_y_px=horizon,
-        )
-        click = _consume_image_click(composite, key="cc_zone_img")
-        if click:
-            st.session_state.cc_pending_vertices.append([click[0], click[1]])
-            st.rerun()
-        if not IMG_CLICK_AVAILABLE:
-            _manual_vertex_input()
-        n = len(st.session_state.cc_pending_vertices)
-        st.caption(f"Vertices picked: {n}" + (" (need ≥3)" if n < 3 else ""))
-        b1, b2 = st.columns(2)
-        with b1:
-            if st.button("Undo last point", disabled=n == 0):
-                st.session_state.cc_pending_vertices.pop()
-                st.rerun()
-        with b2:
-            if st.button("Clear points", disabled=n == 0):
-                st.session_state.cc_pending_vertices = []
-                st.rerun()
-
+        _zone_vertex_editor("cc_zone_img", "cc_zone_horizon")
     with col_form:
         st.markdown("**Zone details**")
         with st.form("cc_zone_form"):
@@ -611,7 +646,117 @@ def _tab_image_zones() -> None:
         if save:
             _save_zone(zone_name, zone_type, alert_label, int(priority), zone_notes)
 
-    _render_zone_table()
+
+def _image_zones_ai_panel() -> None:
+    st.markdown("**1 · Describe the areas — one per line — with a priority**")
+    desc = st.text_area(
+        "Areas to monitor",
+        key="cc_zone_ai_text",
+        placeholder=(
+            "white building on the left, high priority\n"
+            "hill behind the field, medium\n"
+            "barn, low"
+        ),
+        height=110,
+    )
+    gen_l, gen_r = st.columns(2)
+    with gen_l:
+        if st.button("Generate zones with AI", type="primary", use_container_width=True):
+            _generate_zones_from_text(desc)
+    with gen_r:
+        if st.session_state.cc_zone_drafts and st.button(
+            "Clear AI drafts", use_container_width=True
+        ):
+            st.session_state.cc_zone_drafts = []
+            st.session_state.cc_pending_vertices = []
+            st.rerun()
+
+    drafts = st.session_state.cc_zone_drafts
+    if not drafts:
+        st.caption(
+            "No AI drafts yet. The model fills in name, type and priority from your "
+            "text — you draw each polygon. Prefer drawing first? Use “Switch to manual "
+            "drawing”."
+        )
+        return
+    _place_draft_zones(drafts)
+
+
+def _generate_zones_from_text(description: str) -> None:
+    if not description or not description.strip():
+        st.warning("Describe at least one area first.")
+        return
+    try:
+        from src.llm import extract_zones
+    except Exception as exc:  # groq missing / import failure — keep the tab usable
+        st.error(f"LLM helper unavailable: {exc}")
+        return
+    try:
+        with st.spinner("Structuring your zones…"):
+            zones = extract_zones(description, _ZONE_TYPES)
+    except Exception as exc:
+        st.error(f"Could not generate zones: {exc}")
+        st.caption("Check GROQ_API_KEY in Settings → Secrets, then try again.")
+        return
+    if not zones:
+        st.warning("The model returned no zones. Try rephrasing your description.")
+        return
+    for z in zones:
+        z["draft_id"] = str(uuid.uuid4())[:8]
+    st.session_state.cc_zone_drafts = zones
+    st.session_state.cc_pending_vertices = []
+    st.success(f"Generated {len(zones)} draft zone(s). Draw each one on the image below.")
+    st.rerun()
+
+
+def _place_draft_zones(drafts: list[dict]) -> None:
+    st.markdown("**2 · Draft zones** — names and priorities from your description")
+    st.dataframe(
+        pd.DataFrame([
+            {
+                "#": i + 1, "zone_name": d["zone_name"], "zone_type": d["zone_type"],
+                "priority": d["priority"], "alert_label": d["alert_label"],
+            }
+            for i, d in enumerate(drafts)
+        ]),
+        use_container_width=True,
+    )
+
+    st.markdown("**3 · Draw each zone on the image, then save it**")
+    options = [f"{i + 1}. {d['zone_name']} (priority {d['priority']})" for i, d in enumerate(drafts)]
+    sel = st.selectbox("Zone to place", options, key="cc_zone_draft_sel")
+    active = drafts[options.index(sel)]
+    did = active["draft_id"]
+
+    col_img, col_form = st.columns([1, 1])
+    with col_img:
+        st.markdown(f"Click vertices for **{active['zone_name']}**")
+        _zone_vertex_editor("cc_zone_ai_img", "cc_zone_ai_horizon")
+    with col_form:
+        st.markdown("**Confirm details**")
+        name = st.text_input("Zone Name *", value=active["zone_name"], key=f"cc_ai_name_{did}")
+        ztype = st.selectbox(
+            "Zone Type", _ZONE_TYPES,
+            index=(
+                _ZONE_TYPES.index(active["zone_type"])
+                if active["zone_type"] in _ZONE_TYPES else _ZONE_TYPES.index("custom")
+            ),
+            key=f"cc_ai_type_{did}",
+        )
+        alert_label = st.text_input("Alert Label", value=active["alert_label"], key=f"cc_ai_label_{did}")
+        priority = st.number_input(
+            "Priority", min_value=1, max_value=10, value=int(active["priority"]), step=1,
+            key=f"cc_ai_prio_{did}",
+        )
+        notes = st.text_input("Notes", value=active["notes"], key=f"cc_ai_notes_{did}")
+        if st.button("Save this zone", type="primary", key=f"cc_ai_save_{did}"):
+            if _commit_zone(name, ztype, alert_label, int(priority), notes):
+                st.session_state.cc_zone_drafts = [
+                    d for d in st.session_state.cc_zone_drafts if d["draft_id"] != did
+                ]
+                st.session_state.cc_pending_vertices = []
+                st.success(f"Zone '{name}' saved.")
+                st.rerun()
 
 
 def _manual_vertex_input() -> None:
@@ -629,12 +774,17 @@ def _manual_vertex_input() -> None:
             st.error(f"Invalid vertices JSON: {exc}")
 
 
-def _save_zone(zone_name, zone_type, alert_label, priority, zone_notes) -> None:
+def _commit_zone(zone_name, zone_type, alert_label, priority, zone_notes) -> bool:
+    """Validate the pending vertices + details and append a zone.
+
+    Returns True on success (caller handles messaging / rerun); False if the
+    zone name is missing or the polygon fails validation.
+    """
     verts = list(st.session_state.cc_pending_vertices)
     w, h = st.session_state.cc_image_size
     if not zone_name.strip():
         st.error("Zone Name is required.")
-        return
+        return False
     zone = {
         "zone_id": str(uuid.uuid4())[:8],
         "zone_name": zone_name.strip(),
@@ -650,12 +800,17 @@ def _save_zone(zone_name, zone_type, alert_label, priority, zone_notes) -> None:
     if errors:
         for e in errors:
             st.error(e)
-        return
+        return False
     zone["vertices_norm"] = normalize_polygon_vertices(verts, w, h)
     st.session_state.cc_image_zones.append(zone)
     st.session_state.cc_pending_vertices = []
-    st.success(f"Zone '{zone_name}' added.")
-    st.rerun()
+    return True
+
+
+def _save_zone(zone_name, zone_type, alert_label, priority, zone_notes) -> None:
+    if _commit_zone(zone_name, zone_type, alert_label, priority, zone_notes):
+        st.success(f"Zone '{zone_name}' added.")
+        st.rerun()
 
 
 def _render_zone_table() -> None:
