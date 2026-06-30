@@ -7,6 +7,7 @@ environment-variable fallback. The key is never hard-coded.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 
@@ -104,13 +105,17 @@ def sanitize_zone_records(raw_zones, allowed_types: list[str]) -> list[dict]:
         priority = max(1, min(10, priority))
         alert_label = str(z.get("alert_label", "")).strip() or name
         notes = str(z.get("notes", "")).strip()
-        cleaned.append({
+        record = {
             "zone_name": name,
             "zone_type": ztype,
             "alert_label": alert_label,
             "priority": priority,
             "notes": notes,
-        })
+        }
+        box = parse_box_norm(z.get("box"))
+        if box is not None:
+            record["box_norm"] = box  # approximate, from a vision model only
+        cleaned.append(record)
     return cleaned
 
 
@@ -139,5 +144,99 @@ def extract_zones(
         data = json.loads(content)
     except json.JSONDecodeError:
         return []
+    raw_zones = data.get("zones") if isinstance(data, dict) else None
+    return sanitize_zone_records(raw_zones, allowed_types)
+
+
+# ── Vision: approximate ROI boxes from an image (NOT a real detector) ─────────
+#
+# A vision LLM is not an object detector: the boxes it returns are rough and
+# frequently wrong. They are surfaced as editable "verify" drafts, never as
+# trustworthy coordinates. Confirm the live model id at console.groq.com/docs/models.
+
+DEFAULT_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+
+VISION_SYSTEM_PROMPT = (
+    "You help set up monitoring zones on a FIXED camera image for a fire-detection "
+    "tool. The user names areas (with priorities). Look at the image and, for each "
+    "named area, return an APPROXIMATE bounding box. Return ONLY a JSON object: "
+    '{"zones": [{"zone_name": str, "zone_type": str, "alert_label": str, '
+    '"priority": int, "notes": str, "box": [x0, y0, x1, y1]}]}.\n'
+    "Rules:\n"
+    "- box values are NORMALIZED floats 0..1 of image width/height; (x0,y0) is "
+    "top-left, (x1,y1) bottom-right, with x0<x1 and y0<y1.\n"
+    "- One entry per named area. If you cannot locate an area, keep the entry but "
+    "set its box to null.\n"
+    "- zone_type MUST be exactly one of: {allowed} (use 'custom' if none fit).\n"
+    "- priority is an integer 1-10: map low->2, medium->5, high->9, critical->10; "
+    "use a given number; default 5.\n"
+    "- Boxes are rough estimates; never claim precision."
+)
+
+
+def parse_box_norm(value):
+    """Coerce a value into a clamped, ordered normalized box [x0,y0,x1,y1] or None."""
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        return None
+    try:
+        coords = [float(v) for v in value]
+    except (TypeError, ValueError):
+        return None
+    x0, y0, x1, y1 = (min(max(c, 0.0), 1.0) for c in coords)
+    if x1 < x0:
+        x0, x1 = x1, x0
+    if y1 < y0:
+        y0, y1 = y1, y0
+    if (x1 - x0) < 1e-3 or (y1 - y0) < 1e-3:
+        return None  # degenerate box
+    return [x0, y0, x1, y1]
+
+
+def _loads_json_object(text: str) -> dict:
+    """Parse a JSON object from model text, tolerating code fences / extra prose."""
+    try:
+        parsed = json.loads(text)
+        return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError:
+        pass
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end > start:
+        try:
+            parsed = json.loads(text[start:end + 1])
+            return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+    return {}
+
+
+def detect_zone_boxes(
+    image_bytes: bytes,
+    description: str,
+    allowed_types: list[str],
+    mime: str = "image/jpeg",
+    model: str = DEFAULT_VISION_MODEL,
+) -> list[dict]:
+    """Ask a Groq vision model for APPROXIMATE ROI boxes per named area.
+
+    Returns sanitized zone records; those the model could locate include a
+    normalized 'box_norm' [x0,y0,x1,y1]. Boxes are rough estimates, not detection.
+    """
+    if not image_bytes or not (description or "").strip():
+        return []
+    b64 = base64.b64encode(image_bytes).decode("ascii")
+    system = VISION_SYSTEM_PROMPT.replace("{allowed}", ", ".join(allowed_types))
+    resp = get_client().chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": [
+                {"type": "text", "text": "Areas to locate (one per line):\n" + description.strip()},
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+            ]},
+        ],
+        temperature=0.2,
+    )
+    content = resp.choices[0].message.content or "{}"
+    data = _loads_json_object(content)
     raw_zones = data.get("zones") if isinstance(data, dict) else None
     return sanitize_zone_records(raw_zones, allowed_types)

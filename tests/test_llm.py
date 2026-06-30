@@ -1,5 +1,5 @@
 """Unit tests for src/llm.py zone-record sanitization (pure, no network)."""
-from src.llm import sanitize_zone_records
+from src.llm import parse_box_norm, sanitize_zone_records
 
 ALLOWED = ["barn", "field", "road", "fence", "parking", "forest_edge", "custom"]
 
@@ -46,3 +46,29 @@ def test_non_list_input_returns_empty():
     assert sanitize_zone_records(None, ALLOWED) == []
     assert sanitize_zone_records({"zones": []}, ALLOWED) == []
     assert sanitize_zone_records("text", ALLOWED) == []
+
+
+def test_text_records_have_no_box():
+    out = sanitize_zone_records([{"zone_name": "A", "priority": 5}], ALLOWED)
+    assert "box_norm" not in out[0]
+
+
+def test_valid_box_is_carried_and_clamped():
+    out = sanitize_zone_records(
+        [{"zone_name": "A", "box": [-0.2, 0.1, 1.5, 0.9]}], ALLOWED
+    )
+    assert out[0]["box_norm"] == [0.0, 0.1, 1.0, 0.9]
+
+
+def test_box_corners_are_reordered():
+    box = parse_box_norm([0.8, 0.9, 0.2, 0.3])  # bottom-right given first
+    assert box == [0.2, 0.3, 0.8, 0.9]
+
+
+def test_degenerate_or_malformed_box_is_dropped():
+    assert parse_box_norm([0.5, 0.5, 0.5, 0.5]) is None  # zero area
+    assert parse_box_norm([0.1, 0.2, 0.3]) is None        # wrong length
+    assert parse_box_norm(["a", "b", "c", "d"]) is None    # non-numeric
+    assert parse_box_norm(None) is None
+    out = sanitize_zone_records([{"zone_name": "A", "box": [0.5, 0.5, 0.5, 0.5]}], ALLOWED)
+    assert "box_norm" not in out[0]

@@ -565,6 +565,8 @@ def _tab_image_zones() -> None:
         st.session_state.cc_zone_use_ai = True
     if "cc_zone_drafts" not in st.session_state:
         st.session_state.cc_zone_drafts = []
+    if "cc_zone_loaded_draft" not in st.session_state:
+        st.session_state.cc_zone_loaded_draft = None
     use_ai = st.session_state.cc_zone_use_ai
 
     head_l, head_r = st.columns([3, 1])
@@ -572,8 +574,9 @@ def _tab_image_zones() -> None:
         if use_ai:
             st.caption(
                 "AI-assisted (default): describe the areas and their priority in plain "
-                "text and the model structures them into named zones. You then draw each "
-                "polygon on the image — the model never guesses coordinates."
+                "text. “Structure from text” names and prioritises them (you draw the "
+                "shapes); “Detect on image” asks a vision model for APPROXIMATE ROI "
+                "boxes you then verify and adjust."
             )
         else:
             st.caption(
@@ -659,24 +662,31 @@ def _image_zones_ai_panel() -> None:
         ),
         height=110,
     )
-    gen_l, gen_r = st.columns(2)
-    with gen_l:
-        if st.button("Generate zones with AI", type="primary", use_container_width=True):
+    b1, b2, b3 = st.columns(3)
+    with b1:
+        if st.button("Structure from text", use_container_width=True,
+                     help="Names, types and priorities only — you draw the shapes."):
             _generate_zones_from_text(desc)
-    with gen_r:
+    with b2:
+        if st.button("Detect on image (AI vision)", type="primary", use_container_width=True,
+                     help="A vision model proposes approximate ROI boxes you then verify."):
+            _detect_zones_from_image(desc)
+    with b3:
         if st.session_state.cc_zone_drafts and st.button(
             "Clear AI drafts", use_container_width=True
         ):
             st.session_state.cc_zone_drafts = []
             st.session_state.cc_pending_vertices = []
+            st.session_state.cc_zone_loaded_draft = None
             st.rerun()
 
     drafts = st.session_state.cc_zone_drafts
     if not drafts:
         st.caption(
-            "No AI drafts yet. The model fills in name, type and priority from your "
-            "text — you draw each polygon. Prefer drawing first? Use “Switch to manual "
-            "drawing”."
+            "No AI drafts yet. “Structure from text” fills name/type/priority (you draw "
+            "each polygon); “Detect on image” overlays approximate ROI boxes from a "
+            "vision model that you verify. Prefer drawing yourself? Use “Switch to "
+            "manual drawing”."
         )
         return
     _place_draft_zones(drafts)
@@ -705,7 +715,69 @@ def _generate_zones_from_text(description: str) -> None:
         z["draft_id"] = str(uuid.uuid4())[:8]
     st.session_state.cc_zone_drafts = zones
     st.session_state.cc_pending_vertices = []
-    st.success(f"Generated {len(zones)} draft zone(s). Draw each one on the image below.")
+    st.session_state.cc_zone_loaded_draft = None
+    st.success(f"Structured {len(zones)} zone(s). Draw each one on the image below.")
+    st.rerun()
+
+
+def _frame_for_vision(max_side: int = 1024):
+    """Downscale the uploaded frame and JPEG-encode it for the vision model."""
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(st.session_state.cc_uploaded_image)).convert("RGB")
+    w, h = img.size
+    scale = min(1.0, max_side / max(w, h)) if max(w, h) else 1.0
+    if scale < 1.0:
+        img = img.resize((max(1, int(w * scale)), max(1, int(h * scale))))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue(), "image/jpeg"
+
+
+def _box_norm_to_vertices(box, w: int, h: int) -> list:
+    """Convert a normalized [x0,y0,x1,y1] box to pixel polygon vertices."""
+    x0, y0, x1, y1 = box
+    return [[x0 * w, y0 * h], [x1 * w, y0 * h], [x1 * w, y1 * h], [x0 * w, y1 * h]]
+
+
+def _detect_zones_from_image(description: str) -> None:
+    if not description or not description.strip():
+        st.warning("Describe at least one area first.")
+        return
+    if not st.session_state.cc_uploaded_image:
+        st.warning("Upload a camera frame first.")
+        return
+    try:
+        from src.llm import detect_zone_boxes
+    except Exception as exc:  # groq missing / import failure — keep the tab usable
+        st.error(f"LLM helper unavailable: {exc}")
+        return
+    try:
+        img_bytes, mime = _frame_for_vision()
+        with st.spinner("Asking the vision model to locate your areas…"):
+            zones = detect_zone_boxes(img_bytes, description, _ZONE_TYPES, mime=mime)
+    except Exception as exc:
+        st.error(f"Vision detection failed: {exc}")
+        st.caption("Check GROQ_API_KEY, and that the vision model id in src/llm.py is current.")
+        return
+    if not zones:
+        st.warning("The vision model returned no zones. Try rephrasing your description.")
+        return
+    w, h = st.session_state.cc_image_size
+    n_boxes = 0
+    for z in zones:
+        z["draft_id"] = str(uuid.uuid4())[:8]
+        box = z.get("box_norm")
+        if box:
+            z["vertices_px"] = _box_norm_to_vertices(box, w, h)
+            n_boxes += 1
+    st.session_state.cc_zone_drafts = zones
+    st.session_state.cc_pending_vertices = []
+    st.session_state.cc_zone_loaded_draft = None
+    st.success(
+        f"Vision model proposed {n_boxes} ROI box(es) across {len(zones)} zone(s). "
+        "These are APPROXIMATE — select each below to see and verify it."
+    )
     st.rerun()
 
 
@@ -716,22 +788,37 @@ def _place_draft_zones(drafts: list[dict]) -> None:
             {
                 "#": i + 1, "zone_name": d["zone_name"], "zone_type": d["zone_type"],
                 "priority": d["priority"], "alert_label": d["alert_label"],
+                "AI ROI": "estimate" if d.get("vertices_px") else "—",
             }
             for i, d in enumerate(drafts)
         ]),
         use_container_width=True,
     )
 
-    st.markdown("**3 · Draw each zone on the image, then save it**")
+    st.markdown("**3 · Verify each zone on the image, then save it**")
     options = [f"{i + 1}. {d['zone_name']} (priority {d['priority']})" for i, d in enumerate(drafts)]
     sel = st.selectbox("Zone to place", options, key="cc_zone_draft_sel")
     active = drafts[options.index(sel)]
     did = active["draft_id"]
 
+    # When the selected draft changes, load its AI box (if any) into the editor so
+    # the model's estimated ROI is drawn on the image; empty for text-only drafts.
+    if st.session_state.cc_zone_loaded_draft != did:
+        st.session_state.cc_pending_vertices = [list(v) for v in active.get("vertices_px", [])]
+        st.session_state.cc_zone_loaded_draft = did
+        st.rerun()
+
+    has_box = bool(active.get("vertices_px"))
     col_img, col_form = st.columns([1, 1])
     with col_img:
-        st.markdown(f"Click vertices for **{active['zone_name']}**")
+        st.markdown(f"{'Verify the AI estimate for' if has_box else 'Click vertices for'} "
+                    f"**{active['zone_name']}**")
+        if has_box:
+            st.caption("Dashed outline = approximate AI estimate — adjust before saving.")
         _zone_vertex_editor("cc_zone_ai_img", "cc_zone_ai_horizon")
+        if has_box and st.button("Reset to AI estimate", key=f"cc_ai_reset_{did}"):
+            st.session_state.cc_pending_vertices = [list(v) for v in active["vertices_px"]]
+            st.rerun()
     with col_form:
         st.markdown("**Confirm details**")
         name = st.text_input("Zone Name *", value=active["zone_name"], key=f"cc_ai_name_{did}")
