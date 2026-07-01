@@ -114,3 +114,27 @@ def test_importing_dashboards_does_not_import_heavy_ml():
 
     assert "ultralytics" not in sys.modules
     assert "torch" not in sys.modules
+
+
+def test_central_control_incident_yolo_button_and_lazy_imports():
+    # The YOLO11s fire/smoke detector button lives in the Incident Assistant, and
+    # detector/groq loading stays lazy (no module-level heavy imports).
+    import ast
+    from pathlib import Path
+
+    from src.dashboards import central_control as cc
+
+    assert callable(cc._tab_incident_assistant)
+
+    text = Path(cc.__file__).read_text(encoding="utf-8")
+    assert "Run YOLO11s fire/smoke detector" in text  # button lives here, not Image Zones
+
+    tree = ast.parse(text)
+    top_imports: list[str] = []
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            top_imports += [a.name for a in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            top_imports.append(node.module or "")
+    heavy = {"ultralytics", "torch", "groq"}
+    assert not any(m and m.split(".")[0] in heavy for m in top_imports)

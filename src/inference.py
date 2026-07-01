@@ -159,16 +159,25 @@ def run_detection(model, pil_image, conf: float = 0.25, imgsz: int = 640) -> dic
     fire_count = 0
     smoke_count = 0
     max_confidence = None
+    detections: list[dict] = []
     boxes = getattr(result, "boxes", None)
     if boxes is not None and len(boxes) > 0:
         cls_ids = [int(c) for c in boxes.cls.tolist()]
         confidences = [float(c) for c in boxes.conf.tolist()]
-        for cls_id, confidence in zip(cls_ids, confidences):
+        # Normalized [x_center, y_center, w, h] per box, used for zone matching.
+        xywhn = boxes.xywhn.tolist() if getattr(boxes, "xywhn", None) is not None else [None] * len(cls_ids)
+        for cls_id, confidence, box in zip(cls_ids, confidences, xywhn):
             label = str(names.get(cls_id, "")).strip().lower()
             if label == "fire":
                 fire_count += 1
             elif label == "smoke":
                 smoke_count += 1
+            if label in ("fire", "smoke") and box is not None:
+                detections.append({
+                    "class": label,
+                    "confidence": confidence,
+                    "bbox_norm": [float(v) for v in box],
+                })
             if max_confidence is None or confidence > max_confidence:
                 max_confidence = confidence
 
@@ -185,4 +194,29 @@ def run_detection(model, pil_image, conf: float = 0.25, imgsz: int = 640) -> dic
         "total_detections": fire_count + smoke_count,
         "max_confidence": max_confidence,
         "inference_ms": inference_ms,
+        "detections": detections,
     }
+
+
+def top_hazard_detection(result: dict) -> dict | None:
+    """Return the highest-confidence fire/smoke detection from a ``run_detection`` result.
+
+    Returns ``None`` when the result carries no fire/smoke detections. Pure — takes
+    the result dict, so it is testable without loading a model.
+    """
+    detections = result.get("detections") or []
+    if not detections:
+        return None
+    return max(detections, key=lambda d: d.get("confidence", 0.0))
+
+
+def bbox_bottom_center_norm(bbox_norm) -> tuple[float, float]:
+    """Return the bottom-center anchor (x, y) in [0,1] for a normalized xywh box.
+
+    Matches the project's approximate fire-location convention (``anchor_x =
+    x_center``, ``anchor_y = y_center + height/2``), clamped to the frame.
+    """
+    x_center, y_center, _w, h = bbox_norm
+    x = min(max(x_center, 0.0), 1.0)
+    y = min(max(y_center + h / 2.0, 0.0), 1.0)
+    return x, y

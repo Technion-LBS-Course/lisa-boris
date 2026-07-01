@@ -127,6 +127,12 @@ PyroFinder consists of three operational products and one internal product.
 - Display active fire/smoke events with approximate location and status.
 - Support alert review, confirmation, rejection, and false-alarm marking.
 
+**Operational agent flow (implemented):** Central Control hosts three text/config agents (six tabs; no YOLO runs in this dashboard):
+
+- **Setup / Configuration Agent** (Image Zones) — turns a free-text description of the areas in a camera frame into structured image-zone records (`object_to_find`, `zone_name`, low/medium/high priority, optional `zone_type`/`notes`, `requires_user_confirmation`). Uses Groq when `GROQ_API_KEY` is set, otherwise a deterministic local parser; prompt-injection / off-intent input is filtered and never adds a detection class. Zones can be accepted as pending and drawn later. A config-import uploader restores camera + reference points from a saved `camera_mapping_config.json`.
+- **Incident Assistant** — runs after a confirmed fire/smoke detection and assembles the event location, matched image zone, approximate map point, and apparent image-plane direction, then produces operational recommendations and draft messages (property owner / neighbor / farm worker / fire-department summary), with confirm / false-alarm actions and a session alert log. It only drafts and recommends — it never contacts anyone or dispatches automatically.
+- **Risk Advisory** — a preventive, weather-aware advisory (Open-Meteo, which requires no API key, with a deterministic offline mock fallback) compared against configured zones and priorities, with a user-set check interval and manual refresh. If live weather is unavailable the app shows clearly-labelled fallback data. Advisory guidance only — not an early-warning alert, an ignition prediction, or a dispatch.
+
 **MVP status:** A basic version is part of the course MVP.
 
 ### 7.2 Mobile Customer App
@@ -733,10 +739,15 @@ src/
   mapping.py
   alerts.py
   evaluation.py           # cost-sensitive operational alert metrics + approximate fire-location helpers; pure stdlib, no ML imports
+  llm.py                  # Groq helper (operational text + zone-setup assist); groq imported lazily in get_client(); not the detector
+  agent_schemas.py        # shared vocab for the operational agents (priority, zone-type, prompt-injection filter, compass) — pure
+  zone_agent.py           # Setup/Configuration Agent: free-text -> operational image-zone records (Groq or deterministic local fallback)
+  incident_agent.py       # Incident Assistant: incident context + recommendations + draft messages + alert record (pure; drafts only)
+  weather.py              # Risk Advisory: Open-Meteo (no API key) + deterministic mock fallback; fire-weather risk + preventive advisories (pure logic)
   dashboards/             # dashboard renderers; app.py dispatches one render() per dashboard mode
     model_helpers.py      # shared model/comparison rendering helpers + cached detector loader (ML imports lazy)
     operations_learning.py # Operations & Learning dashboard renderer
-    central_control.py    # Central Control dashboard renderer (placeholder)
+    central_control.py    # Central Control dashboard renderer (6 tabs incl. AI zone setup, Incident Assistant, Risk Advisory)
     m2_dashboard.py       # M2 dashboard orchestrator -> m2/
     m2/                   # M2 tab modules: problem_understanding, literature_review, market_review, dataset_eda
     m3_dashboard.py       # M3 dashboard orchestrator -> m3/
@@ -782,6 +793,9 @@ docs/
 tests/
   test_smoke.py
   test_evaluation.py      # unit tests for src/evaluation.py (alert confusion, cost weighting, location helpers)
+  test_zone_agent.py      # unit tests for src/zone_agent + src/agent_schemas (parse, priority, injection filter, fallback) — pure
+  test_incident_agent.py  # unit tests for src/incident_agent (context, recommendations, drafts, alert record) — pure
+  test_weather.py         # unit tests for src/weather (risk scoring, advisories, provider selection, fallback) — pure
   test_dashboards_smoke.py # dashboard import smoke tests (no ultralytics/torch imported at module import)
 ```
 
@@ -807,7 +821,12 @@ Current Python dependencies are defined in `requirements.txt`:
 - PyYAML
 - folium
 - streamlit-folium
+- streamlit-image-coordinates
 - shapely
+- groq
+- truststore
+
+**Optional secret (never committed):** `GROQ_API_KEY` powers the AI-assisted zone setup and the optional incident-message wording polish. It is read from `st.secrets` (`.streamlit/secrets.toml`) or an environment variable only, and is never logged or committed. When it is absent the zone agent degrades gracefully to a deterministic local parser, and `groq` is imported lazily so the app runs even if the package is not installed. The **Risk Advisory uses Open-Meteo, which requires no API key, signup, or credit card**; if live weather is unavailable it falls back to a deterministic offline mock (clearly labelled in the UI). No weather API key is used anywhere.
 
 Run tests:
 

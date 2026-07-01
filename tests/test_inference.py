@@ -84,3 +84,30 @@ def test_checkpoint_exists_and_available_detectors(tmp_path, monkeypatch):
 def test_missing_yolo11s_message_is_actionable():
     assert "models/yolo11s_dfire_best.pt" in inference.MISSING_YOLO11S_MESSAGE
     assert "in progress" in inference.MISSING_YOLO11S_MESSAGE.lower()
+
+
+# ── detection result helpers (pure — no model needed) ─────────────────────────
+
+
+def test_top_hazard_detection_picks_highest_confidence():
+    result = {"detections": [
+        {"class": "smoke", "confidence": 0.4, "bbox_norm": [0.2, 0.2, 0.1, 0.1]},
+        {"class": "fire", "confidence": 0.9, "bbox_norm": [0.5, 0.5, 0.2, 0.2]},
+    ]}
+    top = inference.top_hazard_detection(result)
+    assert top["class"] == "fire"
+    assert top["confidence"] == 0.9
+
+
+def test_top_hazard_detection_none_when_empty():
+    assert inference.top_hazard_detection({"detections": []}) is None
+    assert inference.top_hazard_detection({}) is None
+
+
+def test_bbox_bottom_center_norm_anchor_and_clamp():
+    x, y = inference.bbox_bottom_center_norm([0.5, 0.4, 0.2, 0.2])
+    assert x == pytest.approx(0.5)
+    assert y == pytest.approx(0.5)  # y_center 0.4 + height/2 0.1
+    # anchor clamps to the frame
+    _, y2 = inference.bbox_bottom_center_norm([0.5, 0.95, 0.2, 0.4])
+    assert y2 == pytest.approx(1.0)

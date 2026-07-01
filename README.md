@@ -45,7 +45,7 @@ Dani manages a 120-dunam farm with outdoor security cameras at boundary points. 
 PyroFinder consists of three operational products and one internal product.
 
 ### 1. Central Control Dashboard
-**For:** PyroFinder operator / admin. Manages all customers, sites, and cameras on a map. Displays camera health, active detections, alert history, and mapping status. Supports manual editing of camera location, height, azimuth, responsibility zones, and polygons. Supports alert review, confirmation, and false-alarm marking.
+**For:** PyroFinder operator / admin. Manages all customers, sites, and cameras on a map. Displays camera health, active detections, alert history, and mapping status. Supports manual editing of camera location, height, azimuth, responsibility zones, and polygons. Supports alert review, confirmation, and false-alarm marking. It also hosts three operator agents: an **AI-assisted zone setup** (free-text → named image zones with priorities; works offline without an API key), an **Incident Assistant** that turns a confirmed detection into operational recommendations and draft messages (it only drafts and recommends — never contacts anyone or dispatches), and a weather-based **Risk Advisory** for preventive guidance (not an early-warning alert).
 
 ### 2. Mobile Customer App
 **For:** End customer / property owner. Receives fire/smoke alerts with approximate location. Allows confirming or rejecting alerts and marking false alarms. Shows active events on a map relative to the customer's property. 
@@ -338,10 +338,15 @@ project-root/
 │   ├── mapping.py       ← mapping modes, polygon helpers, location formatting
 │   ├── alerts.py        ← alert record creation, status validation
 │   ├── evaluation.py    ← cost-sensitive operational alert metrics + approximate fire-location helpers (pure stdlib)
+│   ├── llm.py           ← Groq helper (operational text + AI zone setup); groq imported lazily; not the detector
+│   ├── agent_schemas.py ← shared vocab for operational agents (priority, zone-type, injection filter, compass) — pure
+│   ├── zone_agent.py    ← Setup/Configuration Agent: free-text → operational image-zone records (Groq or local fallback)
+│   ├── incident_agent.py ← Incident Assistant: incident context + recommendations + draft messages + alert record (pure)
+│   ├── weather.py       ← Risk Advisory: Open-Meteo (no API key) + deterministic mock fallback; fire-weather risk + preventive advisories
 │   └── dashboards/      ← dashboard renderers dispatched by app.py
 │       ├── model_helpers.py        ← shared model/comparison rendering helpers + cached detector loader (lazy ML)
 │       ├── operations_learning.py  ← Operations & Learning dashboard
-│       ├── central_control.py      ← Central Control dashboard (placeholder)
+│       ├── central_control.py      ← Central Control dashboard (6 tabs: AI zone setup, Incident Assistant, Risk Advisory)
 │       ├── m2_dashboard.py         ← M2 dashboard orchestrator → m2/
 │       ├── m2/                     ← M2 tab modules (problem, literature, market, dataset_eda)
 │       ├── m3_dashboard.py         ← M3 dashboard orchestrator → m3/
@@ -391,6 +396,9 @@ project-root/
 └── tests/
     ├── test_smoke.py
     ├── test_evaluation.py   ← unit tests for src/evaluation.py (alert confusion, cost weighting, location helpers)
+    ├── test_zone_agent.py   ← unit tests for src/zone_agent + src/agent_schemas (parse, priority, injection filter, fallback)
+    ├── test_incident_agent.py ← unit tests for src/incident_agent (context, recommendations, drafts, alert record)
+    ├── test_weather.py      ← unit tests for src/weather (risk scoring, advisories, provider selection, fallback)
     └── test_dashboards_smoke.py  ← dashboard import smoke tests (no ultralytics/torch at import)
 ```
 
@@ -408,6 +416,12 @@ The app opens on the **M3 Dashboard** (the first sidebar option) — four tabs: 
 **Operations & Learning Dashboard**, and **Central Control Dashboard** are also selectable
 from the sidebar. `app.py` is a thin shell; each dashboard is rendered by a module under
 `src/dashboards/`.
+
+**Optional API key (Central Control agents).** The AI-assisted zone setup uses `GROQ_API_KEY`,
+read from `.streamlit/secrets.toml` or an environment variable and **never committed or logged**.
+Without it, zone setup falls back to a deterministic local parser. The **Risk Advisory uses
+Open-Meteo and requires no API key** — if live weather is unavailable it falls back to a
+deterministic offline mock (shown clearly in the UI). See `.env.example` for the placeholder.
 
 ---
 
