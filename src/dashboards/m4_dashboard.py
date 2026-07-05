@@ -23,9 +23,6 @@ def render() -> None:
     )
 
     cc._init_state()
-    # No top frame uploader / import-config panel in M4: the camera frame comes from the
-    # demo image sequence loaded inside the Incident Assistant tab — its first frame is the
-    # reference used by Image Zones / Camera Metadata.
 
     # A keyed segmented control (not st.tabs) so the active section is stored in session
     # state and survives every rerun — uploads, sliders and other interactions no longer
@@ -36,7 +33,15 @@ def render() -> None:
         label_visibility="collapsed",
     ) or sections[0]
 
-    if active == "Image Zones":
+    if active == "Camera Metadata":
+        # The shared camera-frame uploader + import-config live in this tab in M4.
+        # This reference frame is used by Image Zones; the Incident Assistant's demo
+        # sequence is separate and does not overwrite it.
+        cc._frame_uploader(with_sequence=False)
+        cc._import_config_panel()
+        st.markdown("---")
+        cc._tab_camera_metadata()
+    elif active == "Image Zones":
         cc._tab_image_zones()
     elif active == "Incident Assistant":
         cc._tab_incident_assistant(
@@ -44,5 +49,3 @@ def render() -> None:
         )
     elif active == "Risk Advisory":
         cc._tab_risk_advisory()
-    else:
-        cc._tab_camera_metadata()

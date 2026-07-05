@@ -272,10 +272,14 @@ def _setup_status(camera: dict, reference_points: list, image_zones: list) -> di
 
 
 def _frame_uploader(with_sequence: bool = True) -> None:
-    # A loaded demo sequence owns the current frame; hide the single uploader then.
+    # with_sequence: a loaded demo sequence drives the shared frame and hides the single
+    # uploader (Central Control). Without it (M4) the sequence is decoupled, so the single
+    # uploader is always shown and owns the reference frame.
     if with_sequence:
         _sequence_panel()
-    seq_active = bool(st.session_state.get("cc_seq"))
+        seq_active = bool(st.session_state.get("cc_seq"))
+    else:
+        seq_active = False
 
     if not seq_active:
         uploaded = st.file_uploader(
@@ -331,7 +335,7 @@ def _build_sequence_frames(items: list[tuple[str, bytes]]) -> list[dict]:
     return frames
 
 
-def _store_sequence(frames: list[dict]) -> None:
+def _store_sequence(frames: list[dict], drive_shared_frame: bool = True) -> None:
     if not frames:
         st.warning("No readable images found to load as a sequence.")
         return
@@ -339,8 +343,11 @@ def _store_sequence(frames: list[dict]) -> None:
     st.session_state.cc_seq_idx = 0
     st.session_state.pop("cc_seq_det", None)  # drop cached per-frame detections
     st.session_state.pop("cc_incident_seq_idx", None)  # re-assess incident on the new sequence
-    st.session_state.cc_uploaded_image = frames[0]["bytes"]
-    st.session_state.cc_image_size = frames[0]["size"]
+    if drive_shared_frame:
+        # Central Control: the sequence drives the shared frame. M4 keeps them separate so a
+        # loaded sequence never overwrites the Camera Metadata reference frame.
+        st.session_state.cc_uploaded_image = frames[0]["bytes"]
+        st.session_state.cc_image_size = frames[0]["size"]
     w, h = frames[0]["size"]
     st.success(
         f"Loaded {len(frames)} frames at {w}x{h}. Step through them with the slider below."
@@ -349,7 +356,7 @@ def _store_sequence(frames: list[dict]) -> None:
     # and a programmatic rerun would reset st.tabs to the first tab.
 
 
-def _load_sequence_from_folder(folder: str) -> None:
+def _load_sequence_from_folder(folder: str, drive_shared_frame: bool = True) -> None:
     import glob
     import os
 
@@ -370,12 +377,12 @@ def _load_sequence_from_folder(folder: str) -> None:
                 items.append((os.path.basename(f), fh.read()))
         except OSError:
             continue
-    _store_sequence(_build_sequence_frames(items))
+    _store_sequence(_build_sequence_frames(items), drive_shared_frame)
 
 
-def _load_sequence_from_uploads(uploads) -> None:
+def _load_sequence_from_uploads(uploads, drive_shared_frame: bool = True) -> None:
     items = sorted(((u.name, u.getvalue()) for u in uploads), key=lambda t: t[0])
-    _store_sequence(_build_sequence_frames(items))
+    _store_sequence(_build_sequence_frames(items), drive_shared_frame)
 
 
 def _sequence_panel(drive_shared_frame: bool = True) -> None:
@@ -395,13 +402,13 @@ def _sequence_panel(drive_shared_frame: bool = True) -> None:
         with c2:
             st.write("")
             if st.button("Load folder", use_container_width=True):
-                _load_sequence_from_folder(folder)
+                _load_sequence_from_folder(folder, drive_shared_frame)
         ups = st.file_uploader(
             "…or upload sequence frames", type=["jpg", "jpeg", "png"],
             accept_multiple_files=True, key="cc_seq_upload",
         )
         if ups and st.button("Use uploaded frames"):
-            _load_sequence_from_uploads(ups)
+            _load_sequence_from_uploads(ups, drive_shared_frame)
 
         seq = st.session_state.get("cc_seq") or []
         if not seq:
