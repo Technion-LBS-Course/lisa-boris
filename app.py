@@ -13,6 +13,7 @@ from src.model import get_model_plan
 from src.ui import inject_pyrofinder_theme
 
 from src.dashboards import (
+    m4_dashboard,
     m3_dashboard,
     m2_dashboard,
     operations_learning,
@@ -36,6 +37,7 @@ with st.sidebar:
     mode = st.selectbox(
         "Dashboard mode",
         [
+            "M4 Dashboard",
             "M3 Dashboard",
             "M2 Dashboard",
             "Operations & Learning Dashboard",
@@ -78,7 +80,9 @@ with st.sidebar:
 st.markdown("## 🔥 PyroFinder")
 st.caption("Real-time fire and smoke detection using existing cameras.")
 
-if mode == "M3 Dashboard":
+if mode == "M4 Dashboard":
+    m4_dashboard.render()
+elif mode == "M3 Dashboard":
     m3_dashboard.render(confidence_threshold, confirmation_frames)
 elif mode == "Operations & Learning Dashboard":
     operations_learning.render(confidence_threshold, confirmation_frames)

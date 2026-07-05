@@ -17,6 +17,7 @@ pytest.importorskip("streamlit")
 DASHBOARD_MODULES = [
     "src.dashboards.model_helpers",
     "src.dashboards.m3_dashboard",
+    "src.dashboards.m4_dashboard",
     "src.dashboards.m3.overview_tab",
     "src.dashboards.m3.models_tab",
     "src.dashboards.m3.model_comparison_tab",
@@ -40,12 +41,14 @@ def test_dashboard_package_imports():
 
 def test_render_callables_present():
     from src.dashboards import (
+        m4_dashboard,
         m3_dashboard,
         m2_dashboard,
         operations_learning,
         central_control,
     )
 
+    assert callable(m4_dashboard.render)
     assert callable(m3_dashboard.render)
     assert callable(m2_dashboard.render)
     assert callable(operations_learning.render)

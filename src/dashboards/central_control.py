@@ -271,24 +271,188 @@ def _setup_status(camera: dict, reference_points: list, image_zones: list) -> di
 # ── Shared frame uploader ─────────────────────────────────────────────────────
 
 
-def _frame_uploader() -> None:
-    uploaded = st.file_uploader(
-        "Camera frame (shared across Reference Points and Image Zones)",
-        type=["jpg", "jpeg", "png"],
-        key="cc_frame_upload",
-    )
-    if uploaded is not None:
-        img_bytes = uploaded.getvalue()
-        if img_bytes != st.session_state.cc_uploaded_image:
-            st.session_state.cc_uploaded_image = img_bytes
-            try:
-                from PIL import Image
-                st.session_state.cc_image_size = Image.open(io.BytesIO(img_bytes)).size
-            except Exception:
-                pass
+def _frame_uploader(with_sequence: bool = True) -> None:
+    # A loaded demo sequence owns the current frame; hide the single uploader then.
+    if with_sequence:
+        _sequence_panel()
+    seq_active = bool(st.session_state.get("cc_seq"))
+
+    if not seq_active:
+        uploaded = st.file_uploader(
+            "Camera frame (shared across Reference Points and Image Zones)",
+            type=["jpg", "jpeg", "png"],
+            key="cc_frame_upload",
+        )
+        if uploaded is not None:
+            img_bytes = uploaded.getvalue()
+            if img_bytes != st.session_state.cc_uploaded_image:
+                st.session_state.cc_uploaded_image = img_bytes
+                try:
+                    from PIL import Image
+                    st.session_state.cc_image_size = Image.open(io.BytesIO(img_bytes)).size
+                except Exception:
+                    pass
+
     if st.session_state.cc_uploaded_image:
         w, h = st.session_state.cc_image_size
-        st.caption(f"Frame loaded — {w}x{h} px.")
+        src = "demo sequence" if seq_active else "upload"
+        st.caption(f"Frame loaded — {w}x{h} px ({src}).")
+
+
+# ── Demo image sequence (feeds the shared frame; no YOLO changes) ─────────────
+
+
+def _build_sequence_frames(items: list[tuple[str, bytes]]) -> list[dict]:
+    """Decode (name, raw-bytes) pairs and resize all to one common size.
+
+    Frames of a live camera can arrive at different resolutions; a zone is drawn
+    once and reused across the whole sequence, so every frame is resized to the
+    first frame's size (aspect is ~identical here) and re-encoded as JPEG. Returns
+    [{name, bytes, size}] in the given order.
+    """
+    from PIL import Image
+
+    decoded = []
+    for name, raw in items:
+        try:
+            decoded.append((name, Image.open(io.BytesIO(raw)).convert("RGB")))
+        except Exception:
+            continue  # skip unreadable files
+    if not decoded:
+        return []
+    target = decoded[0][1].size  # (w, h) — the common canvas
+    frames = []
+    for name, img in decoded:
+        if img.size != target:
+            img = img.resize(target)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=90)
+        frames.append({"name": name, "bytes": buf.getvalue(), "size": target})
+    return frames
+
+
+def _store_sequence(frames: list[dict]) -> None:
+    if not frames:
+        st.warning("No readable images found to load as a sequence.")
+        return
+    st.session_state.cc_seq = frames
+    st.session_state.cc_seq_idx = 0
+    st.session_state.pop("cc_seq_det", None)  # drop cached per-frame detections
+    st.session_state.pop("cc_incident_seq_idx", None)  # re-assess incident on the new sequence
+    st.session_state.cc_uploaded_image = frames[0]["bytes"]
+    st.session_state.cc_image_size = frames[0]["size"]
+    w, h = frames[0]["size"]
+    st.success(
+        f"Loaded {len(frames)} frames at {w}x{h}. Step through them below — the "
+        "selected frame drives Image Zones and the Incident Assistant."
+    )
+    # No st.rerun(): the button's own rerun renders the loaded sequence this run,
+    # and a programmatic rerun would reset st.tabs to the first tab.
+
+
+def _apply_sequence_frame() -> None:
+    """Set the shared frame to the selected sequence frame before the tabs render.
+
+    Called at the top of a dashboard render (before st.tabs), so tabs that render
+    before the Incident Assistant — e.g. Image Zones — stay in sync with the frame
+    chosen by the sequence slider, with no one-rerun lag.
+    """
+    seq = st.session_state.get("cc_seq") or []
+    if not seq:
+        return
+    idx = min(st.session_state.get("cc_seq_idx", 0), len(seq) - 1)
+    st.session_state.cc_seq_idx = idx
+    frame = seq[idx]
+    st.session_state.cc_uploaded_image = frame["bytes"]
+    st.session_state.cc_image_size = frame["size"]
+
+
+def _load_sequence_from_folder(folder: str) -> None:
+    import glob
+    import os
+
+    if not folder or not os.path.isdir(folder):
+        st.error(f"Folder not found: {folder}")
+        return
+    files = sorted(
+        f for f in glob.glob(os.path.join(folder, "*"))
+        if f.lower().endswith((".jpg", ".jpeg", ".png"))
+    )
+    if not files:
+        st.warning("No .jpg/.jpeg/.png images found in that folder.")
+        return
+    items = []
+    for f in files:
+        try:
+            with open(f, "rb") as fh:
+                items.append((os.path.basename(f), fh.read()))
+        except OSError:
+            continue
+    _store_sequence(_build_sequence_frames(items))
+
+
+def _load_sequence_from_uploads(uploads) -> None:
+    items = sorted(((u.name, u.getvalue()) for u in uploads), key=lambda t: t[0])
+    _store_sequence(_build_sequence_frames(items))
+
+
+def _sequence_panel() -> None:
+    with st.expander(
+        "Demo: image sequence (same camera over time)",
+        expanded=bool(st.session_state.get("cc_seq")),
+    ):
+        st.caption(
+            "Load a folder or upload several frames of one camera over time. The "
+            "selected frame becomes the current camera frame, so Image Zones and the "
+            "Incident Assistant run on it. Frames are resized to one common size so a "
+            "zone drawn once lines up across the whole sequence."
+        )
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            folder = st.text_input("Sequence folder", value="TESTING/sequance", key="cc_seq_folder")
+        with c2:
+            st.write("")
+            if st.button("Load folder", use_container_width=True):
+                _load_sequence_from_folder(folder)
+        ups = st.file_uploader(
+            "…or upload sequence frames", type=["jpg", "jpeg", "png"],
+            accept_multiple_files=True, key="cc_seq_upload",
+        )
+        if ups and st.button("Use uploaded frames"):
+            _load_sequence_from_uploads(ups)
+
+        seq = st.session_state.get("cc_seq") or []
+        if not seq:
+            return
+
+        n = len(seq)
+        st.session_state.setdefault("cc_seq_idx", 0)
+        st.session_state.cc_seq_idx = min(st.session_state.cc_seq_idx, n - 1)
+
+        nav1, nav2, nav3 = st.columns(3)
+        with nav1:
+            if st.button("◀ Prev", use_container_width=True,
+                         disabled=st.session_state.cc_seq_idx <= 0):
+                st.session_state.cc_seq_idx -= 1
+        with nav2:
+            if st.button("Next ▶", use_container_width=True,
+                         disabled=st.session_state.cc_seq_idx >= n - 1):
+                st.session_state.cc_seq_idx += 1
+        with nav3:
+            if st.button("Clear sequence", use_container_width=True):
+                st.session_state.pop("cc_seq", None)
+                st.session_state.pop("cc_seq_idx", None)
+                st.session_state.pop("cc_seq_det", None)
+                st.session_state.pop("cc_incident_seq_idx", None)
+                st.rerun()
+
+        if n > 1:
+            st.slider("Frame", 0, n - 1, key="cc_seq_idx")
+
+        frame = seq[st.session_state.cc_seq_idx]
+        st.session_state.cc_uploaded_image = frame["bytes"]
+        st.session_state.cc_image_size = frame["size"]
+        st.caption(f"Frame {st.session_state.cc_seq_idx + 1} / {n} — {frame['name']}")
 
 
 # ── Import saved configuration ────────────────────────────────────────────────
@@ -1502,7 +1666,7 @@ def _log_incident_alert(ctx, status: str) -> None:
     st.rerun()
 
 
-def _render_incident_result() -> None:
+def _render_incident_result(show_drafts: bool = True) -> None:
     ctx = st.session_state.cc_incident_ctx
     if ctx is None:
         return
@@ -1514,15 +1678,16 @@ def _render_incident_result() -> None:
     for rec in incident_agent.recommend_actions(ctx):
         st.markdown(f"- {rec}")
 
-    st.markdown("**Draft messages** — review and send them yourself; nothing is sent automatically.")
-    refine = st.checkbox("Refine wording with AI (optional — needs GROQ_API_KEY)", key="cc_inc_refine")
-    drafts = incident_agent.build_drafts(ctx)
-    if refine:
-        with st.spinner("Refining drafts…"):
-            drafts = {aud: incident_agent.polish_message(text, aud) for aud, text in drafts.items()}
-    for audience, text in drafts.items():
-        with st.expander(f"Draft — {audience}"):
-            st.text_area(audience, value=text, height=170, key=f"cc_inc_draft_{audience}")
+    if show_drafts:
+        st.markdown("**Draft messages** — review and send them yourself; nothing is sent automatically.")
+        refine = st.checkbox("Refine wording with AI (optional — needs GROQ_API_KEY)", key="cc_inc_refine")
+        drafts = incident_agent.build_drafts(ctx)
+        if refine:
+            with st.spinner("Refining drafts…"):
+                drafts = {aud: incident_agent.polish_message(text, aud) for aud, text in drafts.items()}
+        for audience, text in drafts.items():
+            with st.expander(f"Draft — {audience}"):
+                st.text_area(audience, value=text, height=170, key=f"cc_inc_draft_{audience}")
 
     st.markdown("**Alert decision**")
     st.caption(
@@ -1578,8 +1743,14 @@ def _weather_for_incident(centroid_norm):
         return None
 
 
-def _assess_incident(detected_class, confidence, centroid_norm, prev_centroid_norm) -> None:
-    """Build the incident context (+weather) and open the operational conversation."""
+def _assess_incident(detected_class, confidence, centroid_norm, prev_centroid_norm,
+                     rerun: bool = True) -> None:
+    """Build the incident context (+weather) and open the operational conversation.
+
+    ``rerun=False`` lets a caller that is already mid-render (e.g. the sequence
+    auto-assess) update the incident without a programmatic st.rerun(), which would
+    otherwise reset st.tabs to the first tab.
+    """
     wx = _weather_for_incident(centroid_norm)
     ctx = incident_agent.build_incident_context(
         camera=st.session_state.cc_camera,
@@ -1598,7 +1769,8 @@ def _assess_incident(detected_class, confidence, centroid_norm, prev_centroid_no
     st.session_state.cc_incident_chat = [
         {"role": "assistant", "content": incident_agent.incident_narrative(ctx)}
     ]
-    st.rerun()
+    if rerun:
+        st.rerun()
 
 
 def _run_yolo_incident() -> None:
@@ -1678,50 +1850,149 @@ def _render_incident_conversation() -> None:
         st.rerun()
 
 
-def _tab_incident_assistant() -> None:
+def _detect_frame_bytes(img_bytes) -> dict | None:
+    """Run the fine-tuned YOLO11s detector (YOLO11n fallback) on frame bytes.
+
+    Returns a ``run_detection`` result with ``model_name`` added, or ``None`` when
+    no checkpoint is available or inference fails. Used by the sequence view to
+    auto-detect per frame; does not build an incident.
+    """
+    from PIL import Image
+    from src import inference
+
+    if inference.checkpoint_exists("YOLO11s"):
+        model_name = "YOLO11s"
+    elif inference.checkpoint_exists("YOLO11n"):
+        model_name = "YOLO11n"
+    else:
+        return None
+    try:
+        image = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+        with st.spinner(f"Running {model_name} on this frame…"):
+            model = _load_detector_cached(model_name)
+            result = inference.run_detection(model, image, conf=0.25)
+    except FileNotFoundError:
+        st.error(inference.MISSING_YOLO11S_MESSAGE)
+        return None
+    except Exception as exc:
+        st.error(f"Detection failed: {exc}")
+        return None
+    result["model_name"] = model_name
+    return result
+
+
+def _render_sequence_detection() -> None:
+    """Show the selected sequence frame with YOLO boxes; auto-runs per frame (cached)."""
+    from src import inference
+
+    seq = st.session_state.get("cc_seq") or []
+    if not seq or not st.session_state.cc_uploaded_image:
+        return
+    if not (inference.checkpoint_exists("YOLO11s") or inference.checkpoint_exists("YOLO11n")):
+        st.info(inference.MISSING_YOLO11S_MESSAGE)
+        return
+
+    idx = min(st.session_state.get("cc_seq_idx", 0), len(seq) - 1)
+    st.markdown("**Detections on the selected frame** — the detector runs automatically per frame.")
+    cache = st.session_state.setdefault("cc_seq_det", {})
+    if idx not in cache:
+        det = _detect_frame_bytes(st.session_state.cc_uploaded_image)
+        if det is None:
+            return
+        cache[idx] = det
+    _render_detection_overlay(cache[idx])
+    _auto_assess_sequence_frame(cache[idx])
+
+
+def _auto_assess_sequence_frame(det: dict) -> None:
+    """Build (or clear) the incident from the selected sequence frame automatically.
+
+    Lets the incident summary, conversation and recommendations update when the
+    slider moves — no button press. Guarded by the frame index so each frame is
+    assessed once (the assess/clear both st.rerun(), so the guard stops a loop).
+    """
+    from src import inference
+
+    idx = st.session_state.get("cc_seq_idx", 0)
+    if st.session_state.get("cc_incident_seq_idx") == idx:
+        return
+    st.session_state.cc_incident_seq_idx = idx
+    st.session_state.cc_incident_detection = det
+    top = inference.top_hazard_detection(det)
+    if top is None:
+        # No hazard in this frame — clear any prior incident so the panel reflects it.
+        st.session_state.cc_incident_ctx = None
+        st.session_state.cc_incident_chat = []
+        st.session_state.cc_incident_weather = None
+        return
+    anchor = inference.bbox_bottom_center_norm(top["bbox_norm"])
+    # rerun=False: we are mid-render, and a programmatic rerun would reset the tab.
+    _assess_incident(top["class"], float(top["confidence"]), anchor, None, rerun=False)
+
+
+def _tab_incident_assistant(
+    show_intro: bool = True,
+    allow_manual_point: bool = True,
+    sequence_view: bool = False,
+    show_drafts: bool = True,
+) -> None:
     st.subheader("Incident Assistant")
-    st.caption(
-        "Incident workflow: run the YOLO11s fire/smoke detector on the current frame, "
-        "match the detection to a mapped zone, pull Open-Meteo weather/wind, and get "
-        "recommendations and draft messages. The assistant only drafts and recommends — "
-        "it never contacts anyone or dispatches automatically."
-    )
+    if show_intro:
+        st.caption(
+            "Incident workflow: run the YOLO11s fire/smoke detector on the current frame, "
+            "match the detection to a mapped zone, pull Open-Meteo weather/wind, and get "
+            "recommendations and draft messages. The assistant only drafts and recommends — "
+            "it never contacts anyone or dispatches automatically."
+        )
+
+    if sequence_view:
+        _sequence_panel()
+        _render_sequence_detection()
+
+    # Compute after _sequence_panel() so a sequence loaded during this same run counts —
+    # otherwise the run button and a stale overlay flash until the next interaction.
+    seq_active = sequence_view and bool(st.session_state.get("cc_seq"))
 
     if not st.session_state.cc_camera.get("camera_id", "").strip():
         st.info("Set a Camera ID in the Camera Metadata tab so alerts are attributable.")
 
-    st.markdown("**1 · Detect fire/smoke on the current frame**")
-    run = st.button(
-        "Run YOLO11s fire/smoke detector", type="primary", key="cc_inc_run_yolo",
-        disabled=st.session_state.cc_uploaded_image is None,
-    )
-    if st.session_state.cc_uploaded_image is None:
-        st.caption("Upload a camera frame above to run the detector.")
-    if run:
-        _run_yolo_incident()
+    # With a loaded sequence the detector runs automatically per frame (and the
+    # overlay is shown above), so the manual run button + standalone overlay are
+    # redundant and hidden. They stay for Central Control and the single-image case.
+    if not seq_active:
+        st.markdown("**1 · Detect fire/smoke on the current frame**")
+        run = st.button(
+            "Run YOLO11s fire/smoke detector", type="primary", key="cc_inc_run_yolo",
+            disabled=st.session_state.cc_uploaded_image is None,
+        )
+        if st.session_state.cc_uploaded_image is None:
+            st.caption("Upload a camera frame above to run the detector.")
+        if run:
+            _run_yolo_incident()
 
-    det = st.session_state.get("cc_incident_detection")
-    if det is not None:
-        _render_detection_overlay(det)
+        det = st.session_state.get("cc_incident_detection")
+        if det is not None:
+            _render_detection_overlay(det)
 
-    # Manual fallback (no nested expander: revealed by a checkbox).
-    if st.checkbox("No detector available? Set the hazard point manually", key="cc_inc_manual"):
-        col_a, col_b = st.columns(2)
-        with col_a:
-            manual_class = st.selectbox("Detected class", ["fire", "smoke"], key="cc_inc_class")
-        with col_b:
-            manual_conf = st.slider("Confidence", 0.0, 1.0, 0.8, 0.05, key="cc_inc_conf")
-        _incident_point_picker()
-        cur = st.session_state.cc_incident_point
-        st.caption(f"Hazard point: ({cur[0]:.3f}, {cur[1]:.3f})" if cur else "Hazard point: not set.")
-        prev = _incident_prev_point()
-        if st.button("Assess from manual point", disabled=cur is None, key="cc_inc_assess"):
-            _assess_incident(manual_class, float(manual_conf), cur, prev)
+    if allow_manual_point:
+        # Manual fallback (no nested expander: revealed by a checkbox).
+        if st.checkbox("No detector available? Set the hazard point manually", key="cc_inc_manual"):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                manual_class = st.selectbox("Detected class", ["fire", "smoke"], key="cc_inc_class")
+            with col_b:
+                manual_conf = st.slider("Confidence", 0.0, 1.0, 0.8, 0.05, key="cc_inc_conf")
+            _incident_point_picker()
+            cur = st.session_state.cc_incident_point
+            st.caption(f"Hazard point: ({cur[0]:.3f}, {cur[1]:.3f})" if cur else "Hazard point: not set.")
+            prev = _incident_prev_point()
+            if st.button("Assess from manual point", disabled=cur is None, key="cc_inc_assess"):
+                _assess_incident(manual_class, float(manual_conf), cur, prev)
 
     if st.session_state.cc_incident_ctx is not None:
         st.markdown("---")
         _render_incident_conversation()
-        _render_incident_result()
+        _render_incident_result(show_drafts=show_drafts)
 
     st.markdown("---")
     _render_alert_log()
