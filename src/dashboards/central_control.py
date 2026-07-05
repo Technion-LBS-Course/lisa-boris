@@ -343,28 +343,10 @@ def _store_sequence(frames: list[dict]) -> None:
     st.session_state.cc_image_size = frames[0]["size"]
     w, h = frames[0]["size"]
     st.success(
-        f"Loaded {len(frames)} frames at {w}x{h}. Step through them below — the "
-        "selected frame drives Image Zones and the Incident Assistant."
+        f"Loaded {len(frames)} frames at {w}x{h}. Step through them with the slider below."
     )
     # No st.rerun(): the button's own rerun renders the loaded sequence this run,
     # and a programmatic rerun would reset st.tabs to the first tab.
-
-
-def _apply_sequence_frame() -> None:
-    """Set the shared frame to the selected sequence frame before the tabs render.
-
-    Called at the top of a dashboard render (before st.tabs), so tabs that render
-    before the Incident Assistant — e.g. Image Zones — stay in sync with the frame
-    chosen by the sequence slider, with no one-rerun lag.
-    """
-    seq = st.session_state.get("cc_seq") or []
-    if not seq:
-        return
-    idx = min(st.session_state.get("cc_seq_idx", 0), len(seq) - 1)
-    st.session_state.cc_seq_idx = idx
-    frame = seq[idx]
-    st.session_state.cc_uploaded_image = frame["bytes"]
-    st.session_state.cc_image_size = frame["size"]
 
 
 def _load_sequence_from_folder(folder: str) -> None:
@@ -396,7 +378,7 @@ def _load_sequence_from_uploads(uploads) -> None:
     _store_sequence(_build_sequence_frames(items))
 
 
-def _sequence_panel() -> None:
+def _sequence_panel(drive_shared_frame: bool = True) -> None:
     with st.expander(
         "Demo: image sequence (same camera over time)",
         expanded=bool(st.session_state.get("cc_seq")),
@@ -450,8 +432,11 @@ def _sequence_panel() -> None:
             st.slider("Frame", 0, n - 1, key="cc_seq_idx")
 
         frame = seq[st.session_state.cc_seq_idx]
-        st.session_state.cc_uploaded_image = frame["bytes"]
-        st.session_state.cc_image_size = frame["size"]
+        if drive_shared_frame:
+            # Central Control: the slider drives the shared frame used by all tabs.
+            # M4 passes drive_shared_frame=False so Image Zones keeps its own frame.
+            st.session_state.cc_uploaded_image = frame["bytes"]
+            st.session_state.cc_image_size = frame["size"]
         st.caption(f"Frame {st.session_state.cc_seq_idx + 1} / {n} — {frame['name']}")
 
 
@@ -990,7 +975,7 @@ def _generate_zones_from_text(description: str) -> None:
     st.session_state.cc_zone_drafts = result.zones
     st.session_state.cc_pending_vertices = []
     st.session_state.cc_zone_loaded_draft = None
-    st.rerun()
+    # No st.rerun(): the drafts render this run, and a rerun would reset the active tab.
 
 
 def _frame_for_vision(max_side: int = 1024):
@@ -1064,7 +1049,7 @@ def _detect_zones_from_image(description: str) -> None:
         f"Vision model proposed {n_boxes} ROI box(es) across {len(zones)} zone(s). "
         "These are APPROXIMATE — select each below to see and verify it."
     )
-    st.rerun()
+    # No st.rerun(): the drafts render this run, and a rerun would reset the active tab.
 
 
 def _as_op_zone(draft: dict) -> dict:
@@ -1140,9 +1125,10 @@ def _place_draft_zones(drafts: list[dict]) -> None:
     # When the selected draft changes, load its AI box (if any) into the editor so
     # the model's estimated ROI is drawn on the image; empty for text-only drafts.
     if st.session_state.cc_zone_loaded_draft != did:
+        # Load the draft's AI box into the editor. No st.rerun(): pending_vertices is set
+        # before the editor renders below, and a rerun would reset the active tab.
         st.session_state.cc_pending_vertices = [list(v) for v in active.get("vertices_px", [])]
         st.session_state.cc_zone_loaded_draft = did
-        st.rerun()
 
     has_box = bool(active.get("vertices_px"))
     col_img, col_form = st.columns([1, 1])
@@ -1886,17 +1872,18 @@ def _render_sequence_detection() -> None:
     from src import inference
 
     seq = st.session_state.get("cc_seq") or []
-    if not seq or not st.session_state.cc_uploaded_image:
+    if not seq:
         return
     if not (inference.checkpoint_exists("YOLO11s") or inference.checkpoint_exists("YOLO11n")):
         st.info(inference.MISSING_YOLO11S_MESSAGE)
         return
 
     idx = min(st.session_state.get("cc_seq_idx", 0), len(seq) - 1)
+    frame = seq[idx]  # detect on the sequence frame directly (not the shared frame)
     st.markdown("**Detections on the selected frame** — the detector runs automatically per frame.")
     cache = st.session_state.setdefault("cc_seq_det", {})
     if idx not in cache:
-        det = _detect_frame_bytes(st.session_state.cc_uploaded_image)
+        det = _detect_frame_bytes(frame["bytes"])
         if det is None:
             return
         cache[idx] = det
@@ -1946,7 +1933,9 @@ def _tab_incident_assistant(
         )
 
     if sequence_view:
-        _sequence_panel()
+        # drive_shared_frame=False: the incident slider drives only the incident's own
+        # detection, not the shared frame Image Zones / Camera Metadata draw on.
+        _sequence_panel(drive_shared_frame=False)
         _render_sequence_detection()
 
     # Compute after _sequence_panel() so a sequence loaded during this same run counts —
