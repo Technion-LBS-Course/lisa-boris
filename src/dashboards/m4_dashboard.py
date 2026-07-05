@@ -23,24 +23,26 @@ def render() -> None:
     )
 
     cc._init_state()
-    # The demo image sequence is loaded from inside the Incident Assistant tab in M4 and
-    # drives only the incident's own detection. Image Zones / Camera Metadata keep the
-    # stable reference frame (the first sequence frame), so scrubbing the incident slider
-    # does not change the Image Zones frame.
-    cc._frame_uploader(with_sequence=False)
-    cc._import_config_panel()
-    st.markdown("---")
+    # No top frame uploader / import-config panel in M4: the camera frame comes from the
+    # demo image sequence loaded inside the Incident Assistant tab — its first frame is the
+    # reference used by Image Zones / Camera Metadata.
 
-    tab_cam, tab_zones, tab_incident, tab_risk = st.tabs(
-        ["Camera Metadata", "Image Zones", "Incident Assistant", "Risk Advisory"]
-    )
-    with tab_cam:
-        cc._tab_camera_metadata()
-    with tab_zones:
+    # A keyed segmented control (not st.tabs) so the active section is stored in session
+    # state and survives every rerun — uploads, sliders and other interactions no longer
+    # bounce back to the first section the way st.tabs does.
+    sections = ["Camera Metadata", "Image Zones", "Incident Assistant", "Risk Advisory"]
+    active = st.segmented_control(
+        "Section", sections, key="m4_section", default=sections[0],
+        label_visibility="collapsed",
+    ) or sections[0]
+
+    if active == "Image Zones":
         cc._tab_image_zones()
-    with tab_incident:
+    elif active == "Incident Assistant":
         cc._tab_incident_assistant(
             show_intro=False, allow_manual_point=False, sequence_view=True, show_drafts=False
         )
-    with tab_risk:
+    elif active == "Risk Advisory":
         cc._tab_risk_advisory()
+    else:
+        cc._tab_camera_metadata()
