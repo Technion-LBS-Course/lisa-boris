@@ -138,3 +138,40 @@ def test_central_control_incident_yolo_button_and_lazy_imports():
             top_imports.append(node.module or "")
     heavy = {"ultralytics", "torch", "groq"}
     assert not any(m and m.split(".")[0] in heavy for m in top_imports)
+
+
+def test_central_control_has_segmentation_refiner():
+    # Image Zones offers segmentation-assisted polygon refinement, and it is wired
+    # into both the AI-vision and manual panels. The backend (src/segmentation_assist)
+    # is imported lazily, so no heavy segmentation library loads at module import.
+    import ast
+    from pathlib import Path
+
+    from src.dashboards import central_control as cc
+
+    assert callable(cc._render_segmentation_refiner)
+
+    text = Path(cc.__file__).read_text(encoding="utf-8")
+    assert "Refine selected box with segmentation" in text
+    assert "Selected ROI box" in text
+    assert text.count("_render_segmentation_refiner(") >= 3  # 1 def + AI panel + manual panel
+
+    # cv2 must not be imported at module top level (segmentation is lazy / on-click).
+    tree = ast.parse(text)
+    top_imports: list[str] = []
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            top_imports += [a.name for a in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            top_imports.append(node.module or "")
+    assert not any(m and m.split(".")[0] == "cv2" for m in top_imports), top_imports
+
+
+def test_segmentation_assist_imports_without_cv2_or_numpy_at_load():
+    # The helper module must import even where cv2/numpy are only used lazily.
+    import importlib
+
+    mod = importlib.import_module("src.segmentation_assist")
+    for fn in ("validate_roi_box", "polygon_from_box_fallback", "mask_to_polygon",
+               "refine_box_to_mask", "segmentation_backend_available"):
+        assert callable(getattr(mod, fn))

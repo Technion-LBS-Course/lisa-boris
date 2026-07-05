@@ -730,6 +730,9 @@ def _image_zones_manual_panel() -> None:
         if save:
             _save_zone(zone_name, zone_type, alert_label, int(priority), zone_notes)
 
+    st.markdown("---")
+    _render_segmentation_refiner("cc_zone_manual_seg", active_draft=None)
+
 
 def _render_parse_messages() -> None:
     """Show the source, warnings, and clarification requests from the last parse."""
@@ -1025,6 +1028,9 @@ def _place_draft_zones(drafts: list[dict]) -> None:
                 st.success(f"Zone '{name}' saved.")
                 st.rerun()
 
+    st.markdown("---")
+    _render_segmentation_refiner("cc_zone_ai_seg", active_draft=active)
+
 
 def _manual_vertex_input() -> None:
     st.caption("Interactive image clicking unavailable — paste vertices as JSON [[x,y],...]:")
@@ -1133,6 +1139,177 @@ def _render_zone_table() -> None:
             if st.button("Delete zone", key="cc_zone_del"):
                 st.session_state.cc_image_zones = [z for z in zones if z["zone_id"] != sel]
                 st.rerun()
+
+
+# ── Segmentation-assisted polygon refinement (Image Zones only) ───────────────
+#
+# After a rough ROI box exists — a Groq Vision suggestion, a manually entered box,
+# or the bounding box of a few clicked points — the operator can run a LOCAL
+# segmentation inside that box to get a cleaner editable polygon. This is setup
+# tooling for Image Zones: it is NOT fire/smoke detection, it never calls YOLO11s,
+# and it never calls Groq (backend lives in src/segmentation_assist.py). The
+# accepted polygon is written into cc_pending_vertices so the existing "Save zone"
+# flow persists it with all the operational fields.
+
+
+def _bbox_norm_from_pixels(vertices_px: list) -> dict | None:
+    """Normalized bounding box {x_min,y_min,x_max,y_max} of pixel vertices, or None."""
+    w, h = st.session_state.cc_image_size
+    pts = [v for v in (vertices_px or []) if v is not None]
+    if len(pts) < 2 or not w or not h:
+        return None
+    xs = [float(v[0]) for v in pts]
+    ys = [float(v[1]) for v in pts]
+    return {
+        "x_min": min(xs) / w, "y_min": min(ys) / h,
+        "x_max": max(xs) / w, "y_max": max(ys) / h,
+    }
+
+
+def _roi_box_options(active_draft: dict | None) -> list[tuple[str, dict]]:
+    """Available rough ROI boxes for segmentation, as (label, box_norm) pairs."""
+    from src import segmentation_assist as seg
+
+    options: list[tuple[str, dict]] = []
+    if active_draft:
+        box = active_draft.get("box_norm")
+        if box:
+            try:
+                options.append((
+                    f"AI ROI estimate — {active_draft.get('zone_name', 'zone')}",
+                    seg.box_norm_from_xyxy(box),
+                ))
+            except ValueError:
+                pass
+    pend_box = _bbox_norm_from_pixels(st.session_state.cc_pending_vertices)
+    if pend_box is not None:
+        options.append(("Bounding box of the current polygon points", pend_box))
+    return options
+
+
+def _manual_box_inputs(key_prefix: str) -> dict:
+    """Small normalized-coordinate form for a manual rough ROI box."""
+    st.caption("Rough box as normalized coordinates (0–1), top-left to bottom-right.")
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        x0 = st.number_input("x_min", 0.0, 1.0, 0.0, 0.01, key=f"{key_prefix}_bx0")
+    with c2:
+        y0 = st.number_input("y_min", 0.0, 1.0, 0.0, 0.01, key=f"{key_prefix}_by0")
+    with c3:
+        x1 = st.number_input("x_max", 0.0, 1.0, 0.0, 0.01, key=f"{key_prefix}_bx1")
+    with c4:
+        y1 = st.number_input("y_max", 0.0, 1.0, 0.0, 0.01, key=f"{key_prefix}_by1")
+    return {"x_min": x0, "y_min": y0, "x_max": x1, "y_max": y1}
+
+
+def _render_segmentation_refiner(key_prefix: str, active_draft: dict | None = None) -> None:
+    """ROI-box selector + 'Refine selected box with segmentation' + accept/fallback.
+
+    Segmentation runs ONLY on an explicit click (never on page load), inside the
+    selected box, using neither YOLO11s nor Groq. An accepted polygon is written
+    into cc_pending_vertices for the existing save flow.
+    """
+    from src import segmentation_assist as seg
+
+    st.markdown("**Refine a rough box into a polygon (segmentation)**")
+    st.caption(
+        "Local OpenCV segmentation turns a rough ROI box into a cleaner polygon. "
+        "It runs only when you click, and it does not use YOLO11s or Groq."
+    )
+    if not seg.segmentation_backend_available():
+        st.info(
+            "Local segmentation backend (OpenCV) is unavailable. You can still use a "
+            "rough box directly as a rectangular polygon below."
+        )
+
+    options = _roi_box_options(active_draft)
+    labels = [label for label, _ in options] + ["Manual box (enter coordinates)"]
+    choice = st.selectbox("Selected ROI box", labels, key=f"{key_prefix}_roi_sel")
+
+    if choice == "Manual box (enter coordinates)":
+        raw_box = _manual_box_inputs(key_prefix)
+    else:
+        raw_box = dict(options[labels.index(choice)][1])
+
+    try:
+        valid_box: dict | None = seg.validate_roi_box(raw_box)
+    except ValueError:
+        valid_box = None
+
+    if valid_box is None:
+        st.caption("Select or draw a rough box before running segmentation.")
+
+    if st.button("Refine selected box with segmentation", key=f"{key_prefix}_seg_run",
+                 use_container_width=True, disabled=valid_box is None):
+        with st.spinner("Segmenting inside the selected box…"):
+            result = seg.refine_box_to_mask(st.session_state.cc_uploaded_image, valid_box)
+        st.session_state[f"{key_prefix}_seg_result"] = result
+        st.rerun()
+
+    _render_seg_candidate(key_prefix)
+
+
+def _accept_seg_polygon(key_prefix: str, polygon: list) -> None:
+    """Load a normalized polygon into the editor and clear the candidate."""
+    from src import segmentation_assist as seg
+
+    w, h = st.session_state.cc_image_size
+    st.session_state.cc_pending_vertices = [
+        list(v) for v in seg.polygon_to_pixel_vertices(polygon, w, h)
+    ]
+    st.session_state[f"{key_prefix}_seg_result"] = None
+    st.success("Polygon loaded into the editor — adjust if needed, then save the zone.")
+    st.rerun()
+
+
+def _accept_box_fallback(key_prefix: str, box_norm: dict) -> None:
+    """Use the rough box itself as a rectangular polygon (segmentation fallback)."""
+    from src import segmentation_assist as seg
+
+    _accept_seg_polygon(key_prefix, seg.polygon_from_box_fallback(box_norm))
+
+
+def _render_seg_candidate(key_prefix: str) -> None:
+    """Preview the segmentation candidate polygon (accept / box fallback)."""
+    result = st.session_state.get(f"{key_prefix}_seg_result")
+    if not result:
+        return
+    from src import segmentation_assist as seg
+
+    w, h = st.session_state.cc_image_size
+    box = result.get("box_norm")
+
+    if result.get("ok") and result.get("polygon"):
+        st.success("Segmentation polygon generated.")
+        poly_px = seg.polygon_to_pixel_vertices(result["polygon"], w, h)
+        preview = _composite_image(
+            st.session_state.cc_uploaded_image,
+            zones=st.session_state.cc_image_zones,
+            pending_vertices=poly_px,
+        )
+        st.image(
+            preview, use_container_width=True,
+            caption=(f"Segmentation candidate — {len(poly_px)} vertices "
+                     f"(backend: {result.get('backend')})"),
+        )
+        st.dataframe(
+            pd.DataFrame([
+                {"#": i + 1, "x": round(v["x"], 4), "y": round(v["y"], 4)}
+                for i, v in enumerate(result["polygon"])
+            ]),
+            use_container_width=True,
+        )
+        b1, b2 = st.columns(2)
+        with b1:
+            if st.button("Accept polygon", type="primary", key=f"{key_prefix}_seg_accept"):
+                _accept_seg_polygon(key_prefix, result["polygon"])
+        with b2:
+            if box and st.button("Use original box as polygon", key=f"{key_prefix}_seg_boxfb1"):
+                _accept_box_fallback(key_prefix, box)
+    else:
+        st.error(result.get("message", "Segmentation did not produce a polygon."))
+        if box and st.button("Use original box as polygon", key=f"{key_prefix}_seg_boxfb2"):
+            _accept_box_fallback(key_prefix, box)
 
 
 # ── Tab: Export & Generate ────────────────────────────────────────────────────
