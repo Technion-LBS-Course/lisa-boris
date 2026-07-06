@@ -54,6 +54,19 @@ _REF_MARKER = "#E4573D"   # ember glow
 _ZONE_LINE = "#8CE9FF"    # hud cyan
 _PENDING = "#8F8CC7"      # nordic lilac
 
+# Zone outline color by priority — high is ember/red-orange, medium is amber,
+# low keeps the original hud-cyan style, and anything unrecognized falls back
+# to the same cyan default.
+_ZONE_COLOR_HIGH = (232, 93, 61)     # ember/red-orange
+_ZONE_COLOR_MEDIUM = (245, 197, 66)  # amber/yellow
+_ZONE_COLOR_LOW = (140, 233, 255)    # hud cyan (matches _ZONE_LINE)
+_ZONE_COLOR_DEFAULT = _ZONE_COLOR_LOW
+_ZONE_COLORS_BY_PRIORITY = {
+    "high": _ZONE_COLOR_HIGH,
+    "medium": _ZONE_COLOR_MEDIUM,
+    "low": _ZONE_COLOR_LOW,
+}
+
 
 @st.cache_resource
 def _load_detector_cached(model_name: str):
@@ -191,10 +204,27 @@ def _composite_image(
             continue
         verts = [tuple(v) for v in zone.get("vertices_px", [])]
         if len(verts) >= 3:
-            draw.polygon(verts, outline=_ZONE_LINE, fill=(140, 233, 255, 40))
+            try:
+                priority_int = int(zone.get("priority", 5))
+            except (TypeError, ValueError):
+                priority_int = 5
+            priority_label = zone.get("priority_label") or int_to_priority_label(priority_int)
+            color = _ZONE_COLORS_BY_PRIORITY.get(priority_label, _ZONE_COLOR_DEFAULT)
+            draw.polygon(verts, outline=color, width=3, fill=color + (40,))
             cx = sum(v[0] for v in verts) / len(verts)
             cy = sum(v[1] for v in verts) / len(verts)
-            draw.text((cx, cy), zone.get("zone_name", ""), fill=_ZONE_LINE)
+            label_text = zone.get("zone_name", "")
+            if label_text:
+                try:
+                    tb = draw.textbbox((cx, cy), label_text)
+                    pad = 3
+                    draw.rectangle(
+                        [tb[0] - pad, tb[1] - pad, tb[2] + pad, tb[3] + pad],
+                        fill=(10, 12, 18, 170),
+                    )
+                except AttributeError:
+                    pass
+                draw.text((cx, cy), label_text, fill=color)
 
     pv = [tuple(v) for v in (pending_vertices or [])]
     if pv:
@@ -436,7 +466,12 @@ def _sequence_panel(drive_shared_frame: bool = True) -> None:
                 st.rerun()
 
         if n > 1:
-            st.slider("Frame", 0, n - 1, key="cc_seq_idx")
+            # Internal index (cc_seq_idx) stays 0-based; the slider displays 1..n
+            # via format_func so the operator sees "Frame 1" for the first frame.
+            st.select_slider(
+                "Frame", options=list(range(n)), format_func=lambda i: str(i + 1),
+                key="cc_seq_idx",
+            )
 
         frame = seq[st.session_state.cc_seq_idx]
         if drive_shared_frame:
@@ -806,6 +841,8 @@ def _tab_image_zones() -> None:
         st.session_state.cc_zone_drafts = []
     if "cc_zone_loaded_draft" not in st.session_state:
         st.session_state.cc_zone_loaded_draft = None
+    if "cc_zone_edit_id" not in st.session_state:
+        st.session_state.cc_zone_edit_id = None
     for _msg_key in ("cc_zone_warnings", "cc_zone_clarifications"):
         if _msg_key not in st.session_state:
             st.session_state[_msg_key] = []
@@ -866,25 +903,96 @@ def _zone_vertex_editor(img_key: str, horizon_key: str) -> None:
             st.rerun()
 
 
+def _find_zone(zone_id: str | None) -> dict | None:
+    if not zone_id:
+        return None
+    return next((z for z in st.session_state.cc_image_zones if z["zone_id"] == zone_id), None)
+
+
+def _cancel_zone_edit() -> None:
+    st.session_state.cc_zone_edit_id = None
+    st.session_state.cc_pending_vertices = []
+
+
 def _image_zones_manual_panel() -> None:
-    if st.button("Switch to AI-assisted", key="cc_zone_to_ai"):
-        st.session_state.cc_zone_use_ai = True
-        st.rerun()
+    edit_id = st.session_state.get("cc_zone_edit_id")
+    edit_zone = _find_zone(edit_id)
+    if edit_id and edit_zone is None:
+        st.session_state.cc_zone_edit_id = None
+        edit_id = None
+
+    top1, top2 = st.columns([1, 1])
+    with top1:
+        if st.button("Switch to AI-assisted", key="cc_zone_to_ai"):
+            _cancel_zone_edit()
+            st.session_state.cc_zone_use_ai = True
+            st.rerun()
+    with top2:
+        if edit_zone is not None and st.button("Cancel edit", key="cc_zone_cancel_edit"):
+            _cancel_zone_edit()
+            st.rerun()
+
+    # Widget keys are suffixed by the zone being edited (or "new") so switching
+    # the edit target — or leaving edit mode — refreshes the form's defaults
+    # instead of keeping stale text a user already typed into the same key.
+    edit_key = edit_id or "new"
+
     col_img, col_form = st.columns([1.15, 1])
     with col_img:
-        st.markdown("**Click to add polygon vertices**")
+        if edit_zone is not None:
+            st.markdown(f"**Editing zone: {edit_zone.get('zone_name', '')}** — click to adjust vertices")
+        else:
+            st.markdown("**Click to add polygon vertices**")
         _zone_vertex_editor("cc_zone_img", "cc_zone_horizon")
     with col_form:
         st.markdown("**Zone details**")
-        with st.form("cc_zone_form"):
-            zone_name = st.text_input("Zone Name *", placeholder="e.g. East Barn")
-            zone_type = st.selectbox("Zone Type", _ZONE_TYPES)
-            alert_label = st.text_input("Alert Label", placeholder="e.g. East Barn")
-            priority = st.number_input("Priority", min_value=1, max_value=10, value=5, step=1)
-            zone_notes = st.text_input("Notes", key="cc_zone_notes")
-            save = st.form_submit_button("Save Zone")
+        default_type = edit_zone.get("zone_type") if edit_zone else None
+        default_priority_label = (
+            edit_zone.get("priority_label")
+            or int_to_priority_label(int(edit_zone.get("priority", 5)))
+        ) if edit_zone else "medium"
+        with st.form(f"cc_zone_form_{edit_key}"):
+            zone_name = st.text_input(
+                "Zone Name *", value=edit_zone.get("zone_name", "") if edit_zone else "",
+                placeholder="e.g. East Barn", key=f"cc_zone_name_{edit_key}",
+            )
+            zone_type = st.selectbox(
+                "Zone Type", _ZONE_TYPES,
+                index=_ZONE_TYPES.index(default_type) if default_type in _ZONE_TYPES else 0,
+                key=f"cc_zone_type_{edit_key}",
+            )
+            alert_label = st.text_input(
+                "Alert Label", value=edit_zone.get("alert_label", "") if edit_zone else "",
+                placeholder="e.g. East Barn", key=f"cc_zone_alertlabel_{edit_key}",
+            )
+            priority_label = st.selectbox(
+                "Priority", list(PRIORITY_LABELS),
+                index=list(PRIORITY_LABELS).index(default_priority_label)
+                if default_priority_label in PRIORITY_LABELS else 1,
+                key=f"cc_zone_priority_{edit_key}",
+            )
+            object_to_find = st.text_input(
+                "Object to find", value=edit_zone.get("object_to_find", "") if edit_zone else "",
+                help="What to monitor in this zone. A zone target — not a detector class.",
+                key=f"cc_zone_object_{edit_key}",
+            )
+            zone_notes = st.text_input(
+                "Notes", value=edit_zone.get("notes", "") if edit_zone else "",
+                key=f"cc_zone_notes_{edit_key}",
+            )
+            save = st.form_submit_button("Update Zone" if edit_zone is not None else "Save Zone")
         if save:
-            _save_zone(zone_name, zone_type, alert_label, int(priority), zone_notes)
+            extra = {
+                "object_to_find": object_to_find,
+                "priority_label": priority_label,
+                "requires_user_confirmation": bool(
+                    edit_zone.get("requires_user_confirmation", False)
+                ) if edit_zone else False,
+            }
+            _save_zone(
+                zone_name, zone_type, alert_label, priority_label_to_int(priority_label),
+                zone_notes, extra=extra, zone_id=edit_id,
+            )
 
     st.markdown("---")
     _render_segmentation_refiner("cc_zone_manual_seg", active_draft=None)
@@ -1204,13 +1312,16 @@ def _manual_vertex_input() -> None:
             st.error(f"Invalid vertices JSON: {exc}")
 
 
-def _commit_zone(zone_name, zone_type, alert_label, priority, zone_notes, extra=None) -> bool:
-    """Validate the pending vertices + details and append a zone.
+def _commit_zone(zone_name, zone_type, alert_label, priority, zone_notes, extra=None,
+                  zone_id: str | None = None) -> bool:
+    """Validate the pending vertices + details and add or update a zone.
 
     Returns True on success (caller handles messaging / rerun); False if the
     zone name is missing or the polygon fails validation. ``extra`` carries the
     operational fields (object_to_find, priority_label, requires_user_confirmation)
     when a zone comes from the AI-assisted flow; manual zones pass ``None``.
+    When ``zone_id`` matches an existing zone, that zone is replaced in place
+    (same id, same list position) instead of appending a duplicate.
     """
     verts = list(st.session_state.cc_pending_vertices)
     w, h = st.session_state.cc_image_size
@@ -1222,8 +1333,9 @@ def _commit_zone(zone_name, zone_type, alert_label, priority, zone_notes, extra=
         priority_int = int(priority)
     except (TypeError, ValueError):
         priority_int = 5
+    existing = _find_zone(zone_id)
     zone = {
-        "zone_id": str(uuid.uuid4())[:8],
+        "zone_id": existing["zone_id"] if existing is not None else str(uuid.uuid4())[:8],
         "zone_name": zone_name.strip(),
         "zone_type": zone_type,
         "alert_label": alert_label.strip() or zone_name.strip(),
@@ -1233,7 +1345,7 @@ def _commit_zone(zone_name, zone_type, alert_label, priority, zone_notes, extra=
         "requires_user_confirmation": bool(extra.get("requires_user_confirmation", False)),
         "vertices_px": verts,
         "vertices_norm": [],
-        "enabled": True,
+        "enabled": existing.get("enabled", True) if existing is not None else True,
         "notes": zone_notes.strip(),
         "polygon_status": zone_agent.POLYGON_DRAWN,
     }
@@ -1243,14 +1355,24 @@ def _commit_zone(zone_name, zone_type, alert_label, priority, zone_notes, extra=
             st.error(e)
         return False
     zone["vertices_norm"] = normalize_polygon_vertices(verts, w, h)
-    st.session_state.cc_image_zones.append(zone)
+    if existing is not None:
+        idx = st.session_state.cc_image_zones.index(existing)
+        st.session_state.cc_image_zones[idx] = zone
+    else:
+        st.session_state.cc_image_zones.append(zone)
     st.session_state.cc_pending_vertices = []
     return True
 
 
-def _save_zone(zone_name, zone_type, alert_label, priority, zone_notes) -> None:
-    if _commit_zone(zone_name, zone_type, alert_label, priority, zone_notes):
-        st.success(f"Zone '{zone_name}' added.")
+def _save_zone(zone_name, zone_type, alert_label, priority, zone_notes, extra=None,
+                zone_id: str | None = None) -> None:
+    if _commit_zone(zone_name, zone_type, alert_label, priority, zone_notes,
+                     extra=extra, zone_id=zone_id):
+        if zone_id:
+            st.session_state.cc_zone_edit_id = None
+            st.success(f"Zone '{zone_name}' updated.")
+        else:
+            st.success(f"Zone '{zone_name}' added.")
         st.rerun()
 
 
@@ -1288,9 +1410,11 @@ def _render_zone_table() -> None:
                 st.rerun()
         with c2:
             if st.button("Load into editor", key="cc_zone_load"):
-                for z in zones:
-                    if z["zone_id"] == sel:
-                        st.session_state.cc_pending_vertices = [list(v) for v in z["vertices_px"]]
+                target = _find_zone(sel)
+                if target is not None:
+                    st.session_state.cc_pending_vertices = [list(v) for v in target["vertices_px"]]
+                    st.session_state.cc_zone_edit_id = sel
+                    st.session_state.cc_zone_use_ai = False
                 st.rerun()
         with c3:
             if st.button("Delete zone", key="cc_zone_del"):
@@ -1497,8 +1621,6 @@ def _tab_export() -> None:
         st.session_state.cc_image_zones,
     )
     config_json = json.dumps(config, indent=2, default=str)
-    st.markdown("**Config JSON preview**")
-    st.code(config_json, language="json")
     st.download_button("Download Full Config (JSON)", config_json,
                        file_name="camera_mapping_config.json", mime="application/json")
 
@@ -1683,10 +1805,6 @@ def _render_incident_result(show_drafts: bool = True) -> None:
                 st.text_area(audience, value=text, height=170, key=f"cc_inc_draft_{audience}")
 
     st.markdown("**Alert decision**")
-    st.caption(
-        "Confirm before contacting anyone. PyroFinder never contacts emergency services "
-        "or dispatches automatically."
-    )
     a1, a2, a3 = st.columns(3)
     with a1:
         if st.button("Confirm alert", type="primary", key="cc_inc_confirm"):
@@ -2045,11 +2163,9 @@ def _render_risk_result(interval_min: int) -> None:
 def _tab_risk_advisory() -> None:
     st.subheader("Risk Advisory")
     st.caption(
-        "Preventive fire-weather risk advisory based on current weather and your configured "
-        "zones. This is advisory guidance — not an early-warning alert, an ignition "
-        "prediction, or an emergency dispatch."
+        "Preventive fire-weather risk advisory based on current weather and your "
+        "configured zones."
     )
-    st.caption("Weather context uses Open-Meteo and does not require an API key.")
 
     cam = st.session_state.cc_camera
     lat, lon = cam.get("latitude"), cam.get("longitude")
