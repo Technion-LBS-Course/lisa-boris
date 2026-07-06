@@ -11,6 +11,8 @@ from src.mapping import (
     compute_homography,
     default_camera_metadata,
     denormalize_image_point,
+    downwind_arrow_endpoint,
+    downwind_bearing_deg,
     estimate_horizon_y_norm,
     estimate_map_position,
     find_zone_for_detection,
@@ -729,3 +731,28 @@ def test_estimate_horizon_gradual_ramp_rejected():
     # tiny relative to the total spread -> confidence below threshold -> None.
     rows = [200.0 - i for i in range(100)]
     assert estimate_horizon_y_norm(rows) is None
+
+
+# ── downwind_bearing_deg / downwind_arrow_endpoint ────────────────────────────
+
+
+def test_downwind_bearing_is_opposite_wind_from():
+    assert downwind_bearing_deg(0.0) == pytest.approx(180.0)
+    assert downwind_bearing_deg(90.0) == pytest.approx(270.0)
+    assert downwind_bearing_deg(270.0) == pytest.approx(90.0)
+
+
+def test_downwind_bearing_wraps_below_360():
+    assert downwind_bearing_deg(350.0) == pytest.approx(170.0)
+
+
+def test_downwind_arrow_endpoint_wind_from_north_points_south():
+    lat, lon = downwind_arrow_endpoint(32.0, 34.0, wind_from_deg=0.0)
+    assert lat < 32.0
+    assert lon == pytest.approx(34.0, abs=1e-9)
+
+
+def test_downwind_arrow_endpoint_wind_from_south_points_north():
+    lat, lon = downwind_arrow_endpoint(32.0, 34.0, wind_from_deg=180.0)
+    assert lat > 32.0
+    assert lon == pytest.approx(34.0, abs=1e-9)

@@ -24,6 +24,7 @@ from src.mapping import (
     build_camera_mapping_config,
     default_camera_metadata,
     downwind_arrow_endpoint,
+    downwind_bearing_deg,
     estimate_horizon_from_image,
     estimate_map_position,
     generate_zone_map_estimates,
@@ -1997,14 +1998,19 @@ _MAP_UNAVAILABLE_MESSAGE = (
 
 
 def _incident_map_point(ctx) -> tuple[float, float] | None:
-    """Approximate incident map point: reference-point projection, else camera location.
+    """Approximate incident map point for a CONFIRMED incident, or ``None``.
 
-    Mirrors the same fallback chain as ``_weather_for_incident`` — the
-    reference-point homography gives the more specific estimate; the camera
-    location is the fallback so the map still shows something before zones and
+    ``ctx`` is ``None`` before a hazard is confirmed — in that case this
+    returns ``None`` (no confirmed incident marker), never the camera
+    location, so a no-detection or not-yet-confirmed frame does not show a
+    stale hazard marker. Once ``ctx`` exists, the reference-point homography
+    gives the more specific estimate; the camera location is only the
+    fallback so a confirmed incident still shows something before zones and
     reference points are configured. Both are approximate, never precise.
     """
-    if ctx is not None and ctx.approximate_lat is not None and ctx.approximate_lon is not None:
+    if ctx is None:
+        return None
+    if ctx.approximate_lat is not None and ctx.approximate_lon is not None:
         return ctx.approximate_lat, ctx.approximate_lon
     cam = st.session_state.cc_camera
     lat, lon = cam.get("latitude"), cam.get("longitude")
@@ -2016,19 +2022,23 @@ def _incident_map_point(ctx) -> tuple[float, float] | None:
 def _render_incident_map(
     ctx, map_height: int = 380, preview_point: tuple[float, float] | None = None
 ) -> None:
-    """Render the incident map: camera marker, approximate incident point, downwind line.
+    """Render the incident map: camera marker, approximate incident point, downwind arrow.
 
-    ``ctx`` may be ``None`` (no confirmed hazard yet) — the map still shows the
-    camera location when available. All positions are approximate — never
-    precise geolocation. The downwind line, when wind direction is known,
-    points toward the downwind risk direction (wind-from bearing + 180°), not
-    the direction the wind blows from. ``map_height`` lets the M4 sequence view
-    stretch the map to match the frame + conversation column.
+    ``ctx`` may be ``None`` (no confirmed hazard yet) — the map then shows only
+    the camera location when available, and no incident/preview marker or
+    downwind arrow (see ``_incident_map_point``, which returns ``None`` rather
+    than falling back to the camera location while unconfirmed). All positions
+    are approximate — never precise geolocation. The downwind arrow, when wind
+    direction is known, points toward the downwind risk direction (wind-from
+    bearing + 180°), not the direction the wind blows from. ``map_height`` lets
+    the M4 sequence view stretch the map to match the frame + conversation
+    column.
 
     ``preview_point`` is an optional pre-confirmation marker for the current
     frame's detection (see ``_preview_map_point``) — used only when ``ctx`` is
     ``None`` (no confirmed incident point yet), and drawn with a distinct
-    "unconfirmed" marker instead of the confirmed fire icon.
+    "unconfirmed" marker instead of the confirmed fire icon. No downwind arrow
+    is drawn for a preview point — only a confirmed incident carries wind data.
     """
     try:
         import folium
@@ -2078,14 +2088,19 @@ def _render_incident_map(
         ).add_to(m)
         if ctx is not None and ctx.wind_direction_deg is not None:
             end = downwind_arrow_endpoint(incident_point[0], incident_point[1], ctx.wind_direction_deg)
+            bearing = downwind_bearing_deg(ctx.wind_direction_deg)
             tooltip = f"Downwind risk direction: {ctx.downwind_risk_direction}"
+            # Black shaft + a black triangular arrowhead rotated to the downwind
+            # bearing (folium's RegularPolygonMarker draws a 3-sided vector marker
+            # via the leaflet-dvf plugin) — an arrow, not a line with a colored dot.
             folium.PolyLine(
-                [list(incident_point), list(end)], color=_REF_MARKER, weight=3,
-                opacity=0.85, tooltip=tooltip,
+                [list(incident_point), list(end)], color="black", weight=3,
+                opacity=0.9, tooltip=tooltip,
             ).add_to(m)
-            folium.CircleMarker(
-                list(end), radius=4, color=_REF_MARKER, fill=True,
-                fill_color=_REF_MARKER, tooltip=tooltip,
+            folium.RegularPolygonMarker(
+                list(end), number_of_sides=3, rotation=bearing, radius=7,
+                color="black", weight=1, fill=True, fill_color="black",
+                fill_opacity=1.0, tooltip=tooltip,
             ).add_to(m)
 
     st_folium(m, key="cc_incident_map", height=map_height, use_container_width=True,

@@ -567,6 +567,18 @@ def estimate_horizon_y_norm(
     return y_norm, confidence
 
 
+def downwind_bearing_deg(wind_from_deg: float) -> float:
+    """Compass bearing (degrees clockwise from north) of the downwind risk direction.
+
+    Wind blowing *from* ``wind_from_deg`` carries risk *toward* the opposite
+    bearing (``wind_from_deg + 180``) — the same convention as
+    ``agent_schemas.downwind_direction`` and ``downwind_arrow_endpoint``. Kept
+    as a pure helper so a map marker can be rotated to this bearing without
+    duplicating the offset arithmetic.
+    """
+    return (wind_from_deg + 180.0) % 360.0
+
+
 def downwind_arrow_endpoint(
     lat: float,
     lon: float,
@@ -575,14 +587,13 @@ def downwind_arrow_endpoint(
 ) -> tuple[float, float]:
     """Return an approximate (lat, lon) endpoint pointing in the downwind risk direction.
 
-    Wind blowing *from* ``wind_from_deg`` carries risk *toward* the opposite
-    bearing (``wind_from_deg + 180``) — the same convention as
-    ``agent_schemas.downwind_direction``. ``distance_deg`` is a small fixed
-    offset for a visual map indicator only, not a distance or spread estimate.
+    ``distance_deg`` is a small fixed offset for a visual map indicator only,
+    not a distance or spread estimate. See :func:`downwind_bearing_deg` for
+    the bearing convention.
     """
     import math
 
-    bearing_rad = math.radians((wind_from_deg + 180.0) % 360.0)
+    bearing_rad = math.radians(downwind_bearing_deg(wind_from_deg))
     dlat = distance_deg * math.cos(bearing_rad)
     dlon = distance_deg * math.sin(bearing_rad) / max(math.cos(math.radians(lat)), 1e-6)
     return lat + dlat, lon + dlon
