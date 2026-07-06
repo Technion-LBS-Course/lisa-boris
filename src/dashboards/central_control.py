@@ -35,7 +35,7 @@ from src.mapping import (
     validate_zone_reference_point,
     zone_reference_point_norm,
 )
-from src import incident_agent, weather, zone_agent
+from src import incident_agent, tracking, weather, zone_agent
 from src.agent_schemas import (
     PRIORITY_LABELS,
     compass_label,
@@ -105,6 +105,11 @@ def _init_state() -> None:
         "cc_incident_detection": None,  # last YOLO run_detection result (overlay + boxes)
         "cc_incident_weather": None,  # Weather used for the current incident
         "cc_incident_chat": [],       # operator conversation [{role, content}]
+        "cc_incident_confirm_n": 3,   # N-frame confirmation window size (M4 sequence view)
+        "cc_incident_confirmed_idx": None,  # seq frame idx where the active incident was confirmed
+        "cc_seq_playing": False,      # demo sequence autoplay on/off
+        "cc_seq_frame_delay_ms": 700,  # autoplay delay between frames
+        "cc_seq_pending_seek": None,  # queued cc_seq_idx value, applied before the slider renders
         "cc_alert_log": [],           # created alert records (this session)
         "cc_risk_weather": None,      # last fetched Weather
         "cc_risk_advisory": None,     # last RiskAdvisory
@@ -398,8 +403,9 @@ def _store_sequence(frames: list[dict], drive_shared_frame: bool = True) -> None
         return
     st.session_state.cc_seq = frames
     st.session_state.cc_seq_idx = 0
+    st.session_state.cc_seq_playing = False
+    st.session_state.cc_incident_confirmed_idx = None  # a new sequence re-arms confirmation
     st.session_state.pop("cc_seq_det", None)  # drop cached per-frame detections
-    st.session_state.pop("cc_incident_seq_idx", None)  # re-assess incident on the new sequence
     if drive_shared_frame:
         # Central Control: the sequence drives the shared frame. M4 keeps them separate so a
         # loaded sequence never overwrites the Camera Metadata reference frame.
@@ -489,7 +495,8 @@ def _sequence_panel(drive_shared_frame: bool = True) -> None:
                 st.session_state.pop("cc_seq", None)
                 st.session_state.pop("cc_seq_idx", None)
                 st.session_state.pop("cc_seq_det", None)
-                st.session_state.pop("cc_incident_seq_idx", None)
+                st.session_state.cc_seq_playing = False
+                st.session_state.cc_incident_confirmed_idx = None
                 st.rerun()
 
         if n > 1:
@@ -1892,6 +1899,9 @@ def _reset_incident_state() -> None:
     st.session_state.cc_incident_detection = None
     st.session_state.cc_incident_weather = None
     st.session_state.cc_incident_chat = []
+    # Re-arm N-frame confirmation so a later positive window can raise a new
+    # incident (clearing/confirming/false-alarming all resolve the current one).
+    st.session_state.cc_incident_confirmed_idx = None
 
 
 def _clear_incident() -> None:
@@ -2003,7 +2013,9 @@ def _incident_map_point(ctx) -> tuple[float, float] | None:
     return None
 
 
-def _render_incident_map(ctx, map_height: int = 380) -> None:
+def _render_incident_map(
+    ctx, map_height: int = 380, preview_point: tuple[float, float] | None = None
+) -> None:
     """Render the incident map: camera marker, approximate incident point, downwind line.
 
     ``ctx`` may be ``None`` (no confirmed hazard yet) — the map still shows the
@@ -2012,6 +2024,11 @@ def _render_incident_map(ctx, map_height: int = 380) -> None:
     points toward the downwind risk direction (wind-from bearing + 180°), not
     the direction the wind blows from. ``map_height`` lets the M4 sequence view
     stretch the map to match the frame + conversation column.
+
+    ``preview_point`` is an optional pre-confirmation marker for the current
+    frame's detection (see ``_preview_map_point``) — used only when ``ctx`` is
+    ``None`` (no confirmed incident point yet), and drawn with a distinct
+    "unconfirmed" marker instead of the confirmed fire icon.
     """
     try:
         import folium
@@ -2024,6 +2041,9 @@ def _render_incident_map(ctx, map_height: int = 380) -> None:
     cam_lat, cam_lon = cam.get("latitude"), cam.get("longitude")
     has_camera = cam_lat is not None and cam_lon is not None
     incident_point = _incident_map_point(ctx)
+    is_preview = incident_point is None and preview_point is not None
+    if is_preview:
+        incident_point = preview_point
 
     n_refs = len([p for p in st.session_state.cc_reference_points if p.get("enabled", True)])
     status_bits = [f"Reference points: {n_refs} / 4 enabled"]
@@ -2044,7 +2064,13 @@ def _render_incident_map(ctx, map_height: int = 380) -> None:
             popup="Camera (approximate)",
         ).add_to(m)
 
-    if incident_point is not None:
+    if incident_point is not None and is_preview:
+        folium.Marker(
+            list(incident_point),
+            icon=folium.Icon(color="beige", icon="exclamation-triangle", prefix="fa"),
+            popup="Detection observed — unconfirmed",
+        ).add_to(m)
+    elif incident_point is not None:
         folium.Marker(
             list(incident_point),
             icon=folium.Icon(color="orange", icon="fire", prefix="fa"),
@@ -2206,11 +2232,13 @@ def _detect_frame_bytes(img_bytes) -> dict | None:
 
 
 def _get_sequence_detection() -> dict | None:
-    """Compute (and cache) the YOLO detection for the current sequence frame.
+    """Compute (and cache) the YOLO detection for the current sequence frame only.
 
-    Also auto-assesses the incident from the top hazard detection so the incident
-    context stays in sync with the slider. Returns the cached ``run_detection``
-    result, or ``None`` when the sequence is empty or no checkpoint is available.
+    Returns the cached ``run_detection`` result, or ``None`` when the sequence
+    is empty or no checkpoint is available. Kept as a simple cache-fetch for
+    ``_render_sequence_detection``; the N-frame confirmation pipeline used by
+    the Incident Assistant sequence view lives in
+    ``_process_current_sequence_frame``.
     """
     from src import inference
 
@@ -2229,7 +2257,6 @@ def _get_sequence_detection() -> dict | None:
         if det is None:
             return None
         cache[idx] = det
-    _auto_assess_sequence_frame(cache[idx])
     return cache[idx]
 
 
@@ -2242,30 +2269,227 @@ def _render_sequence_detection() -> None:
     _render_detection_overlay(det)
 
 
-def _auto_assess_sequence_frame(det: dict) -> None:
-    """Build (or clear) the incident from the selected sequence frame automatically.
+# ── N-frame confirmation with one-miss tolerance (M4 sequence playback) ───────
 
-    Lets the incident summary, conversation and recommendations update when the
-    slider moves — no button press. Guarded by the frame index so each frame is
-    assessed once (the assess/clear both st.rerun(), so the guard stops a loop).
+
+def _ensure_window_detections(idx: int, required_frames: int) -> list[dict | None]:
+    """Return cached detections for the trailing confirmation window, computing gaps.
+
+    The window is ``[idx - required_frames, idx]`` (at most ``required_frames +
+    1`` frames). Frames already in ``cc_seq_det`` are reused untouched — never
+    re-run. Frames inside this small, bounded window that are NOT yet cached
+    (e.g. the operator dragged the slider past them) are computed once and
+    cached, so confirmation stays correct even without visiting every frame in
+    order; frames outside the window are left alone.
+    """
+    seq = st.session_state.get("cc_seq") or []
+    cache = st.session_state.setdefault("cc_seq_det", {})
+    start = max(0, idx - required_frames)
+    results: list[dict | None] = []
+    for i in range(start, idx + 1):
+        if i not in cache:
+            det_i = _detect_frame_bytes(seq[i]["bytes"])
+            if det_i is not None:
+                cache[i] = det_i
+        results.append(cache.get(i))
+    return results
+
+
+def _build_confirmed_incident(window_results: list[dict | None]) -> None:
+    """Build the incident context from the confirmation window's fire-priority pick.
+
+    Fire always outranks smoke: if the current (most recent) frame has fire,
+    its own detection anchors the incident; otherwise, if any earlier frame in
+    the window has fire, the most recent such detection anchors it instead;
+    only when no frame in the window has fire does the current frame's smoke
+    detection anchor the incident. See
+    ``src.inference.select_confirmed_event_detection``.
     """
     from src import inference
 
-    idx = st.session_state.get("cc_seq_idx", 0)
-    if st.session_state.get("cc_incident_seq_idx") == idx:
+    focus = inference.select_confirmed_event_detection(window_results)
+    if focus is None:
         return
-    st.session_state.cc_incident_seq_idx = idx
-    st.session_state.cc_incident_detection = det
-    top = inference.top_hazard_detection(det)
-    if top is None:
-        # No hazard in this frame — clear any prior incident so the panel reflects it.
-        st.session_state.cc_incident_ctx = None
-        st.session_state.cc_incident_chat = []
-        st.session_state.cc_incident_weather = None
-        return
-    anchor = inference.bbox_bottom_center_norm(top["bbox_norm"])
+    anchor = inference.bbox_bottom_center_norm(focus["bbox_norm"])
     # rerun=False: we are mid-render, and a programmatic rerun would reset the tab.
-    _assess_incident(top["class"], float(top["confidence"]), anchor, None, rerun=False)
+    _assess_incident(focus["class"], float(focus["confidence"]), anchor, None, rerun=False)
+
+
+def _maybe_build_confirmed_incident(idx: int, confirmed: bool, window_results: list[dict | None]) -> None:
+    """Build the incident exactly once per confirmed event; never spam-create.
+
+    Guarded by ``cc_incident_confirmed_idx``: once an incident is built, later
+    frames — even further positive ones during autoplay — do not raise a new
+    one. Clearing the incident, confirming it, or marking it a false alarm all
+    reset the guard (see ``_reset_incident_state``), re-arming confirmation.
+    """
+    if not confirmed or st.session_state.cc_incident_confirmed_idx is not None:
+        return
+    _build_confirmed_incident(window_results)
+    st.session_state.cc_incident_confirmed_idx = idx
+
+
+def _process_current_sequence_frame(required_frames: int):
+    """Run the N-frame confirmation pipeline for the current sequence frame.
+
+    Returns ``(det, current_top, confirmed, positive_count, window_len)``:
+    ``det`` is the current frame's ``run_detection`` result (``None`` if no
+    checkpoint or empty sequence); ``current_top`` is the current frame's own
+    top hazard detection (``None`` if none); ``confirmed`` is whether the
+    trailing window satisfies N-of-(N+1) with one-miss tolerance; a confirmed
+    incident is built at most once per event as a side effect.
+    """
+    from src import inference
+
+    seq = st.session_state.get("cc_seq") or []
+    if not seq:
+        return None, None, False, 0, 0
+    if not (inference.checkpoint_exists("YOLO11s") or inference.checkpoint_exists("YOLO11n")):
+        st.info(inference.MISSING_YOLO11S_MESSAGE)
+        return None, None, False, 0, 0
+
+    idx = min(st.session_state.get("cc_seq_idx", 0), len(seq) - 1)
+    window_results = _ensure_window_detections(idx, required_frames)
+    det = window_results[-1]
+    if det is None:
+        return None, None, False, 0, 0
+
+    history_bools = [
+        (inference.top_hazard_detection(r) is not None) if r else False
+        for r in window_results
+    ]
+    confirmed = tracking.is_confirmed_with_tolerance(history_bools, required_frames)
+    current_top = inference.top_hazard_detection(det)
+    _maybe_build_confirmed_incident(idx, confirmed, window_results)
+    return det, current_top, confirmed, sum(history_bools), len(history_bools)
+
+
+def _preview_map_point(current_top: dict | None) -> tuple[float, float] | None:
+    """Approximate map point for a NOT-YET-CONFIRMED detection (live preview only).
+
+    Priority: the matched zone's reference point when the matched zone has
+    one; otherwise the existing detection-anchor projection (same helper the
+    confirmed incident falls back to when no zone matches). Unlike the
+    confirmed incident's stricter rule — which reports a matched zone without a
+    reference point as having NO map point rather than inventing one — this
+    live preview is allowed to fall back to the detection anchor in that case,
+    since it is only a transient indicator, never the recorded incident
+    location. Returns ``None`` when reference points are insufficient.
+    """
+    if current_top is None:
+        return None
+    from src import inference
+
+    anchor = inference.bbox_bottom_center_norm(current_top["bbox_norm"])
+    refs = st.session_state.cc_reference_points
+    for zone in st.session_state.cc_image_zones:
+        if not zone.get("enabled", True):
+            continue
+        vertices_norm = zone.get("vertices_norm", [])
+        if len(vertices_norm) >= 3 and point_in_polygon(anchor[0], anchor[1], vertices_norm):
+            zone_ref = zone_reference_point_norm(zone)
+            if zone_ref is not None:
+                return estimate_map_position(refs, zone_ref)
+            break  # zone matched but has no reference point -> fall back to the anchor
+    return estimate_map_position(refs, anchor)
+
+
+def _render_pending_incident_status(
+    current_top: dict | None, required_frames: int, positive_count: int, window_len: int
+) -> None:
+    """Compact waiting-state shown before a confirmed incident exists.
+
+    No chat assistant is active yet — just a calm status line reflecting the
+    current frame and the N-frame confirmation progress.
+    """
+    st.markdown("**Incident conversation**")
+    if current_top is None:
+        st.caption("No fire/smoke detection in this frame.")
+        return
+    st.caption(
+        f"Detection observed — waiting for {required_frames}-frame confirmation "
+        f"({positive_count} of last {window_len} frame(s) positive)."
+    )
+
+
+def _apply_pending_seq_seek() -> None:
+    """Apply a queued frame seek before the sequence slider widget renders.
+
+    ``cc_seq_idx`` is bound to the sequence slider's widget key inside
+    ``_sequence_panel``, so it can only be mutated BEFORE that widget is
+    instantiated in a given script run — Streamlit raises a
+    ``StreamlitAPIException`` if it is written afterward. Playback ("Stop", and
+    the autoplay advance) therefore never writes ``cc_seq_idx`` directly;
+    instead it queues the target index here via ``cc_seq_pending_seek``, and
+    this function applies it at the top of the run, before ``_sequence_panel()``
+    creates the slider (mirrors how the existing Prev/Next buttons already
+    mutate ``cc_seq_idx`` before that same widget renders).
+    """
+    pending = st.session_state.get("cc_seq_pending_seek")
+    if pending is None:
+        return
+    st.session_state.cc_seq_pending_seek = None
+    seq = st.session_state.get("cc_seq") or []
+    if seq:
+        st.session_state.cc_seq_idx = max(0, min(pending, len(seq) - 1))
+
+
+def _playback_controls(n_frames: int) -> None:
+    """Play / Pause / Stop controls and a speed slider for the loaded demo sequence.
+
+    Streamlit-only autoplay: while ``cc_seq_playing`` is True, the frame index
+    is advanced and the script reruns after a short, bounded delay (see
+    ``_advance_playback_if_needed``) — no threads, async schedulers, or other
+    background work. Playback stops automatically at the last frame.
+    """
+    playing = st.session_state.cc_seq_playing
+    b1, b2, b3, b4 = st.columns([1, 1, 1, 2])
+    with b1:
+        if st.button("▶ Play", key="cc_seq_play", use_container_width=True,
+                     disabled=playing or st.session_state.cc_seq_idx >= n_frames - 1):
+            st.session_state.cc_seq_playing = True
+            st.rerun()
+    with b2:
+        if st.button("⏸ Pause", key="cc_seq_pause", use_container_width=True, disabled=not playing):
+            st.session_state.cc_seq_playing = False
+            st.rerun()
+    with b3:
+        if st.button("⏹ Stop", key="cc_seq_stop", use_container_width=True):
+            st.session_state.cc_seq_playing = False
+            # Queued (not written directly) — the slider already rendered this run.
+            st.session_state.cc_seq_pending_seek = 0
+            st.rerun()
+    with b4:
+        st.slider(
+            "Playback speed (ms/frame)", min_value=150, max_value=2000, step=50,
+            key="cc_seq_frame_delay_ms",
+            help="Delay between automatically advanced frames while playing.",
+        )
+    if playing:
+        st.caption(f"Playing — frame {st.session_state.cc_seq_idx + 1} / {n_frames}.")
+
+
+def _advance_playback_if_needed(n_frames: int) -> None:
+    """Queue one frame advance and rerun while playing; stop automatically at the end.
+
+    Queues the next index via ``cc_seq_pending_seek`` rather than writing
+    ``cc_seq_idx`` directly — the sequence slider's widget already claimed that
+    key earlier in this run (see ``_apply_pending_seq_seek``). A single bounded
+    ``time.sleep()`` per rerun — not a background thread, an async scheduler,
+    or an unbounded loop — is the standard Streamlit idiom for demo-only
+    autoplay: the delay is capped by the speed slider (<= 2s) and this function
+    returns immediately when not playing.
+    """
+    if not st.session_state.cc_seq_playing:
+        return
+    if st.session_state.cc_seq_idx >= n_frames - 1:
+        st.session_state.cc_seq_playing = False  # reached the end — stop automatically
+        return
+    import time
+
+    time.sleep(st.session_state.cc_seq_frame_delay_ms / 1000.0)
+    st.session_state.cc_seq_pending_seek = st.session_state.cc_seq_idx + 1
+    st.rerun()
 
 
 def _tab_incident_assistant(
@@ -2284,6 +2508,9 @@ def _tab_incident_assistant(
         )
 
     if sequence_view:
+        # Apply any queued autoplay/Stop seek BEFORE _sequence_panel() creates the
+        # slider widget bound to cc_seq_idx — see _apply_pending_seq_seek().
+        _apply_pending_seq_seek()
         # drive_shared_frame=False: the incident slider drives only the incident's own
         # detection, not the shared frame Image Zones / Camera Metadata draw on.
         _sequence_panel(drive_shared_frame=False)
@@ -2291,6 +2518,7 @@ def _tab_incident_assistant(
     # Compute after _sequence_panel() so a sequence loaded during this same run counts —
     # otherwise the run button and a stale overlay flash until the next interaction.
     seq_active = sequence_view and bool(st.session_state.get("cc_seq"))
+    n_frames = len(st.session_state.get("cc_seq") or [])
 
     if not st.session_state.cc_camera.get("camera_id", "").strip():
         st.info("Set a Camera ID in the Camera Metadata tab so alerts are attributable.")
@@ -2298,14 +2526,29 @@ def _tab_incident_assistant(
     if seq_active:
         # Three visual areas: a taller map on the left, the selected/annotated
         # frame on the right-top, and the incident conversation on the right-bottom.
-        det = _get_sequence_detection()
+        cfg1, cfg2 = st.columns([1, 2])
+        with cfg1:
+            required_frames = st.number_input(
+                "Confirmation frames (N)", min_value=1, max_value=10,
+                value=int(st.session_state.get("cc_incident_confirm_n", 3)), step=1,
+                key="cc_incident_confirm_n",
+                help="Confirms once at least N of the last N+1 frames — including the "
+                     "current one — contain fire or smoke (tolerates one missed frame).",
+            )
+        with cfg2:
+            _playback_controls(n_frames)
+
+        det, current_top, confirmed, positive_count, window_len = _process_current_sequence_frame(
+            int(required_frames)
+        )
         ctx = st.session_state.cc_incident_ctx
 
         left_col, right_col = st.columns([1.15, 1])
         with left_col:
             st.markdown("**Incident map**")
+            preview_point = _preview_map_point(current_top) if ctx is None else None
             # Taller map so it visually spans the frame + conversation column.
-            _render_incident_map(ctx, map_height=720)
+            _render_incident_map(ctx, map_height=720, preview_point=preview_point)
         with right_col:
             st.markdown("**Selected frame**")
             if det is not None:
@@ -2316,11 +2559,7 @@ def _tab_incident_assistant(
             if ctx is not None:
                 _render_incident_conversation()
             else:
-                st.markdown("**Incident conversation**")
-                st.caption(
-                    "No confirmed hazard in this frame — the conversation opens once "
-                    "fire or smoke is detected."
-                )
+                _render_pending_incident_status(current_top, int(required_frames), positive_count, window_len)
     else:
         # Single-frame flow (Central Control, and M4 before a sequence is loaded).
         st.markdown("**1 · Detect fire/smoke on the current frame**")
@@ -2362,6 +2601,11 @@ def _tab_incident_assistant(
 
     st.markdown("---")
     _render_alert_log()
+
+    if seq_active:
+        # Advance after everything above has rendered, so the operator sees the
+        # full current state (map, frame, chat, alert log) before the next tick.
+        _advance_playback_if_needed(n_frames)
 
 
 # ── Tab: Risk Advisory ────────────────────────────────────────────────────────

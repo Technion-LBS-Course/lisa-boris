@@ -132,3 +132,58 @@ def test_bbox_bottom_center_norm_anchor_and_clamp():
     # anchor clamps to the frame
     _, y2 = inference.bbox_bottom_center_norm([0.5, 0.95, 0.2, 0.4])
     assert y2 == pytest.approx(1.0)
+
+
+# ── select_confirmed_event_detection (fire priority across a frame window) ────
+
+
+def _res(*classes_and_conf):
+    """Build a run_detection-shaped result from (class, confidence) pairs."""
+    return {"detections": [
+        {"class": cls, "confidence": conf, "bbox_norm": [0.5, 0.5, 0.1, 0.1]}
+        for cls, conf in classes_and_conf
+    ]}
+
+
+def test_select_confirmed_event_prefers_current_frame_fire():
+    window = [_res(("smoke", 0.9)), _res(("fire", 0.4))]
+    focus = inference.select_confirmed_event_detection(window)
+    assert focus["class"] == "fire"
+    assert focus["confidence"] == 0.4
+
+
+def test_select_confirmed_event_falls_back_to_earlier_fire_when_current_is_smoke():
+    window = [_res(("fire", 0.6)), _res(("smoke", 0.9))]
+    focus = inference.select_confirmed_event_detection(window)
+    assert focus["class"] == "fire"
+    assert focus["confidence"] == 0.6
+
+
+def test_select_confirmed_event_uses_most_recent_fire_in_window():
+    window = [_res(("fire", 0.3)), _res(("fire", 0.5)), _res(("smoke", 0.9))]
+    focus = inference.select_confirmed_event_detection(window)
+    assert focus["class"] == "fire"
+    assert focus["confidence"] == 0.5  # the more recent of the two fire frames
+
+
+def test_select_confirmed_event_uses_current_smoke_when_no_fire_anywhere():
+    window = [_res(("smoke", 0.5)), _res(("smoke", 0.8))]
+    focus = inference.select_confirmed_event_detection(window)
+    assert focus["class"] == "smoke"
+    assert focus["confidence"] == 0.8
+
+
+def test_select_confirmed_event_skips_none_entries():
+    window = [None, _res(("fire", 0.7)), None, _res(("smoke", 0.9))]
+    focus = inference.select_confirmed_event_detection(window)
+    assert focus["class"] == "fire"
+    assert focus["confidence"] == 0.7
+
+
+def test_select_confirmed_event_none_when_no_detections_in_window():
+    window = [_res(), _res()]
+    assert inference.select_confirmed_event_detection(window) is None
+
+
+def test_select_confirmed_event_empty_window():
+    assert inference.select_confirmed_event_detection([]) is None

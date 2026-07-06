@@ -216,6 +216,36 @@ def top_hazard_detection(result: dict) -> dict | None:
     return max(pool, key=lambda d: d.get("confidence", 0.0))
 
 
+def select_confirmed_event_detection(window_results: list[dict | None]) -> dict | None:
+    """Pick the incident-focus detection across an N-frame confirmation window.
+
+    ``window_results`` holds per-frame ``run_detection`` results ordered oldest
+    to newest, current frame last; an entry is ``None`` when that frame's
+    detection was never computed. Fire always outranks smoke, extending
+    :func:`top_hazard_detection`'s single-frame rule across the window: the
+    current frame's own fire detection wins when present; otherwise the most
+    recent fire detection from an earlier frame in the window wins; only when
+    no frame in the window has fire does the current frame's smoke detection
+    (or ``None``, if the current frame has no detections) win. This never
+    weakens the single-frame fire-first rule in :func:`top_hazard_detection` —
+    it only extends the same priority across multiple frames. Pure — testable
+    without a loaded model.
+    """
+    if not window_results:
+        return None
+    current = window_results[-1]
+    current_top = top_hazard_detection(current) if current else None
+    if current_top is not None and current_top.get("class") == "fire":
+        return current_top
+    for result in reversed(window_results[:-1]):
+        if result is None:
+            continue
+        top = top_hazard_detection(result)
+        if top is not None and top.get("class") == "fire":
+            return top
+    return current_top
+
+
 def bbox_bottom_center_norm(bbox_norm) -> tuple[float, float]:
     """Return the bottom-center anchor (x, y) in [0,1] for a normalized xywh box.
 
