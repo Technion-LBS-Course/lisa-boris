@@ -25,11 +25,21 @@ CAMERA = {
     "latitude": 31.7396, "longitude": 35.1883,
 }
 
-# A drawn, enabled, high-priority forest-edge zone covering the image centre.
+# A drawn, enabled, high-priority forest-edge zone covering the image centre,
+# with an operator-set zone reference point (the map-reporting point).
 CENTER_ZONE = {
     "zone_name": "East Grove", "alert_label": "East Grove", "zone_type": "forest_edge",
     "priority_label": "high", "priority": 9, "enabled": True,
     "vertices_norm": [(0.4, 0.4), (0.6, 0.4), (0.6, 0.6), (0.4, 0.6)],
+    "zone_ref_point_px": [320, 240],
+    "zone_ref_point_norm": [0.5, 0.5],
+}
+
+# The same zone without a zone reference point — matched by name, but it must
+# never get an invented map point.
+CENTER_ZONE_NO_REF = {
+    k: v for k, v in CENTER_ZONE.items()
+    if k not in ("zone_ref_point_px", "zone_ref_point_norm")
 }
 
 # Wind from the W (270°) -> downwind toward the E.
@@ -86,9 +96,58 @@ def test_context_quadrant_fallback_when_no_zone():
 def test_context_estimated_map_point_no_geolocation_disclaimer():
     ctx = _ctx(refs=_square_reference_points())
     assert ctx.approximate_lat == pytest.approx(1.0, abs=1e-6)
-    assert "estimated location" in ctx.location_text.lower()
+    assert "approximate map point from zone reference point" in ctx.location_text
     assert "not precise geolocation" not in ctx.location_text.lower()
     assert "image-space" not in ctx.location_text.lower()
+
+
+def test_context_uses_matched_zone_reference_point_not_detection_anchor():
+    # Zone ref point (0.25, 0.25) projects to (0.5, 0.5); the detection point
+    # (0.5, 0.5) would project to (1.0, 1.0). The zone reference point must win.
+    zone = {**CENTER_ZONE, "zone_ref_point_norm": [0.25, 0.25], "zone_ref_point_px": [160, 120]}
+    ctx = _ctx(zones=(zone,), refs=_square_reference_points(), centroid=(0.5, 0.5))
+    assert ctx.matched_zone == "East Grove"
+    assert ctx.approximate_lat == pytest.approx(0.5, abs=1e-6)
+    assert ctx.approximate_lon == pytest.approx(0.5, abs=1e-6)
+    assert ctx.map_point_source == "zone_reference_point"
+    assert "approximate map point from zone reference point" in ctx.location_text
+
+
+def test_context_matched_zone_without_ref_point_has_no_map_point():
+    ctx = _ctx(zones=(CENTER_ZONE_NO_REF,), refs=_square_reference_points())
+    assert ctx.matched_zone == "East Grove"
+    # No invented map point — not even a detection-anchor projection.
+    assert ctx.approximate_lat is None and ctx.approximate_lon is None
+    assert ctx.map_point_source is None
+    assert "zone reference point not set" in ctx.location_text
+    rows = dict(ctx.display_rows())
+    assert "reference point" in rows.get("Estimated map point", "")
+
+
+def test_context_detection_anchor_fallback_when_no_zone_matched():
+    ctx = _ctx(zones=(), refs=_square_reference_points(), centroid=(0.5, 0.5))
+    assert ctx.matched_zone is None
+    assert ctx.approximate_lat == pytest.approx(1.0, abs=1e-6)
+    assert ctx.map_point_source == "detection_anchor"
+    assert "estimated location" in ctx.location_text.lower()
+
+
+def test_context_quadrant_fallback_when_no_zone_and_no_refs():
+    ctx = _ctx(zones=(), refs=[], centroid=(0.9, 0.9))
+    assert ctx.approximate_lat is None
+    assert ctx.map_point_source is None
+    assert "lower-right" in ctx.location_text
+    assert "camera-frame location" in ctx.location_text
+
+
+def test_context_matched_zone_with_ref_point_but_too_few_refs():
+    # Ref point exists but the homography needs >= 4 reference points — the zone
+    # name is kept and no map point is invented.
+    ctx = _ctx(refs=_square_reference_points()[:3])
+    assert ctx.matched_zone == "East Grove"
+    assert ctx.approximate_lat is None
+    assert ctx.map_point_source is None
+    assert "camera-frame location" in ctx.location_text
 
 
 def test_context_weather_fields_and_downwind():

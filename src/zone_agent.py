@@ -345,6 +345,9 @@ def build_zone_table_entry(
         "notes": op_zone.get("notes", ""),
         "vertices_px": verts_px,
         "vertices_norm": verts_norm,
+        # Map-reporting point inside the image — set later while drawing the polygon.
+        "zone_ref_point_px": None,
+        "zone_ref_point_norm": None,
         "polygon_status": POLYGON_DRAWN if drawn else POLYGON_PENDING,
         "enabled": True,
     }

@@ -14,6 +14,7 @@ from src.mapping import (
     estimate_horizon_y_norm,
     estimate_map_position,
     find_zone_for_detection,
+    generate_zone_map_estimates,
     normalize_image_point,
     normalize_polygon_vertices,
     point_in_polygon,
@@ -21,6 +22,8 @@ from src.mapping import (
     validate_camera_metadata,
     validate_image_polygon,
     validate_reference_point,
+    validate_zone_reference_point,
+    zone_reference_point_norm,
 )
 
 
@@ -548,6 +551,141 @@ def test_estimate_map_position_ignores_disabled():
     pts = _square_reference_points()
     pts[0]["enabled"] = False  # only 3 usable -> not enough
     assert estimate_map_position(pts, (0.5, 0.5)) is None
+
+
+# ── zone_reference_point_norm ─────────────────────────────────────────────────
+
+
+def test_zone_reference_point_norm_valid():
+    zone = {"zone_ref_point_norm": [0.25, 0.75]}
+    assert zone_reference_point_norm(zone) == pytest.approx((0.25, 0.75))
+
+
+def test_zone_reference_point_norm_missing_or_none():
+    assert zone_reference_point_norm({}) is None
+    assert zone_reference_point_norm({"zone_ref_point_norm": None}) is None
+
+
+def test_zone_reference_point_norm_out_of_range():
+    assert zone_reference_point_norm({"zone_ref_point_norm": [1.5, 0.5]}) is None
+    assert zone_reference_point_norm({"zone_ref_point_norm": [0.5, -0.1]}) is None
+
+
+def test_zone_reference_point_norm_malformed():
+    assert zone_reference_point_norm({"zone_ref_point_norm": [0.5]}) is None
+    assert zone_reference_point_norm({"zone_ref_point_norm": "0.5,0.5"}) is None
+    assert zone_reference_point_norm({"zone_ref_point_norm": ["a", "b"]}) is None
+
+
+# ── validate_zone_reference_point ─────────────────────────────────────────────
+
+
+SQUARE_NORM = [(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9)]
+
+
+def test_validate_zone_ref_ok_inside_polygon():
+    zone = {
+        "zone_ref_point_px": [320, 240],
+        "zone_ref_point_norm": [0.5, 0.5],
+        "vertices_norm": SQUARE_NORM,
+    }
+    assert validate_zone_reference_point(zone, 640, 480) == []
+
+
+def test_validate_zone_ref_missing_reports_not_set():
+    errors = validate_zone_reference_point({"vertices_norm": SQUARE_NORM}, 640, 480)
+    assert any("not set" in e for e in errors)
+
+
+def test_validate_zone_ref_outside_image_bounds():
+    zone = {
+        "zone_ref_point_px": [700, 240],
+        "zone_ref_point_norm": [0.5, 0.5],
+        "vertices_norm": SQUARE_NORM,
+    }
+    errors = validate_zone_reference_point(zone, 640, 480)
+    assert any("image bounds" in e for e in errors)
+
+
+def test_validate_zone_ref_outside_polygon_reuses_point_in_polygon():
+    zone = {
+        "zone_ref_point_px": [32, 24],
+        "zone_ref_point_norm": [0.05, 0.05],
+        "vertices_norm": SQUARE_NORM,
+    }
+    errors = validate_zone_reference_point(zone, 640, 480)
+    assert any("outside the zone polygon" in e for e in errors)
+    # Consistency with the reused point_in_polygon helper.
+    assert point_in_polygon(0.05, 0.05, SQUARE_NORM) is False
+
+
+def test_validate_zone_ref_skips_polygon_check_under_3_vertices():
+    zone = {
+        "zone_ref_point_px": [32, 24],
+        "zone_ref_point_norm": [0.05, 0.05],
+        "vertices_norm": SQUARE_NORM[:2],
+    }
+    assert validate_zone_reference_point(zone, 640, 480) == []
+
+
+def test_validate_zone_ref_invalid_norm_coordinates():
+    zone = {"zone_ref_point_px": [320, 240], "zone_ref_point_norm": [2.0, 0.5]}
+    errors = validate_zone_reference_point(zone, 640, 480)
+    assert any("invalid" in e.lower() for e in errors)
+
+
+# ── generate_zone_map_estimates ───────────────────────────────────────────────
+
+
+def test_generate_zone_map_estimates_uses_ref_point_not_centroid():
+    refs = _square_reference_points()  # lat = 2*y_norm, lon = 2*x_norm
+    zone = {
+        "zone_id": "z1", "zone_name": "Tree Area", "enabled": True,
+        # The polygon centroid is (0.5, 0.5) → would project to (1.0, 1.0). The
+        # reference point is deliberately elsewhere to prove it is what's projected.
+        "vertices_norm": SQUARE_NORM,
+        "zone_ref_point_norm": [0.25, 0.25],
+    }
+    estimates, skipped = generate_zone_map_estimates([zone], refs)
+    assert skipped == 0
+    assert len(estimates) == 1
+    est = estimates[0]
+    assert est["zone_id"] == "z1"
+    assert est["zone_name"] == "Tree Area"
+    assert est["projection_source"] == "zone_reference_point"
+    assert est["zone_ref_point_norm"] == pytest.approx([0.25, 0.25])
+    assert est["est_lat"] == pytest.approx(0.5, abs=1e-6)  # ref point, not centroid (1.0)
+    assert est["est_lon"] == pytest.approx(0.5, abs=1e-6)
+    assert "vertices_latlon" not in est
+
+
+def test_generate_zone_map_estimates_skips_zone_without_ref_point():
+    refs = _square_reference_points()
+    zones = [
+        {"zone_id": "z1", "zone_name": "A", "enabled": True, "vertices_norm": SQUARE_NORM},
+        {"zone_id": "z2", "zone_name": "B", "enabled": True, "zone_ref_point_norm": [0.5, 0.5]},
+    ]
+    estimates, skipped = generate_zone_map_estimates(zones, refs)
+    assert skipped == 1
+    assert [e["zone_id"] for e in estimates] == ["z2"]
+
+
+def test_generate_zone_map_estimates_ignores_disabled_zones():
+    refs = _square_reference_points()
+    zones = [{"zone_id": "z1", "zone_name": "A", "enabled": False,
+              "zone_ref_point_norm": [0.5, 0.5]}]
+    estimates, skipped = generate_zone_map_estimates(zones, refs)
+    assert estimates == []
+    assert skipped == 0
+
+
+def test_generate_zone_map_estimates_too_few_reference_points():
+    refs = _square_reference_points()[:3]
+    zones = [{"zone_id": "z1", "zone_name": "A", "enabled": True,
+              "zone_ref_point_norm": [0.5, 0.5]}]
+    estimates, skipped = generate_zone_map_estimates(zones, refs)
+    assert estimates == []
+    assert skipped == 1
 
 
 # ── polygon_centroid_norm ─────────────────────────────────────────────────────

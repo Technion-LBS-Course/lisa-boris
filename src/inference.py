@@ -199,15 +199,21 @@ def run_detection(model, pil_image, conf: float = 0.25, imgsz: int = 640) -> dic
 
 
 def top_hazard_detection(result: dict) -> dict | None:
-    """Return the highest-confidence fire/smoke detection from a ``run_detection`` result.
+    """Return the event-focus fire/smoke detection from a ``run_detection`` result.
 
-    Returns ``None`` when the result carries no fire/smoke detections. Pure — takes
-    the result dict, so it is testable without loading a model.
+    Selection priority: fire is always the event focus when present, regardless
+    of confidence, since a fire is more urgent than smoke; ties within a class
+    are broken by highest confidence. Smoke is only selected when no fire
+    detection exists in the frame. Returns ``None`` when the result carries no
+    fire/smoke detections. Pure — takes the result dict, so it is testable
+    without loading a model.
     """
     detections = result.get("detections") or []
     if not detections:
         return None
-    return max(detections, key=lambda d: d.get("confidence", 0.0))
+    fires = [d for d in detections if d.get("class") == "fire"]
+    pool = fires or detections
+    return max(pool, key=lambda d: d.get("confidence", 0.0))
 
 
 def bbox_bottom_center_norm(bbox_norm) -> tuple[float, float]:

@@ -420,6 +420,97 @@ def polygon_centroid_norm(
     return sx / n, sy / n
 
 
+# ── Zone reference point (per-zone map-reporting point) ───────────────────────
+#
+# Each image zone may carry ONE operator-defined reference point inside the
+# image. The polygon defines image-space zone membership only; the reference
+# point is the single point projected to the map when a detection falls inside
+# the zone. The polygon itself is never projected or stretched onto the map.
+# All outputs remain approximate — never precise geolocation.
+
+
+def zone_reference_point_norm(zone: dict) -> tuple[float, float] | None:
+    """Return the zone's normalized reference point (x, y), or ``None`` if unset/invalid."""
+    pt = zone.get("zone_ref_point_norm")
+    if not isinstance(pt, (list, tuple)) or len(pt) != 2:
+        return None
+    try:
+        x, y = float(pt[0]), float(pt[1])
+    except (TypeError, ValueError):
+        return None
+    if not (0.0 <= x <= 1.0 and 0.0 <= y <= 1.0):
+        return None
+    return x, y
+
+
+def validate_zone_reference_point(
+    zone: dict,
+    image_width: int,
+    image_height: int,
+) -> list[str]:
+    """Return issues with a zone's reference point (empty list = fully map-ready).
+
+    Reported issues: the point is missing, it lies outside the image bounds, or —
+    when the polygon has at least 3 vertices — it lies outside the polygon.
+    Callers treat these as warnings: a zone with issues is kept, never dropped.
+    """
+    pt_norm = zone_reference_point_norm(zone)
+    if zone.get("zone_ref_point_px") is None and zone.get("zone_ref_point_norm") is None:
+        return ["Zone reference point is not set — the zone has no map-reporting point."]
+    if pt_norm is None:
+        return ["Zone reference point coordinates are invalid or outside the image."]
+
+    errors: list[str] = []
+    pt_px = zone.get("zone_ref_point_px")
+    if pt_px is not None:
+        try:
+            x, y = float(pt_px[0]), float(pt_px[1])
+            if not (0 <= x <= image_width and 0 <= y <= image_height):
+                errors.append("Zone reference point is outside the image bounds.")
+        except (TypeError, ValueError, IndexError):
+            errors.append("Zone reference point pixel coordinates are invalid.")
+
+    vertices_norm = [tuple(v) for v in zone.get("vertices_norm", [])]
+    if len(vertices_norm) >= 3 and not point_in_polygon(pt_norm[0], pt_norm[1], vertices_norm):
+        errors.append("Zone reference point is outside the zone polygon.")
+    return errors
+
+
+def generate_zone_map_estimates(
+    image_zones: list[dict],
+    reference_points: list[dict],
+) -> tuple[list[dict], int]:
+    """Project each enabled zone's reference point to an approximate map point.
+
+    Only ``zone_ref_point_norm`` is projected through the reference-point
+    homography — polygon vertices and centroids are never projected onto the
+    map. Returns ``(estimates, skipped)`` where ``skipped`` counts enabled zones
+    without a usable zone reference point (or whose projection failed).
+    """
+    estimates: list[dict] = []
+    skipped = 0
+    for zone in image_zones:
+        if not zone.get("enabled", True):
+            continue
+        ref = zone_reference_point_norm(zone)
+        if ref is None:
+            skipped += 1
+            continue
+        latlon = estimate_map_position(reference_points, ref)
+        if latlon is None:
+            skipped += 1
+            continue
+        estimates.append({
+            "zone_id": zone.get("zone_id", ""),
+            "zone_name": zone.get("zone_name", ""),
+            "zone_ref_point_norm": [ref[0], ref[1]],
+            "est_lat": latlon[0],
+            "est_lon": latlon[1],
+            "projection_source": "zone_reference_point",
+        })
+    return estimates, skipped
+
+
 # ── Skyline / horizon estimate (image-space setup aid) ────────────────────────
 #
 # A rough sky/ground boundary to help an operator place image zones. The sky band
@@ -474,6 +565,27 @@ def estimate_horizon_y_norm(
         return None
     y_norm = (idx + 1) / n
     return y_norm, confidence
+
+
+def downwind_arrow_endpoint(
+    lat: float,
+    lon: float,
+    wind_from_deg: float,
+    distance_deg: float = 0.01,
+) -> tuple[float, float]:
+    """Return an approximate (lat, lon) endpoint pointing in the downwind risk direction.
+
+    Wind blowing *from* ``wind_from_deg`` carries risk *toward* the opposite
+    bearing (``wind_from_deg + 180``) — the same convention as
+    ``agent_schemas.downwind_direction``. ``distance_deg`` is a small fixed
+    offset for a visual map indicator only, not a distance or spread estimate.
+    """
+    import math
+
+    bearing_rad = math.radians((wind_from_deg + 180.0) % 360.0)
+    dlat = distance_deg * math.cos(bearing_rad)
+    dlon = distance_deg * math.sin(bearing_rad) / max(math.cos(math.radians(lat)), 1e-6)
+    return lat + dlat, lon + dlon
 
 
 def estimate_horizon_from_image(image_bytes: bytes, max_dim: int = 256) -> dict | None:

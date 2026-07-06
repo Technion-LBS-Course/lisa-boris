@@ -23,13 +23,17 @@ import streamlit as st
 from src.mapping import (
     build_camera_mapping_config,
     default_camera_metadata,
+    downwind_arrow_endpoint,
     estimate_horizon_from_image,
     estimate_map_position,
+    generate_zone_map_estimates,
     normalize_polygon_vertices,
-    polygon_centroid_norm,
+    point_in_polygon,
     validate_camera_metadata,
     validate_image_polygon,
     validate_reference_point,
+    validate_zone_reference_point,
+    zone_reference_point_norm,
 )
 from src import incident_agent, weather, zone_agent
 from src.agent_schemas import (
@@ -93,6 +97,7 @@ def _init_state() -> None:
         "cc_pending_ref_img": None,   # (x_px, y_px)
         "cc_pending_ref_map": None,   # (lat, lon)
         "cc_pending_vertices": [],    # [[x_px, y_px], ...]
+        "cc_pending_zone_ref": None,  # [x_px, y_px] — pending zone reference point
         "cc_cam_click_latlon": None,  # (lat, lon)
         "cc_map_estimate": None,      # generated projection result
         "cc_incident_point": None,    # (x_norm, y_norm) — confirmed hazard point
@@ -174,6 +179,7 @@ def _composite_image(
     pending_vertices: list | None = None,
     pending_img_pt: tuple[float, float] | None = None,
     horizon_y_px: float | None = None,
+    pending_zone_ref_pt: tuple[float, float] | None = None,
 ):
     """Return a PIL image with reference points, zones and pending markers drawn on."""
     from PIL import Image, ImageDraw
@@ -181,6 +187,16 @@ def _composite_image(
     img = Image.open(io.BytesIO(base_bytes)).convert("RGB")
     draw = ImageDraw.Draw(img, "RGBA")
     r = 6
+
+    def _draw_zone_ref_marker(x: float, y: float, color, label: str) -> None:
+        # Distinct diamond marker so the map-reporting point reads differently
+        # from polygon vertices and image-map reference points.
+        pts = [(x, y - r - 3), (x + r + 3, y), (x, y + r + 3), (x - r - 3, y)]
+        fill = color + (90,) if isinstance(color, tuple) else None
+        draw.polygon(pts, outline=color, width=2, fill=fill)
+        draw.line([x - 3, y, x + 3, y], fill=color, width=2)
+        draw.line([x, y - 3, x, y + 3], fill=color, width=2)
+        draw.text((x + r + 6, y - r - 6), label, fill=color)
 
     if horizon_y_px is not None:
         y = horizon_y_px
@@ -202,6 +218,13 @@ def _composite_image(
     for zone in (zones or []):
         if not zone.get("enabled", True):
             continue
+        ref_pt = zone.get("zone_ref_point_px")
+        if ref_pt is not None:
+            try:
+                _draw_zone_ref_marker(float(ref_pt[0]), float(ref_pt[1]),
+                                      (243, 244, 248), "ref")
+            except (TypeError, ValueError, IndexError):
+                pass
         verts = [tuple(v) for v in zone.get("vertices_px", [])]
         if len(verts) >= 3:
             try:
@@ -240,6 +263,10 @@ def _composite_image(
         x, y = pending_img_pt
         draw.line([x - r * 2, y, x + r * 2, y], fill=_PENDING, width=3)
         draw.line([x, y - r * 2, x, y + r * 2], fill=_PENDING, width=3)
+
+    if pending_zone_ref_pt is not None:
+        x, y = pending_zone_ref_pt
+        _draw_zone_ref_marker(x, y, _PENDING, "zone ref")
 
     return img
 
@@ -876,23 +903,48 @@ def _render_zone_frame_preview() -> None:
 
 
 def _zone_vertex_editor(img_key: str, horizon_key: str) -> None:
-    """Image click-to-vertex editor shared by the manual and AI-assisted panels."""
+    """Image click editor shared by the manual and AI-assisted panels.
+
+    A click either adds a polygon vertex or sets the zone reference point — the
+    single map-reporting point projected to the map when a detection falls
+    inside this zone. The polygon itself is never projected onto the map.
+    """
+    mode = st.radio(
+        "Click action",
+        ["Add polygon vertices", "Set zone reference point"],
+        key=f"{img_key}_mode", horizontal=True,
+        help="The polygon defines the zone in the image. The zone reference point "
+             "is used for approximate map reporting when a detection falls inside "
+             "the zone.",
+    )
+    ref_mode = mode == "Set zone reference point"
+    if ref_mode:
+        st.caption("Click the image to set the map-reporting point for this zone.")
     horizon = _horizon_y_px(horizon_key)
+    pend_ref = st.session_state.cc_pending_zone_ref
     composite = _composite_image(
         st.session_state.cc_uploaded_image,
         zones=st.session_state.cc_image_zones,
         pending_vertices=st.session_state.cc_pending_vertices,
         horizon_y_px=horizon,
+        pending_zone_ref_pt=tuple(pend_ref) if pend_ref else None,
     )
     click = _consume_image_click(composite, key=img_key)
     if click:
-        st.session_state.cc_pending_vertices.append([click[0], click[1]])
+        if ref_mode:
+            st.session_state.cc_pending_zone_ref = [click[0], click[1]]
+        else:
+            st.session_state.cc_pending_vertices.append([click[0], click[1]])
         st.rerun()
     if not IMG_CLICK_AVAILABLE:
-        _manual_vertex_input()
+        if ref_mode:
+            _manual_zone_ref_input(img_key)
+        else:
+            _manual_vertex_input()
     n = len(st.session_state.cc_pending_vertices)
     st.caption(f"Vertices picked: {n}" + (" (need ≥3)" if n < 3 else ""))
-    b1, b2 = st.columns(2)
+    _pending_zone_ref_status(horizon)
+    b1, b2, b3 = st.columns(3)
     with b1:
         if st.button("Undo last point", key=f"{img_key}_undo", disabled=n == 0):
             st.session_state.cc_pending_vertices.pop()
@@ -900,6 +952,61 @@ def _zone_vertex_editor(img_key: str, horizon_key: str) -> None:
     with b2:
         if st.button("Clear points", key=f"{img_key}_clear", disabled=n == 0):
             st.session_state.cc_pending_vertices = []
+            st.rerun()
+    with b3:
+        if st.button("Reset reference point", key=f"{img_key}_refclear",
+                     disabled=st.session_state.cc_pending_zone_ref is None):
+            st.session_state.cc_pending_zone_ref = None
+            st.rerun()
+
+
+def _pending_zone_ref_status(horizon_y_px: float | None) -> None:
+    """Caption + setup warnings for the pending zone reference point.
+
+    The skyline check is a visual setup aid only — not a calibrated geographic
+    horizon, and never a precision claim.
+    """
+    pend_ref = st.session_state.cc_pending_zone_ref
+    if pend_ref is None:
+        st.caption(
+            "Zone reference point: not set. This point is used for approximate map "
+            "reporting when a detection falls inside the zone."
+        )
+        return
+    st.caption(f"Zone reference point: ({pend_ref[0]:.0f}, {pend_ref[1]:.0f}) px")
+    w, h = st.session_state.cc_image_size
+    verts = st.session_state.cc_pending_vertices
+    if len(verts) >= 3 and w and h:
+        inside = point_in_polygon(
+            pend_ref[0] / w, pend_ref[1] / h,
+            [(v[0] / w, v[1] / h) for v in verts],
+        )
+        if not inside:
+            st.warning(
+                "Zone reference point is outside the polygon — click again in "
+                "reference-point mode or reset it."
+            )
+    if horizon_y_px is not None and pend_ref[1] < horizon_y_px:
+        st.warning(
+            "Zone reference point is above the estimated skyline; map projection "
+            "may be unreliable."
+        )
+
+
+def _manual_zone_ref_input(key_prefix: str) -> None:
+    w, h = st.session_state.cc_image_size
+    st.caption("Interactive image clicking unavailable — enter the reference point in pixels:")
+    c1, c2, c3 = st.columns([2, 2, 1])
+    with c1:
+        rx = st.number_input("Ref X (px)", min_value=0.0, max_value=float(w),
+                             value=0.0, key=f"{key_prefix}_refx")
+    with c2:
+        ry = st.number_input("Ref Y (px)", min_value=0.0, max_value=float(h),
+                             value=0.0, key=f"{key_prefix}_refy")
+    with c3:
+        st.write("")
+        if st.button("Set reference point", key=f"{key_prefix}_refset"):
+            st.session_state.cc_pending_zone_ref = [rx, ry]
             st.rerun()
 
 
@@ -912,6 +1019,7 @@ def _find_zone(zone_id: str | None) -> dict | None:
 def _cancel_zone_edit() -> None:
     st.session_state.cc_zone_edit_id = None
     st.session_state.cc_pending_vertices = []
+    st.session_state.cc_pending_zone_ref = None
 
 
 def _image_zones_manual_panel() -> None:
@@ -1014,6 +1122,7 @@ def _render_parse_messages() -> None:
 def _clear_ai_drafts() -> None:
     st.session_state.cc_zone_drafts = []
     st.session_state.cc_pending_vertices = []
+    st.session_state.cc_pending_zone_ref = None
     st.session_state.cc_zone_loaded_draft = None
     st.session_state.cc_zone_warnings = []
     st.session_state.cc_zone_clarifications = []
@@ -1194,6 +1303,7 @@ def _accept_pending_drafts(drafts: list[dict]) -> None:
     count = len(drafts)
     st.session_state.cc_zone_drafts = []
     st.session_state.cc_pending_vertices = []
+    st.session_state.cc_pending_zone_ref = None
     st.session_state.cc_zone_loaded_draft = None
     st.success(
         f"Accepted {count} zone(s) as pending. Draw each polygon later — until then "
@@ -1243,6 +1353,7 @@ def _place_draft_zones(drafts: list[dict]) -> None:
         # Load the draft's AI box into the editor. No st.rerun(): pending_vertices is set
         # before the editor renders below, and a rerun would reset the active tab.
         st.session_state.cc_pending_vertices = [list(v) for v in active.get("vertices_px", [])]
+        st.session_state.cc_pending_zone_ref = None
         st.session_state.cc_zone_loaded_draft = did
 
     has_box = bool(active.get("vertices_px"))
@@ -1334,6 +1445,11 @@ def _commit_zone(zone_name, zone_type, alert_label, priority, zone_notes, extra=
     except (TypeError, ValueError):
         priority_int = 5
     existing = _find_zone(zone_id)
+    ref_px = st.session_state.cc_pending_zone_ref
+    ref_px = [float(ref_px[0]), float(ref_px[1])] if ref_px is not None else None
+    ref_norm = None
+    if ref_px is not None and w and h:
+        ref_norm = [ref_px[0] / w, ref_px[1] / h]
     zone = {
         "zone_id": existing["zone_id"] if existing is not None else str(uuid.uuid4())[:8],
         "zone_name": zone_name.strip(),
@@ -1345,6 +1461,8 @@ def _commit_zone(zone_name, zone_type, alert_label, priority, zone_notes, extra=
         "requires_user_confirmation": bool(extra.get("requires_user_confirmation", False)),
         "vertices_px": verts,
         "vertices_norm": [],
+        "zone_ref_point_px": ref_px,
+        "zone_ref_point_norm": ref_norm,
         "enabled": existing.get("enabled", True) if existing is not None else True,
         "notes": zone_notes.strip(),
         "polygon_status": zone_agent.POLYGON_DRAWN,
@@ -1355,12 +1473,16 @@ def _commit_zone(zone_name, zone_type, alert_label, priority, zone_notes, extra=
             st.error(e)
         return False
     zone["vertices_norm"] = normalize_polygon_vertices(verts, w, h)
+    # Reference-point issues are warnings, never blockers — the polygon is kept.
+    for issue in validate_zone_reference_point(zone, w, h):
+        st.warning(issue)
     if existing is not None:
         idx = st.session_state.cc_image_zones.index(existing)
         st.session_state.cc_image_zones[idx] = zone
     else:
         st.session_state.cc_image_zones.append(zone)
     st.session_state.cc_pending_vertices = []
+    st.session_state.cc_pending_zone_ref = None
     return True
 
 
@@ -1394,6 +1516,7 @@ def _render_zone_table() -> None:
                 or len(z.get("vertices_px", [])) < 3 else "drawn"
             ),
             "vertices": len(z.get("vertices_px", [])),
+            "ref point": "set" if zone_reference_point_norm(z) is not None else "not set",
             "enabled": z.get("enabled", True), "notes": z.get("notes", ""),
         }
         for z in zones
@@ -1413,6 +1536,10 @@ def _render_zone_table() -> None:
                 target = _find_zone(sel)
                 if target is not None:
                     st.session_state.cc_pending_vertices = [list(v) for v in target["vertices_px"]]
+                    ref = target.get("zone_ref_point_px")
+                    st.session_state.cc_pending_zone_ref = (
+                        [float(ref[0]), float(ref[1])] if ref is not None else None
+                    )
                     st.session_state.cc_zone_edit_id = sel
                     st.session_state.cc_zone_use_ai = False
                 st.rerun()
@@ -1601,9 +1728,10 @@ def _tab_export() -> None:
 
     st.markdown("**Generate map estimate from reference points**")
     st.caption(
-        "Uses at least 4 reference point pairs to estimate approximate map positions "
-        "for each image zone (locally planar assumption). Estimates are approximate "
-        "and depend on your reference points."
+        "Uses at least 4 reference point pairs to project each zone's reference "
+        "point to an approximate map point (locally planar assumption). The zone "
+        "polygon is never projected onto the map. Estimates are approximate and "
+        "depend on your reference points."
     )
     enabled_refs = [p for p in st.session_state.cc_reference_points if p.get("enabled", True)]
     if st.button("Generate Map Estimate", disabled=len(enabled_refs) < 4):
@@ -1642,40 +1770,41 @@ def _tab_export() -> None:
 
 
 def _generate_map_estimate(enabled_refs: list[dict]) -> None:
-    estimates = []
-    for z in st.session_state.cc_image_zones:
-        if not z.get("enabled", True):
-            continue
-        centroid = polygon_centroid_norm([tuple(v) for v in z.get("vertices_norm", [])])
-        if centroid is None:
-            continue
-        latlon = estimate_map_position(enabled_refs, centroid)
-        verts_latlon = []
-        for vn in z.get("vertices_norm", []):
-            proj = estimate_map_position(enabled_refs, tuple(vn))
-            if proj:
-                verts_latlon.append([proj[0], proj[1]])
-        if latlon:
-            estimates.append({
-                "zone_id": z["zone_id"], "zone_name": z["zone_name"],
-                "est_lat": latlon[0], "est_lon": latlon[1],
-                "vertices_latlon": verts_latlon,
-            })
-    st.session_state.cc_map_estimate = {"zones": estimates}
-    if not estimates:
-        st.warning("No zones with valid vertices to project.")
-    else:
-        st.success(f"Generated approximate map positions for {len(estimates)} zone(s).")
+    # Projects each enabled zone's zone_ref_point_norm only — never the polygon
+    # centroid and never the polygon vertices (no polygon stretching on the map).
+    estimates, skipped = generate_zone_map_estimates(
+        st.session_state.cc_image_zones, enabled_refs
+    )
+    st.session_state.cc_map_estimate = {"zones": estimates, "skipped": skipped}
+    if not estimates and not skipped:
+        st.warning("No enabled zones to project.")
     st.rerun()
 
 
 def _render_estimate() -> None:
     est = st.session_state.cc_map_estimate
     zones = est.get("zones", [])
+    skipped = est.get("skipped", 0)
+    if skipped:
+        st.warning(
+            f"{skipped} enabled zone(s) skipped — no zone reference point set. "
+            "Set one in Image Zones to include them in the map estimate."
+        )
     if not zones:
+        if skipped:
+            st.info("No zones with a zone reference point to project yet.")
         return
+    st.success(f"Approximate map points for {len(zones)} zone(s) — from each zone's reference point.")
     st.dataframe(
-        pd.DataFrame([{"zone_name": z["zone_name"], "est_lat": z["est_lat"], "est_lon": z["est_lon"]} for z in zones]),
+        pd.DataFrame([
+            {
+                "zone_name": z["zone_name"],
+                "est_lat": z["est_lat"],
+                "est_lon": z["est_lon"],
+                "source": z.get("projection_source", ""),
+            }
+            for z in zones
+        ]),
         use_container_width=True,
     )
     try:
@@ -1693,12 +1822,9 @@ def _render_estimate() -> None:
                 folium.CircleMarker([float(p["map_lat"]), float(p["map_lon"])], radius=5,
                                     color=_REF_MARKER, fill=True).add_to(m)
         for z in zones:
-            if len(z["vertices_latlon"]) >= 3:
-                folium.Polygon(z["vertices_latlon"], color=_ZONE_LINE, fill=True,
-                               fill_opacity=0.25, popup=z["zone_name"]).add_to(m)
             folium.Marker([z["est_lat"], z["est_lon"]],
                           icon=folium.Icon(color="blue", icon="fire", prefix="fa"),
-                          popup=z["zone_name"]).add_to(m)
+                          popup=f"{z['zone_name']} (zone reference point)").add_to(m)
         st_folium(m, key="cc_estimate_map", height=360, use_container_width=True,
                   returned_objects=[])
     except ImportError:
@@ -1781,17 +1907,17 @@ def _log_incident_alert(ctx, status: str) -> None:
     st.rerun()
 
 
-def _render_incident_result(show_drafts: bool = True) -> None:
+def _render_incident_result(show_drafts: bool = True, collapse_summary: bool = False) -> None:
     ctx = st.session_state.cc_incident_ctx
     if ctx is None:
         return
 
-    st.markdown("**Incident summary**")
-    st.table(pd.DataFrame(ctx.display_rows(), columns=["Field", "Value"]))
+    with st.expander("Incident summary", expanded=not collapse_summary):
+        st.table(pd.DataFrame(ctx.display_rows(), columns=["Field", "Value"]))
 
-    st.markdown("**Operational recommendations**")
-    for rec in incident_agent.recommend_actions(ctx):
-        st.markdown(f"- {rec}")
+    with st.expander("Operational recommendations", expanded=not collapse_summary):
+        for rec in incident_agent.recommend_actions(ctx):
+            st.markdown(f"- {rec}")
 
     if show_drafts:
         st.markdown("**Draft messages** — review and send them yourself; nothing is sent automatically.")
@@ -1852,6 +1978,93 @@ def _weather_for_incident(centroid_norm):
         return weather.fetch_weather(latlon[0], latlon[1])
     except Exception:
         return None
+
+
+_MAP_UNAVAILABLE_MESSAGE = (
+    "Approximate map point unavailable — add at least 4 enabled reference points "
+    "or camera coordinates."
+)
+
+
+def _incident_map_point(ctx) -> tuple[float, float] | None:
+    """Approximate incident map point: reference-point projection, else camera location.
+
+    Mirrors the same fallback chain as ``_weather_for_incident`` — the
+    reference-point homography gives the more specific estimate; the camera
+    location is the fallback so the map still shows something before zones and
+    reference points are configured. Both are approximate, never precise.
+    """
+    if ctx is not None and ctx.approximate_lat is not None and ctx.approximate_lon is not None:
+        return ctx.approximate_lat, ctx.approximate_lon
+    cam = st.session_state.cc_camera
+    lat, lon = cam.get("latitude"), cam.get("longitude")
+    if lat is not None and lon is not None:
+        return float(lat), float(lon)
+    return None
+
+
+def _render_incident_map(ctx, map_height: int = 380) -> None:
+    """Render the incident map: camera marker, approximate incident point, downwind line.
+
+    ``ctx`` may be ``None`` (no confirmed hazard yet) — the map still shows the
+    camera location when available. All positions are approximate — never
+    precise geolocation. The downwind line, when wind direction is known,
+    points toward the downwind risk direction (wind-from bearing + 180°), not
+    the direction the wind blows from. ``map_height`` lets the M4 sequence view
+    stretch the map to match the frame + conversation column.
+    """
+    try:
+        import folium
+        from streamlit_folium import st_folium
+    except ImportError:
+        st.info("Map requires `folium` and `streamlit-folium`.")
+        return
+
+    cam = st.session_state.cc_camera
+    cam_lat, cam_lon = cam.get("latitude"), cam.get("longitude")
+    has_camera = cam_lat is not None and cam_lon is not None
+    incident_point = _incident_map_point(ctx)
+
+    n_refs = len([p for p in st.session_state.cc_reference_points if p.get("enabled", True)])
+    status_bits = [f"Reference points: {n_refs} / 4 enabled"]
+    status_bits.append("camera location set" if has_camera else "camera location not set")
+    st.caption(" · ".join(status_bits))
+
+    if incident_point is None and not has_camera:
+        st.info(_MAP_UNAVAILABLE_MESSAGE)
+        return
+
+    center = list(incident_point) if incident_point else [float(cam_lat), float(cam_lon)]
+    m = folium.Map(location=center, zoom_start=15)
+
+    if has_camera:
+        folium.Marker(
+            [float(cam_lat), float(cam_lon)],
+            icon=folium.Icon(color="red", icon="camera", prefix="fa"),
+            popup="Camera (approximate)",
+        ).add_to(m)
+
+    if incident_point is not None:
+        folium.Marker(
+            list(incident_point),
+            icon=folium.Icon(color="orange", icon="fire", prefix="fa"),
+            popup="Approximate incident point",
+        ).add_to(m)
+        if ctx is not None and ctx.wind_direction_deg is not None:
+            end = downwind_arrow_endpoint(incident_point[0], incident_point[1], ctx.wind_direction_deg)
+            tooltip = f"Downwind risk direction: {ctx.downwind_risk_direction}"
+            folium.PolyLine(
+                [list(incident_point), list(end)], color=_REF_MARKER, weight=3,
+                opacity=0.85, tooltip=tooltip,
+            ).add_to(m)
+            folium.CircleMarker(
+                list(end), radius=4, color=_REF_MARKER, fill=True,
+                fill_color=_REF_MARKER, tooltip=tooltip,
+            ).add_to(m)
+
+    st_folium(m, key="cc_incident_map", height=map_height, use_container_width=True,
+              returned_objects=[])
+    st.caption("Map positions are approximate — not precise geolocation.")
 
 
 def _assess_incident(detected_class, confidence, centroid_norm, prev_centroid_norm,
@@ -1992,28 +2205,41 @@ def _detect_frame_bytes(img_bytes) -> dict | None:
     return result
 
 
-def _render_sequence_detection() -> None:
-    """Show the selected sequence frame with YOLO boxes; auto-runs per frame (cached)."""
+def _get_sequence_detection() -> dict | None:
+    """Compute (and cache) the YOLO detection for the current sequence frame.
+
+    Also auto-assesses the incident from the top hazard detection so the incident
+    context stays in sync with the slider. Returns the cached ``run_detection``
+    result, or ``None`` when the sequence is empty or no checkpoint is available.
+    """
     from src import inference
 
     seq = st.session_state.get("cc_seq") or []
     if not seq:
-        return
+        return None
     if not (inference.checkpoint_exists("YOLO11s") or inference.checkpoint_exists("YOLO11n")):
         st.info(inference.MISSING_YOLO11S_MESSAGE)
-        return
+        return None
 
     idx = min(st.session_state.get("cc_seq_idx", 0), len(seq) - 1)
     frame = seq[idx]  # detect on the sequence frame directly (not the shared frame)
-    st.markdown("**Detections on the selected frame** — the detector runs automatically per frame.")
     cache = st.session_state.setdefault("cc_seq_det", {})
     if idx not in cache:
         det = _detect_frame_bytes(frame["bytes"])
         if det is None:
-            return
+            return None
         cache[idx] = det
-    _render_detection_overlay(cache[idx])
     _auto_assess_sequence_frame(cache[idx])
+    return cache[idx]
+
+
+def _render_sequence_detection() -> None:
+    """Show the selected sequence frame with YOLO boxes; auto-runs per frame (cached)."""
+    det = _get_sequence_detection()
+    if det is None:
+        return
+    st.markdown("**Detections on the selected frame** — the detector runs automatically per frame.")
+    _render_detection_overlay(det)
 
 
 def _auto_assess_sequence_frame(det: dict) -> None:
@@ -2061,7 +2287,6 @@ def _tab_incident_assistant(
         # drive_shared_frame=False: the incident slider drives only the incident's own
         # detection, not the shared frame Image Zones / Camera Metadata draw on.
         _sequence_panel(drive_shared_frame=False)
-        _render_sequence_detection()
 
     # Compute after _sequence_panel() so a sequence loaded during this same run counts —
     # otherwise the run button and a stale overlay flash until the next interaction.
@@ -2070,10 +2295,34 @@ def _tab_incident_assistant(
     if not st.session_state.cc_camera.get("camera_id", "").strip():
         st.info("Set a Camera ID in the Camera Metadata tab so alerts are attributable.")
 
-    # With a loaded sequence the detector runs automatically per frame (and the
-    # overlay is shown above), so the manual run button + standalone overlay are
-    # redundant and hidden. They stay for Central Control and the single-image case.
-    if not seq_active:
+    if seq_active:
+        # Three visual areas: a taller map on the left, the selected/annotated
+        # frame on the right-top, and the incident conversation on the right-bottom.
+        det = _get_sequence_detection()
+        ctx = st.session_state.cc_incident_ctx
+
+        left_col, right_col = st.columns([1.15, 1])
+        with left_col:
+            st.markdown("**Incident map**")
+            # Taller map so it visually spans the frame + conversation column.
+            _render_incident_map(ctx, map_height=720)
+        with right_col:
+            st.markdown("**Selected frame**")
+            if det is not None:
+                _render_detection_overlay(det)
+            else:
+                st.info("No detector checkpoint available for this frame.")
+            st.markdown("---")
+            if ctx is not None:
+                _render_incident_conversation()
+            else:
+                st.markdown("**Incident conversation**")
+                st.caption(
+                    "No confirmed hazard in this frame — the conversation opens once "
+                    "fire or smoke is detected."
+                )
+    else:
+        # Single-frame flow (Central Control, and M4 before a sequence is loaded).
         st.markdown("**1 · Detect fire/smoke on the current frame**")
         run = st.button(
             "Run YOLO11s fire/smoke detector", type="primary", key="cc_inc_run_yolo",
@@ -2088,25 +2337,28 @@ def _tab_incident_assistant(
         if det is not None:
             _render_detection_overlay(det)
 
-    if allow_manual_point:
-        # Manual fallback (no nested expander: revealed by a checkbox).
-        if st.checkbox("No detector available? Set the hazard point manually", key="cc_inc_manual"):
-            col_a, col_b = st.columns(2)
-            with col_a:
-                manual_class = st.selectbox("Detected class", ["fire", "smoke"], key="cc_inc_class")
-            with col_b:
-                manual_conf = st.slider("Confidence", 0.0, 1.0, 0.8, 0.05, key="cc_inc_conf")
-            _incident_point_picker()
-            cur = st.session_state.cc_incident_point
-            st.caption(f"Hazard point: ({cur[0]:.3f}, {cur[1]:.3f})" if cur else "Hazard point: not set.")
-            prev = _incident_prev_point()
-            if st.button("Assess from manual point", disabled=cur is None, key="cc_inc_assess"):
-                _assess_incident(manual_class, float(manual_conf), cur, prev)
+        if allow_manual_point:
+            # Manual fallback (no nested expander: revealed by a checkbox).
+            if st.checkbox("No detector available? Set the hazard point manually", key="cc_inc_manual"):
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    manual_class = st.selectbox("Detected class", ["fire", "smoke"], key="cc_inc_class")
+                with col_b:
+                    manual_conf = st.slider("Confidence", 0.0, 1.0, 0.8, 0.05, key="cc_inc_conf")
+                _incident_point_picker()
+                cur = st.session_state.cc_incident_point
+                st.caption(f"Hazard point: ({cur[0]:.3f}, {cur[1]:.3f})" if cur else "Hazard point: not set.")
+                prev = _incident_prev_point()
+                if st.button("Assess from manual point", disabled=cur is None, key="cc_inc_assess"):
+                    _assess_incident(manual_class, float(manual_conf), cur, prev)
+
+        if st.session_state.cc_incident_ctx is not None:
+            st.markdown("---")
+            _render_incident_conversation()
 
     if st.session_state.cc_incident_ctx is not None:
         st.markdown("---")
-        _render_incident_conversation()
-        _render_incident_result(show_drafts=show_drafts)
+        _render_incident_result(show_drafts=show_drafts, collapse_summary=seq_active)
 
     st.markdown("---")
     _render_alert_log()

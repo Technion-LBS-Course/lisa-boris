@@ -89,7 +89,7 @@ def test_missing_yolo11s_message_is_actionable():
 # ── detection result helpers (pure — no model needed) ─────────────────────────
 
 
-def test_top_hazard_detection_picks_highest_confidence():
+def test_top_hazard_detection_picks_highest_confidence_within_fire():
     result = {"detections": [
         {"class": "smoke", "confidence": 0.4, "bbox_norm": [0.2, 0.2, 0.1, 0.1]},
         {"class": "fire", "confidence": 0.9, "bbox_norm": [0.5, 0.5, 0.2, 0.2]},
@@ -97,6 +97,27 @@ def test_top_hazard_detection_picks_highest_confidence():
     top = inference.top_hazard_detection(result)
     assert top["class"] == "fire"
     assert top["confidence"] == 0.9
+
+
+def test_top_hazard_detection_prefers_fire_over_higher_confidence_smoke():
+    # Fire is the event focus even when a smoke detection has higher confidence.
+    result = {"detections": [
+        {"class": "fire", "confidence": 0.3, "bbox_norm": [0.5, 0.5, 0.2, 0.2]},
+        {"class": "smoke", "confidence": 0.95, "bbox_norm": [0.2, 0.2, 0.1, 0.1]},
+    ]}
+    top = inference.top_hazard_detection(result)
+    assert top["class"] == "fire"
+    assert top["confidence"] == 0.3
+
+
+def test_top_hazard_detection_smoke_only():
+    result = {"detections": [
+        {"class": "smoke", "confidence": 0.5, "bbox_norm": [0.2, 0.2, 0.1, 0.1]},
+        {"class": "smoke", "confidence": 0.7, "bbox_norm": [0.3, 0.3, 0.1, 0.1]},
+    ]}
+    top = inference.top_hazard_detection(result)
+    assert top["class"] == "smoke"
+    assert top["confidence"] == 0.7
 
 
 def test_top_hazard_detection_none_when_empty():

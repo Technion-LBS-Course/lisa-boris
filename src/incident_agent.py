@@ -30,7 +30,12 @@ from dataclasses import dataclass, field
 # and are re-exported here for callers and tests that import them from this module.
 from src.agent_schemas import compass_label, downwind_direction, int_to_priority_label
 from src.alerts import create_alert_record
-from src.mapping import estimate_map_position, image_quadrant, point_in_polygon
+from src.mapping import (
+    estimate_map_position,
+    image_quadrant,
+    point_in_polygon,
+    zone_reference_point_norm,
+)
 from src.tracking import estimate_apparent_direction
 
 __all__ = [
@@ -63,6 +68,11 @@ class IncidentContext:
     zone_priority_label: str | None = None
     approximate_lat: float | None = None
     approximate_lon: float | None = None
+    # Where the approximate map point came from: "zone_reference_point" when the
+    # matched zone's operator-set reference point was projected, "detection_anchor"
+    # when the detection's own image point was projected, or None when no map
+    # point exists.
+    map_point_source: str | None = None
     image_plane_direction: str | None = None
     downwind_risk_direction: str | None = None
     # Weather context (Open-Meteo live reading or offline mock; may be absent).
@@ -92,9 +102,19 @@ class IncidentContext:
                 zone += f" ({self.zone_priority_label} priority)"
             rows.append(("Mapped zone", zone))
         if self.approximate_lat is not None and self.approximate_lon is not None:
+            source = ""
+            if self.map_point_source == "zone_reference_point":
+                source = " (from zone reference point)"
+            elif self.map_point_source == "detection_anchor":
+                source = " (from detection point)"
             rows.append((
                 "Estimated map point",
-                f"~{self.approximate_lat:.5f}, {self.approximate_lon:.5f}",
+                f"~{self.approximate_lat:.5f}, {self.approximate_lon:.5f}{source}",
+            ))
+        elif self.matched_zone and "reference point not set" in self.location_text:
+            rows.append((
+                "Estimated map point",
+                "unavailable — set a zone reference point for this zone",
             ))
         if self.image_plane_direction:
             rows.append(("Apparent movement (in frame)", self.image_plane_direction))
@@ -166,19 +186,45 @@ def build_incident_context(
             int(zone.get("priority", 5))
         )
 
+    # Map-point priority: the matched zone's operator-set reference point comes
+    # first; the detection-anchor projection is used only when no zone matched;
+    # otherwise the image quadrant / camera-frame text is the fallback. A matched
+    # zone WITHOUT a reference point never gets an invented map point — the
+    # missing point is reported instead. All map outputs are approximate.
     approx_lat = approx_lon = None
-    projection = estimate_map_position(reference_points, centroid_norm)
-    if projection is not None:
-        approx_lat, approx_lon = projection
+    map_point_source = None
+    zone_ref_missing = False
+    if zone is not None:
+        zone_ref = zone_reference_point_norm(zone)
+        if zone_ref is not None:
+            projection = estimate_map_position(reference_points, zone_ref)
+            if projection is not None:
+                approx_lat, approx_lon = projection
+                map_point_source = "zone_reference_point"
+        else:
+            zone_ref_missing = True
+    else:
+        projection = estimate_map_position(reference_points, centroid_norm)
+        if projection is not None:
+            approx_lat, approx_lon = projection
+            map_point_source = "detection_anchor"
 
     if matched_zone:
         base = f"mapped zone '{matched_zone}'"
+        if map_point_source == "zone_reference_point":
+            location_text = f"{base} — approximate map point from zone reference point"
+        elif zone_ref_missing:
+            location_text = (
+                f"{base} — zone reference point not set, no approximate map point"
+            )
+        else:
+            location_text = f"{base} — camera-frame location"
     else:
         base = f"the {image_quadrant(cx, cy)} area of the camera frame"
-    if approx_lat is not None and approx_lon is not None:
-        location_text = f"{base} — estimated location ~{approx_lat:.4f}, {approx_lon:.4f}"
-    else:
-        location_text = f"{base} — camera-frame location"
+        if approx_lat is not None and approx_lon is not None:
+            location_text = f"{base} — estimated location ~{approx_lat:.4f}, {approx_lon:.4f}"
+        else:
+            location_text = f"{base} — camera-frame location"
 
     image_plane_direction = None
     if prev_centroid_norm is not None:
@@ -202,6 +248,7 @@ def build_incident_context(
         location_text=location_text,
         approximate_lat=approx_lat,
         approximate_lon=approx_lon,
+        map_point_source=map_point_source,
         image_plane_direction=image_plane_direction,
         downwind_risk_direction=downwind,
         temperature_c=_wget(weather, "temperature_c"),
