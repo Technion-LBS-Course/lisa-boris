@@ -1070,20 +1070,34 @@ def _maybe_routine_report(force: bool = False) -> None:
 
 
 def _render_alert_status() -> None:
+    """Always render a fixed-height status bar so the layout never shifts.
+
+    When an incident is active it shows the red alert bar; otherwise it shows a
+    calm neutral 'monitoring' bar of the SAME height. Previously the bar appeared
+    only during an alert, so the whole screen jumped down (then back up) as the
+    alert came and went.
+    """
     a = st.session_state.lo_active_alert
-    if not a:
-        return
-    cls = str(a["detected_class"]).upper()
-    st.markdown(
-        f"<div style='display:flex;align-items:center;gap:12px;padding:12px 16px;"
-        f"background:{_ACCENT};border-radius:12px;color:#fff;margin:4px 0 8px'>"
-        "<div style='width:10px;height:10px;border-radius:50%;background:#fff'></div>"
-        f"<span style='font-weight:700'>{cls} detected — {a['zone']} · "
-        f"{a['confidence']:.0%} · {a['ts']}</span>"
-        "<span style='margin-left:auto;font:600 11px \"IBM Plex Mono\",monospace;opacity:.85'>"
-        "resolve it in the ops chat →</span></div>",
-        unsafe_allow_html=True,
-    )
+    base = ("display:flex;align-items:center;gap:12px;padding:12px 16px;"
+            "border-radius:12px;margin:4px 0 8px;min-height:46px;box-sizing:border-box")
+    if a:
+        cls = str(a["detected_class"]).upper()
+        st.markdown(
+            f"<div style='{base};background:{_ACCENT};color:#fff'>"
+            "<div style='width:10px;height:10px;border-radius:50%;background:#fff'></div>"
+            f"<span style='font-weight:700'>{cls} detected — {a['zone']}</span>"
+            "<span style='margin-left:auto;font:600 11px \"IBM Plex Mono\",monospace;opacity:.85'>"
+            "resolve it in the ops chat →</span></div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f"<div style='{base};background:rgba(30,122,67,.10);"
+            "border:1px solid rgba(30,122,67,.25);color:#1e7a43'>"
+            "<div style='width:10px;height:10px;border-radius:50%;background:#1e7a43'></div>"
+            "<span style='font-weight:600'>Monitoring — no active incident</span></div>",
+            unsafe_allow_html=True,
+        )
 
 
 def _resolve_incident(status: str) -> None:
@@ -1181,7 +1195,12 @@ def _ops_chat(ctx) -> None:
 
 
 def _live_sidebar_settings(settings: dict) -> tuple[dict, int]:
-    """Return ``({"smoke": thr, "fire": thr}, n_req)`` — per-class confidence."""
+    """Return ``({"smoke": thr, "fire": thr}, n_req)`` — per-class confidence.
+
+    Also owns the playback-speed control: it lives in the sidebar (rendered every
+    run) so it never resets when a detection toggles the main-area layout, and it
+    feeds ``cc_seq_frame_delay_ms`` which the shared autoplay advance reads.
+    """
     legacy = float(settings.get("confidence_threshold", 0.50))
     with st.sidebar:
         st.markdown("### Detection settings")
@@ -1191,7 +1210,53 @@ def _live_sidebar_settings(settings: dict) -> tuple[dict, int]:
         fire_pct = st.slider("Fire confidence (%)", 5, 95, fire_default, 5, key="lo_conf_pct_fire")
         n_req = st.number_input("Confirmation frames (N)", 1, 10,
                                 int(settings.get("confirmation_frames", 2)), 1, key="lo_confirm_n")
+        st.markdown("### Playback")
+        speed_ms = st.slider("Playback speed (ms/frame)", 150, 3000, 1500, 50,
+                             key="lo_playback_speed_ms",
+                             help="Delay between auto-advanced frames while playing.")
+    # Feed the shared autoplay advance (self-gates on cc_seq_playing).
+    st.session_state.cc_seq_frame_delay_ms = int(speed_ms)
     return {"smoke": smoke_pct / 100.0, "fire": fire_pct / 100.0}, int(n_req)
+
+
+def _live_playback_controls(n: int) -> None:
+    """Prev / Play / Pause / Stop / Next — always visible, even during an alert.
+
+    Replaces the frame slider with step buttons so ``cc_seq_idx`` is a plain,
+    stable session variable: the slider was a widget-bound key that Streamlit
+    garbage-collected whenever it wasn't rendered (during an alert), which made the
+    frame jump on resolve/chat reruns. Manual steps queue ``cc_seq_pending_seek``
+    (applied by ``cc._apply_pending_seq_seek`` at the top of the next run) and pause
+    playback. On a confirmed detection the frame is simply paused here, not hidden.
+    """
+    idx = int(st.session_state.get("cc_seq_idx", 0))
+    playing = bool(st.session_state.get("cc_seq_playing"))
+    c1, c2, c3, c4, c5 = st.columns(5)
+    with c1:
+        if st.button("◀ Prev", key="lo_pb_prev", use_container_width=True, disabled=idx <= 0):
+            st.session_state.cc_seq_playing = False
+            st.session_state.cc_seq_pending_seek = idx - 1
+            st.rerun()
+    with c2:
+        if st.button("▶ Play", key="lo_pb_play", use_container_width=True,
+                     disabled=playing or idx >= n - 1):
+            st.session_state.cc_seq_playing = True
+            st.rerun()
+    with c3:
+        if st.button("⏸ Pause", key="lo_pb_pause", use_container_width=True, disabled=not playing):
+            st.session_state.cc_seq_playing = False
+            st.rerun()
+    with c4:
+        if st.button("⏹ Stop", key="lo_pb_stop", use_container_width=True):
+            st.session_state.cc_seq_playing = False
+            st.session_state.cc_seq_pending_seek = 0
+            st.rerun()
+    with c5:
+        if st.button("Next ▶", key="lo_pb_next", use_container_width=True, disabled=idx >= n - 1):
+            st.session_state.cc_seq_playing = False
+            st.session_state.cc_seq_pending_seek = idx + 1
+            st.rerun()
+    st.caption(f"Frame {idx + 1} / {n}" + (" · playing" if playing else ""))
 
 
 def _live_section() -> None:
@@ -1228,20 +1293,18 @@ def _live_section() -> None:
     left, right = st.columns([1.15, 1])
     with left:
         _render_live_frame(det, seq, idx, alerting)
-        if not alerting:
-            if n > 1:
-                st.select_slider("Frame", options=list(range(n)),
-                                 format_func=lambda i: f"Frame {i + 1}/{n}", key="cc_seq_idx")
-            cc._playback_controls(n)
-        else:
-            st.caption("Playback frozen on the verified detection — resolve it in the ops chat to resume.")
+        _live_playback_controls(n)
+        if alerting:
+            st.caption("Paused on the detection frame — resolve it in the ops chat, or "
+                       "step/play to keep reviewing.")
         preview = cc._preview_map_point(current_top) if ctx is None else None
         _render_live_map(ctx, preview_point=preview, height=360)
     with right:
         _ops_chat(ctx)
 
-    if not alerting:
-        cc._advance_playback_if_needed(n)
+    # Self-gates on cc_seq_playing: a confirmed detection pauses playback (so this is
+    # a no-op) but the controls stay usable; chat reruns never advance the frame.
+    cc._advance_playback_if_needed(n)
 
 
 # ── HISTORY ─────────────────────────────────────────────────────────────────
