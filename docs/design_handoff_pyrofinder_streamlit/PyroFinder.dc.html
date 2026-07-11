@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=Public+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#efece6;font-family:'Public Sans',system-ui,sans-serif}
+a{color:#c2410c;text-decoration:none}a:hover{color:#9a3412;text-decoration:underline}
+@keyframes pf-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+</style>
+</helmet>
+
+<section data-screen-label="Turn 1 — PyroFinder flow variations" style="padding:40px 44px 60px">
+  <div style="display:flex;align-items:baseline;gap:10px;margin:0 0 6px">
+    <a href="#t1" style="font:600 10px 'IBM Plex Mono',monospace;padding:3px 7px;background:#1a1a1a;color:#fff;border-radius:4px">1</a>
+    <span style="font:600 14px 'Space Grotesk',sans-serif;color:#1a1a1a">PyroFinder — full flow, two directions (screens are clickable: use the step tabs and Next / Back)</span>
+  </div>
+  <p style="font:400 12px/1.5 'Public Sans',sans-serif;color:rgba(0,0,0,.55);margin:0 0 24px;max-width:760px">Based on your sketch: ① camera setup on map → ② anchor calibration (≥4 anchors) → ③ AI-assisted zone marking → ④ live monitoring → ⑤ history. All data is dummy. Striped areas are placeholders for real camera footage / map tiles.</p>
+
+  <div style="display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start">
+
+    <!-- ============ OPTION 1a : DARK CONTROL ROOM (desktop) ============ -->
+    <div id="1a" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 'Public Sans',sans-serif;color:rgba(0,0,0,.55)">
+        <a href="#1a" style="font:600 10.5px 'IBM Plex Mono',monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px">1a</a>
+        Dark control-room · desktop 1280px · Space Grotesk + Plex Mono · amber accent
+      </div>
+
+      <div data-screen-label="1a PyroFinder dark desktop" style="width:1280px;background:#0d1117;border-radius:10px;overflow:hidden;border:1px solid rgba(0,0,0,.2);box-shadow:0 2px 12px rgba(0,0,0,.15);color:#e8eaed">
+
+        <!-- top bar -->
+        <div style="display:flex;align-items:center;gap:20px;padding:0 20px;height:56px;background:#10151c;border-bottom:1px solid rgba(255,255,255,.07)">
+          <div style="display:flex;align-items:center;gap:9px">
+            <div style="width:24px;height:24px;border-radius:6px;background:#ff8c3b;display:grid;place-items:center;color:#0d1117;font:700 13px 'Space Grotesk',sans-serif">P</div>
+            <span style="font:600 16px 'Space Grotesk',sans-serif;letter-spacing:.02em">PyroFinder</span>
+          </div>
+          <div style="display:flex;gap:4px;margin-left:24px">
+            <button onClick="{{ aGoSetup }}" style="{{ aTabSetupStyle }}">Camera Setup</button>
+            <button onClick="{{ aGoLive }}" style="{{ aTabLiveStyle }}">Live</button>
+            <button onClick="{{ aGoHist }}" style="{{ aTabHistStyle }}">History</button>
+          </div>
+          <div style="flex:1"></div>
+          <sc-if value="{{ alertActive }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;align-items:center;gap:8px;padding:5px 12px;border-radius:6px;background:rgba(255,77,77,.12);border:1px solid rgba(255,77,77,.4)">
+              <div style="width:8px;height:8px;border-radius:50%;background:#ff4d4d;animation:pf-pulse 1.2s infinite"></div>
+              <span style="font:600 11px 'IBM Plex Mono',monospace;color:#ff8a8a">1 ACTIVE ALERT</span>
+            </div>
+          </sc-if>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font:500 12px 'Public Sans',sans-serif;color:rgba(255,255,255,.6)">D. Peretz</span>
+            <div style="width:32px;height:32px;border-radius:50%;background:#2a3441;display:grid;place-items:center;font:600 12px 'Space Grotesk',sans-serif;color:#ff8c3b">DP</div>
+          </div>
+        </div>
+
+        <!-- wizard stepper (setup screens only) -->
+        <sc-if value="{{ aInSetup }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:0;padding:14px 24px;background:#0f141a;border-bottom:1px solid rgba(255,255,255,.06)">
+            <sc-for list="{{ aSteps }}" as="st" hint-placeholder-count="3">
+              <button onClick="{{ st.onClick }}" style="{{ st.style }}">
+                <span style="{{ st.numStyle }}">{{ st.num }}</span>{{ st.label }}
+              </button>
+            </sc-for>
+            <div style="flex:1"></div>
+            <span style="font:500 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.4)">CAM-04 · Ridge East · setup</span>
+          </div>
+        </sc-if>
+
+        <!-- ===== A / SCREEN 1 : camera setup ===== -->
+        <sc-if value="{{ aIs1 }}" hint-placeholder-val="{{ true }}">
+          <div data-screen-label="1a S1 Camera Setup" style="display:grid;grid-template-columns:1fr 320px;gap:16px;padding:20px;height:640px;box-sizing:border-box">
+            <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(255,140,59,.08);border:1px solid rgba(255,140,59,.3);border-radius:8px">
+                <span style="font:700 12px 'IBM Plex Mono',monospace;color:#ff8c3b">STEP 1</span>
+                <span style="font:500 13px 'Public Sans',sans-serif;color:rgba(255,255,255,.85)">Place the camera on the map — click its exact mounting location, then set the viewing direction.</span>
+              </div>
+              <!-- map -->
+              <div style="position:relative;flex:1;background:#141b24;border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden">
+                <div style="position:absolute;left:-5%;top:58%;width:115%;height:12px;background:#1f2833;transform:rotate(-6deg)"></div>
+                <div style="position:absolute;left:30%;top:-5%;width:10px;height:115%;background:#1f2833;transform:rotate(8deg)"></div>
+                <div style="position:absolute;left:55%;top:10%;width:34%;height:38%;background:#18222b;border-radius:10px"></div>
+                <div style="position:absolute;left:8%;top:12%;width:16%;height:26%;background:#16232a;border-radius:50% 40% 55% 45%"></div>
+                <div style="position:absolute;left:44%;top:44%;width:140px;height:120px;background:rgba(255,140,59,.14);clip-path:polygon(8% 100%,0 18%,100% 0,60% 100%)"></div>
+                <div style="position:absolute;left:calc(44% - 8px);top:calc(44% + 104px);width:16px;height:16px;border-radius:50%;background:#ff8c3b;border:3px solid #0d1117;box-shadow:0 0 0 3px rgba(255,140,59,.35)"></div>
+                <div style="position:absolute;left:calc(44% + 16px);top:calc(44% + 96px);padding:4px 8px;background:#0d1117;border:1px solid rgba(255,140,59,.5);border-radius:5px;font:600 10px 'IBM Plex Mono',monospace;color:#ff8c3b">CAM-04 · 34.7818N 35.0218E</div>
+                <div style="position:absolute;right:12px;bottom:12px;font:500 10px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.3)">[ map placeholder — real tiles here ]</div>
+                <div style="position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:6px">
+                  <div style="width:30px;height:30px;border-radius:6px;background:#10151c;border:1px solid rgba(255,255,255,.12);display:grid;place-items:center;font:600 15px 'Space Grotesk',sans-serif;color:rgba(255,255,255,.7)">+</div>
+                  <div style="width:30px;height:30px;border-radius:6px;background:#10151c;border:1px solid rgba(255,255,255,.12);display:grid;place-items:center;font:600 15px 'Space Grotesk',sans-serif;color:rgba(255,255,255,.7)">−</div>
+                </div>
+              </div>
+              <!-- camera preview strip -->
+              <div style="display:flex;gap:16px;height:150px">
+                <div style="position:relative;flex:1;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:repeating-linear-gradient(45deg,#151b23,#151b23 12px,#111720 12px,#111720 24px)">
+                  <div style="position:absolute;left:10px;top:10px;display:flex;align-items:center;gap:6px;padding:3px 8px;background:rgba(13,17,23,.85);border-radius:4px">
+                    <div style="width:7px;height:7px;border-radius:50%;background:#ff4d4d;animation:pf-pulse 1.4s infinite"></div>
+                    <span style="font:600 10px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.8)">LIVE · CAM-04</span>
+                  </div>
+                  <div style="position:absolute;inset:0;display:grid;place-items:center;font:500 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.35)">[ camera feed placeholder ]</div>
+                </div>
+              </div>
+            </div>
+            <!-- camera data panel -->
+            <div style="display:flex;flex-direction:column;background:#10151c;border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden">
+              <div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.07);font:600 13px 'Space Grotesk',sans-serif">Camera data</div>
+              <div style="padding:8px 16px;display:flex;flex-direction:column">
+                <sc-for list="{{ camFields }}" as="f" hint-placeholder-count="6">
+                  <div style="display:flex;justify-content:space-between;gap-x:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+                    <span style="font:500 11px 'Public Sans',sans-serif;color:rgba(255,255,255,.45)">{{ f.k }}</span>
+                    <span style="font:500 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.85);text-align:right">{{ f.v }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="flex:1"></div>
+              <div style="padding:16px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;align-items:center;gap:8px;font:500 11px 'Public Sans',sans-serif;color:#7ee2a0"><div style="width:7px;height:7px;border-radius:50%;background:#7ee2a0"></div>Location set on map</div>
+                <button onClick="{{ aNext }}" style="height:44px;border:none;border-radius:7px;background:#ff8c3b;color:#0d1117;font:700 13px 'Space Grotesk',sans-serif;cursor:pointer" style-hover="background:#ffa25e">Next — Calibrate anchors →</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== A / SCREEN 2 : anchor calibration ===== -->
+        <sc-if value="{{ aIs2 }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="1a S2 Anchor Calibration" style="display:flex;flex-direction:column;gap:14px;padding:20px;height:640px;box-sizing:border-box">
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(255,140,59,.08);border:1px solid rgba(255,140,59,.3);border-radius:8px">
+              <span style="font:700 12px 'IBM Plex Mono',monospace;color:#ff8c3b">STEP 2</span>
+              <span style="font:500 13px 'Public Sans',sans-serif;color:rgba(255,255,255,.85)">Mark at least 4 anchor points on the camera image and their matching locations on the map.</span>
+              <div style="flex:1"></div>
+              <span style="font:600 12px 'IBM Plex Mono',monospace;color:#7ee2a0">4 / 4 pairs matched ✓</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;flex:1;min-height:0">
+              <!-- camera image with anchors -->
+              <div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:repeating-linear-gradient(45deg,#151b23,#151b23 12px,#111720 12px,#111720 24px)">
+                <div style="position:absolute;left:10px;top:10px;padding:3px 8px;background:rgba(13,17,23,.85);border-radius:4px;font:600 10px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.8)">CAMERA IMAGE · frozen frame</div>
+                <div style="position:absolute;inset:0;display:grid;place-items:center;font:500 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.35)">[ camera frame placeholder ]</div>
+                <sc-for list="{{ anchorsImg }}" as="an" hint-placeholder-count="4">
+                  <div style="{{ an.style }}"><span style="font:700 10px 'IBM Plex Mono',monospace;color:#0d1117">{{ an.n }}</span></div>
+                </sc-for>
+              </div>
+              <!-- map with anchors -->
+              <div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:#141b24">
+                <div style="position:absolute;left:-5%;top:60%;width:115%;height:11px;background:#1f2833;transform:rotate(-5deg)"></div>
+                <div style="position:absolute;left:34%;top:-5%;width:9px;height:115%;background:#1f2833;transform:rotate(7deg)"></div>
+                <div style="position:absolute;left:58%;top:12%;width:30%;height:34%;background:#18222b;border-radius:10px"></div>
+                <div style="position:absolute;left:10px;top:10px;padding:3px 8px;background:rgba(13,17,23,.85);border-radius:4px;font:600 10px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.8);z-index:2">MAP · match each anchor</div>
+                <div style="position:absolute;right:12px;bottom:10px;font:500 10px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.3)">[ map placeholder ]</div>
+                <sc-for list="{{ anchorsMap }}" as="an" hint-placeholder-count="4">
+                  <div style="{{ an.style }}"><span style="font:700 10px 'IBM Plex Mono',monospace;color:#0d1117">{{ an.n }}</span></div>
+                </sc-for>
+              </div>
+            </div>
+            <!-- reference point list -->
+            <div style="display:flex;gap:10px;align-items:center">
+              <sc-for list="{{ refPoints }}" as="rp" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#10151c;border:1px solid rgba(255,255,255,.09);border-radius:7px">
+                  <div style="width:18px;height:18px;border-radius:50%;background:#ff8c3b;display:grid;place-items:center;font:700 10px 'IBM Plex Mono',monospace;color:#0d1117">{{ rp.n }}</div>
+                  <span style="font:500 11px 'Public Sans',sans-serif;color:rgba(255,255,255,.8)">{{ rp.name }}</span>
+                  <span style="font:500 10px 'IBM Plex Mono',monospace;color:#7ee2a0">✓ matched</span>
+                </div>
+              </sc-for>
+              <button style="padding:8px 12px;background:transparent;border:1px dashed rgba(255,255,255,.25);border-radius:7px;color:rgba(255,255,255,.55);font:500 11px 'Public Sans',sans-serif;cursor:pointer" style-hover="border-color:#ff8c3b;color:#ff8c3b">+ Add anchor</button>
+            </div>
+            <div style="display:flex;gap:10px">
+              <button onClick="{{ aPrev }}" style="height:42px;padding:0 20px;border:1px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.75);font:600 12px 'Space Grotesk',sans-serif;cursor:pointer" style-hover="border-color:rgba(255,255,255,.45)">← Back</button>
+              <div style="flex:1"></div>
+              <button style="height:42px;padding:0 24px;border:1px solid #7ee2a0;border-radius:7px;background:rgba(126,226,160,.1);color:#7ee2a0;font:700 12px 'Space Grotesk',sans-serif;cursor:pointer" style-hover="background:rgba(126,226,160,.2)">SAVE calibration</button>
+              <button onClick="{{ aNext }}" style="height:42px;padding:0 24px;border:none;border-radius:7px;background:#ff8c3b;color:#0d1117;font:700 12px 'Space Grotesk',sans-serif;cursor:pointer" style-hover="background:#ffa25e">Next — Mark zones →</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== A / SCREEN 3 : zone marking + AI chat ===== -->
+        <sc-if value="{{ aIs3 }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="1a S3 Zone Marking" style="display:grid;grid-template-columns:1fr 340px;gap:16px;padding:20px;height:640px;box-sizing:border-box">
+            <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+              <!-- camera image / polygon workspace -->
+              <div style="position:relative;flex:1;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:repeating-linear-gradient(45deg,#151b23,#151b23 12px,#111720 12px,#111720 24px)">
+                <div style="position:absolute;left:10px;top:10px;padding:3px 8px;background:rgba(13,17,23,.85);border-radius:4px;font:600 10px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.8)">CAM-04 · zone workspace</div>
+                <div style="position:absolute;inset:0;display:grid;place-items:center;font:500 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.35)">[ camera frame placeholder ]</div>
+                <div style="position:absolute;left:12%;top:30%;width:38%;height:42%;background:rgba(255,140,59,.14);border:2px dashed #ff8c3b;clip-path:polygon(0 30%,40% 0,100% 18%,88% 100%,10% 92%)"></div>
+                <div style="position:absolute;left:14%;top:26%;padding:3px 8px;background:#ff8c3b;border-radius:4px;font:700 10px 'IBM Plex Mono',monospace;color:#0d1117">Z1 · Dry brush slope · HIGH</div>
+                <div style="position:absolute;left:58%;top:52%;width:30%;height:30%;background:rgba(94,169,255,.12);border:2px dashed #5ea9ff;clip-path:polygon(0 20%,60% 0,100% 40%,80% 100%,5% 88%)"></div>
+                <div style="position:absolute;left:60%;top:48%;padding:3px 8px;background:#5ea9ff;border-radius:4px;font:700 10px 'IBM Plex Mono',monospace;color:#0d1117">Z2 · Access road · MED</div>
+              </div>
+              <!-- registered polygons -->
+              <div style="background:#10151c;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:12px 16px">
+                <div style="font:600 12px 'Space Grotesk',sans-serif;margin-bottom:8px">Registered zones</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <sc-for list="{{ zones }}" as="z" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(255,255,255,.03);border-radius:6px">
+                      <div style="{{ z.dotStyle }}"></div>
+                      <span style="font:600 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.85)">{{ z.id }}</span>
+                      <span style="font:500 11px 'Public Sans',sans-serif;color:rgba(255,255,255,.7)">{{ z.name }}</span>
+                      <div style="flex:1"></div>
+                      <span style="{{ z.prioStyle }}">{{ z.prio }}</span>
+                      <span style="font:500 10px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.4)">{{ z.mode }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px">
+                <button onClick="{{ aPrev }}" style="height:42px;padding:0 20px;border:1px solid rgba(255,255,255,.2);border-radius:7px;background:transparent;color:rgba(255,255,255,.75);font:600 12px 'Space Grotesk',sans-serif;cursor:pointer" style-hover="border-color:rgba(255,255,255,.45)">← Back</button>
+                <div style="flex:1"></div>
+                <button onClick="{{ aGoLive }}" style="height:42px;padding:0 28px;border:none;border-radius:7px;background:#7ee2a0;color:#0d1117;font:700 12px 'Space Grotesk',sans-serif;cursor:pointer" style-hover="background:#98edb4">Finish setup — Go live ✓</button>
+              </div>
+            </div>
+            <!-- AI chat panel -->
+            <div style="display:flex;flex-direction:column;background:#10151c;border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden">
+              <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.07)">
+                <div style="width:22px;height:22px;border-radius:6px;background:rgba(255,140,59,.2);display:grid;place-items:center;font:700 11px 'Space Grotesk',sans-serif;color:#ff8c3b">✦</div>
+                <span style="font:600 13px 'Space Grotesk',sans-serif">Zone assistant</span>
+              </div>
+              <div style="flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px">
+                <sc-for list="{{ chatA }}" as="m" hint-placeholder-count="6">
+                  <div style="{{ m.rowStyle }}">
+                    <div style="{{ m.bubbleStyle }}">{{ m.text }}</div>
+                  </div>
+                </sc-for>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <button style="padding:6px 10px;border:1px solid rgba(255,140,59,.5);border-radius:14px;background:transparent;color:#ff8c3b;font:600 11px 'Public Sans',sans-serif;cursor:pointer" style-hover="background:rgba(255,140,59,.12)">Looks right ✓</button>
+                  <button style="padding:6px 10px;border:1px solid rgba(255,255,255,.2);border-radius:14px;background:transparent;color:rgba(255,255,255,.7);font:600 11px 'Public Sans',sans-serif;cursor:pointer" style-hover="border-color:rgba(255,255,255,.45)">Edit outline</button>
+                  <button style="padding:6px 10px;border:1px solid rgba(255,255,255,.2);border-radius:14px;background:transparent;color:rgba(255,255,255,.7);font:600 11px 'Public Sans',sans-serif;cursor:pointer" style-hover="border-color:rgba(255,255,255,.45)">Change priority</button>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;padding:12px;border-top:1px solid rgba(255,255,255,.07)">
+                <div style="flex:1;height:38px;border:1px solid rgba(255,255,255,.15);border-radius:7px;display:flex;align-items:center;padding:0 12px;font:400 12px 'Public Sans',sans-serif;color:rgba(255,255,255,.35)">Describe a zone…</div>
+                <button style="width:38px;height:38px;border:none;border-radius:7px;background:#ff8c3b;color:#0d1117;font:700 14px 'Space Grotesk',sans-serif;cursor:pointer" style-hover="background:#ffa25e">↑</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== A / SCREEN 4 : live ===== -->
+        <sc-if value="{{ aIs4 }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="1a S4 Live Monitoring" style="display:flex;flex-direction:column;gap:16px;padding:20px;height:700px;box-sizing:border-box">
+            <!-- big camera -->
+            <div style="position:relative;flex:1.3;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:repeating-linear-gradient(45deg,#151b23,#151b23 12px,#111720 12px,#111720 24px)">
+              <div style="position:absolute;left:12px;top:12px;display:flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(13,17,23,.85);border-radius:4px">
+                <div style="width:7px;height:7px;border-radius:50%;background:#ff4d4d;animation:pf-pulse 1.4s infinite"></div>
+                <span style="font:600 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.85)">LIVE · CAM-04 · Ridge East · 30 fps</span>
+              </div>
+              <div style="position:absolute;inset:0;display:grid;place-items:center;font:500 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.35)">[ live camera feed placeholder ]</div>
+              <sc-if value="{{ alertActive }}" hint-placeholder-val="{{ true }}">
+                <div style="position:absolute;left:20%;top:32%;width:180px;height:130px;border:2px solid #ff4d4d;border-radius:4px;box-shadow:0 0 0 3px rgba(255,77,77,.25)"></div>
+                <div style="position:absolute;left:20%;top:calc(32% - 26px);padding:3px 9px;background:#ff4d4d;border-radius:4px 4px 0 0;font:700 11px 'IBM Plex Mono',monospace;color:#fff;white-space:nowrap">SMOKE {{ confidencePct }}</div>
+                <div style="position:absolute;right:12px;top:12px;display:flex;flex-direction:column;gap:8px;width:250px">
+                  <div style="padding:12px 14px;background:rgba(20,10,8,.92);border:1px solid rgba(255,77,77,.5);border-radius:8px">
+                    <div style="font:700 12px 'Space Grotesk',sans-serif;color:#ff8a8a;margin-bottom:4px">⚠ Smoke detected — Z1 Dry brush slope</div>
+                    <div style="font:400 11px/1.45 'Public Sans',sans-serif;color:rgba(255,255,255,.7)">14:32:07 · high-priority zone · crew notified</div>
+                    <div style="display:flex;gap:6px;margin-top:8px">
+                      <button style="padding:5px 10px;border:none;border-radius:5px;background:#ff4d4d;color:#fff;font:700 10px 'Space Grotesk',sans-serif;cursor:pointer" style-hover="background:#ff6b6b">DISPATCH</button>
+                      <button style="padding:5px 10px;border:1px solid rgba(255,255,255,.25);border-radius:5px;background:transparent;color:rgba(255,255,255,.75);font:600 10px 'Space Grotesk',sans-serif;cursor:pointer" style-hover="border-color:rgba(255,255,255,.5)">Dismiss</button>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+            <!-- map + chat row -->
+            <div style="display:grid;grid-template-columns:1fr 340px;gap:16px;flex:1;min-height:0">
+              <div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.08);background:#141b24">
+                <div style="position:absolute;left:-5%;top:55%;width:115%;height:11px;background:#1f2833;transform:rotate(-5deg)"></div>
+                <div style="position:absolute;left:36%;top:-5%;width:9px;height:115%;background:#1f2833;transform:rotate(6deg)"></div>
+                <div style="position:absolute;left:40%;top:20%;width:130px;height:110px;background:rgba(255,140,59,.14);clip-path:polygon(8% 100%,0 18%,100% 0,60% 100%)"></div>
+                <div style="position:absolute;left:calc(40% - 7px);top:calc(20% + 96px);width:14px;height:14px;border-radius:50%;background:#ff8c3b;border:3px solid #0d1117"></div>
+                <sc-if value="{{ alertActive }}" hint-placeholder-val="{{ true }}">
+                  <div style="position:absolute;left:47%;top:26%;width:14px;height:14px;border-radius:50%;background:#ff4d4d;box-shadow:0 0 0 5px rgba(255,77,77,.3);animation:pf-pulse 1.2s infinite"></div>
+                </sc-if>
+                <div style="position:absolute;left:10px;top:10px;padding:3px 8px;background:rgba(13,17,23,.85);border-radius:4px;font:600 10px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.8)">MAP · detection projected</div>
+                <div style="position:absolute;right:12px;bottom:10px;font:500 10px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.3)">[ map placeholder ]</div>
+              </div>
+              <div style="display:flex;flex-direction:column;background:#10151c;border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden">
+                <div style="padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.07);font:600 13px 'Space Grotesk',sans-serif">Ops chat</div>
+                <div style="flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px">
+                  <sc-for list="{{ chatLive }}" as="m" hint-placeholder-count="3">
+                    <div style="{{ m.rowStyle }}"><div style="{{ m.bubbleStyle }}">{{ m.text }}</div></div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;gap:8px;padding:10px;border-top:1px solid rgba(255,255,255,.07)">
+                  <div style="flex:1;height:34px;border:1px solid rgba(255,255,255,.15);border-radius:7px;display:flex;align-items:center;padding:0 12px;font:400 11px 'Public Sans',sans-serif;color:rgba(255,255,255,.35)">Ask about the scene…</div>
+                  <button style="width:34px;height:34px;border:none;border-radius:7px;background:#ff8c3b;color:#0d1117;font:700 13px 'Space Grotesk',sans-serif;cursor:pointer" style-hover="background:#ffa25e">↑</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== A / SCREEN 5 : history ===== -->
+        <sc-if value="{{ aIs5 }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="1a S5 History" style="display:flex;flex-direction:column;gap:16px;padding:20px;height:700px;box-sizing:border-box">
+            <!-- filter bar -->
+            <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:#10151c;border:1px solid rgba(255,255,255,.08);border-radius:8px">
+              <span style="font:600 12px 'Space Grotesk',sans-serif;color:rgba(255,255,255,.85)">Event history</span>
+              <div style="width:1px;height:20px;background:rgba(255,255,255,.1)"></div>
+              <div style="display:flex;align-items:center;gap:8px;font:500 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.7)">
+                <div style="padding:6px 10px;border:1px solid rgba(255,255,255,.15);border-radius:6px;white-space:nowrap">Jun 01 2026</div>
+                <span style="color:rgba(255,255,255,.4)">→</span>
+                <div style="padding:6px 10px;border:1px solid rgba(255,255,255,.15);border-radius:6px;white-space:nowrap">Jul 07 2026</div>
+              </div>
+              <div style="display:flex;gap:6px">
+                <div style="padding:6px 10px;border-radius:14px;background:rgba(255,140,59,.15);border:1px solid rgba(255,140,59,.4);font:600 11px 'Public Sans',sans-serif;color:#ff8c3b;white-space:nowrap">All cameras</div>
+                <div style="padding:6px 10px;border-radius:14px;border:1px solid rgba(255,255,255,.15);font:500 11px 'Public Sans',sans-serif;color:rgba(255,255,255,.6)">Smoke</div>
+                <div style="padding:6px 10px;border-radius:14px;border:1px solid rgba(255,255,255,.15);font:500 11px 'Public Sans',sans-serif;color:rgba(255,255,255,.6)">Fire</div>
+                <div style="padding:6px 10px;border-radius:14px;border:1px solid rgba(255,255,255,.15);font:500 11px 'Public Sans',sans-serif;color:rgba(255,255,255,.6);white-space:nowrap">False alarms</div>
+              </div>
+              <div style="flex:1"></div>
+              <span style="font:500 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.45)">23 events</span>
+            </div>
+            <!-- timeline chart -->
+            <div style="background:#10151c;border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:16px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:12px">
+                <span style="font:600 12px 'Space Grotesk',sans-serif">Detections per day</span>
+                <div style="display:flex;gap:14px;font:500 10px 'Public Sans',sans-serif;color:rgba(255,255,255,.55)">
+                  <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#ff4d4d;display:inline-block"></span>Confirmed</span>
+                  <span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#3a4552;display:inline-block"></span>False alarm</span>
+                </div>
+              </div>
+              <div style="display:flex;align-items:flex-end;gap:6px;height:90px">
+                <sc-for list="{{ histBars }}" as="b" hint-placeholder-count="20">
+                  <div style="flex:1;display:flex;flex-direction:column;gap:2px;justify-content:flex-end;height:100%">
+                    <div style="{{ b.redStyle }}"></div>
+                    <div style="{{ b.grayStyle }}"></div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-top:8px;font:500 9px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.35)"><span>Jun 01</span><span>Jun 12</span><span>Jun 24</span><span>Jul 07</span></div>
+            </div>
+            <!-- event list -->
+            <div style="flex:1;min-height:0;background:#10151c;border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:auto">
+              <sc-for list="{{ events }}" as="e" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.05)" style-hover="background:rgba(255,255,255,.03)">
+                  <div style="{{ e.dotStyle }}"></div>
+                  <span style="font:500 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.55);width:118px">{{ e.time }}</span>
+                  <span style="{{ e.typeStyle }}">{{ e.type }}</span>
+                  <span style="font:500 12px 'Public Sans',sans-serif;color:rgba(255,255,255,.85)">{{ e.desc }}</span>
+                  <div style="flex:1"></div>
+                  <span style="font:500 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.5)">{{ e.cam }}</span>
+                  <span style="font:600 11px 'IBM Plex Mono',monospace;color:rgba(255,255,255,.7)">{{ e.conf }}</span>
+                  <button style="padding:5px 10px;border:1px solid rgba(255,255,255,.18);border-radius:5px;background:transparent;color:rgba(255,255,255,.7);font:600 10px 'Space Grotesk',sans-serif;cursor:pointer;white-space:nowrap;flex:none" style-hover="border-color:#ff8c3b;color:#ff8c3b">View clip</button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <!-- ============ OPTION 1b : LIGHT TABLET ============ -->
+    <div id="1b" style="display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:baseline;gap:8px;font:400 11px/1.3 'Public Sans',sans-serif;color:rgba(0,0,0,.55)">
+        <a href="#1b" style="font:600 10.5px 'IBM Plex Mono',monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px">1b</a>
+        Clean light · tablet 834px · Public Sans · flame-red accent · field-crew friendly
+      </div>
+
+      <div data-screen-label="1b PyroFinder light tablet" style="width:834px;background:#faf9f7;border-radius:18px;overflow:hidden;border:1px solid rgba(0,0,0,.1);box-shadow:0 2px 12px rgba(0,0,0,.12);color:#1c1b18">
+
+        <!-- top bar -->
+        <div style="display:flex;align-items:center;gap:14px;padding:0 18px;height:58px;background:#ffffff;border-bottom:1px solid rgba(0,0,0,.08)">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:26px;height:26px;border-radius:8px;background:#d9481f;display:grid;place-items:center;color:#fff;font:700 13px 'Public Sans',sans-serif">P</div>
+            <span style="font:700 15px 'Public Sans',sans-serif;letter-spacing:-.01em">PyroFinder</span>
+          </div>
+          <div style="flex:1"></div>
+          <div style="display:flex;gap:2px;background:#f0ede8;border-radius:10px;padding:3px">
+            <button onClick="{{ bGoSetup }}" style="{{ bTabSetupStyle }}">Setup</button>
+            <button onClick="{{ bGoLive }}" style="{{ bTabLiveStyle }}">Live</button>
+            <button onClick="{{ bGoHist }}" style="{{ bTabHistStyle }}">History</button>
+          </div>
+          <div style="flex:1"></div>
+          <div style="width:34px;height:34px;border-radius:50%;background:#efe4dd;display:grid;place-items:center;font:700 12px 'Public Sans',sans-serif;color:#d9481f">DP</div>
+        </div>
+
+        <!-- stepper -->
+        <sc-if value="{{ bInSetup }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:8px;padding:14px 18px;background:#fdfcfa;border-bottom:1px solid rgba(0,0,0,.06)">
+            <sc-for list="{{ bSteps }}" as="st" hint-placeholder-count="3">
+              <button onClick="{{ st.onClick }}" style="{{ st.style }}">{{ st.num }}. {{ st.label }}</button>
+            </sc-for>
+            <div style="flex:1"></div>
+            <span style="font:500 11px 'Public Sans',sans-serif;color:rgba(0,0,0,.45)">CAM-04 · Ridge East</span>
+          </div>
+        </sc-if>
+
+        <!-- ===== B / SCREEN 1 ===== -->
+        <sc-if value="{{ bIs1 }}" hint-placeholder-val="{{ true }}">
+          <div data-screen-label="1b S1 Camera Setup" style="display:flex;flex-direction:column;gap:14px;padding:18px;height:760px;box-sizing:border-box">
+            <div style="padding:12px 16px;background:#fbeee7;border-radius:12px;font:500 13px/1.4 'Public Sans',sans-serif;color:#8a3413">
+              <strong style="font-weight:700">Step 1 · Place your camera.</strong> Tap the exact spot on the map where the camera is mounted, then drag to set its viewing direction.
+            </div>
+            <div style="position:relative;flex:1.4;background:#e7ebe2;border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,.07)">
+              <div style="position:absolute;left:-5%;top:56%;width:115%;height:13px;background:#f7f4ee;transform:rotate(-6deg)"></div>
+              <div style="position:absolute;left:32%;top:-5%;width:11px;height:115%;background:#f7f4ee;transform:rotate(8deg)"></div>
+              <div style="position:absolute;left:56%;top:10%;width:34%;height:36%;background:#dbe3d4;border-radius:12px"></div>
+              <div style="position:absolute;left:8%;top:12%;width:17%;height:26%;background:#d4dfc9;border-radius:50% 40% 55% 45%"></div>
+              <div style="position:absolute;left:44%;top:42%;width:130px;height:112px;background:rgba(217,72,31,.15);clip-path:polygon(8% 100%,0 18%,100% 0,60% 100%)"></div>
+              <div style="position:absolute;left:calc(44% - 9px);top:calc(42% + 96px);width:18px;height:18px;border-radius:50%;background:#d9481f;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3)"></div>
+              <div style="position:absolute;left:calc(44% + 18px);top:calc(42% + 88px);padding:4px 9px;background:#fff;border-radius:6px;font:600 10px 'IBM Plex Mono',monospace;color:#d9481f;box-shadow:0 1px 4px rgba(0,0,0,.15)">CAM-04 · placed ✓</div>
+              <div style="position:absolute;right:12px;bottom:10px;font:500 10px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.35)">[ map placeholder ]</div>
+            </div>
+            <div style="display:flex;gap:14px;flex:1;min-height:0">
+              <div style="position:relative;flex:1;border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,.07);background:repeating-linear-gradient(45deg,#e9e6e0,#e9e6e0 12px,#e2ded7 12px,#e2ded7 24px)">
+                <div style="position:absolute;left:10px;top:10px;padding:3px 9px;background:#fff;border-radius:5px;font:600 10px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.6);box-shadow:0 1px 3px rgba(0,0,0,.1)">LIVE · CAM-04</div>
+                <div style="position:absolute;inset:0;display:grid;place-items:center;font:500 11px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.35)">[ camera feed placeholder ]</div>
+              </div>
+              <div style="width:250px;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;padding:14px;display:flex;flex-direction:column">
+                <div style="font:700 13px 'Public Sans',sans-serif;margin-bottom:6px">Camera data</div>
+                <sc-for list="{{ camFieldsB }}" as="f" hint-placeholder-count="5">
+                  <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(0,0,0,.05)">
+                    <span style="font:500 11px 'Public Sans',sans-serif;color:rgba(0,0,0,.45)">{{ f.k }}</span>
+                    <span style="font:600 11px 'IBM Plex Mono',monospace;color:#1c1b18">{{ f.v }}</span>
+                  </div>
+                </sc-for>
+                <div style="flex:1"></div>
+                <button onClick="{{ bNext }}" style="height:46px;border:none;border-radius:10px;background:#d9481f;color:#fff;font:700 14px 'Public Sans',sans-serif;cursor:pointer" style-hover="background:#c23e18">Next →</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== B / SCREEN 2 ===== -->
+        <sc-if value="{{ bIs2 }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="1b S2 Anchor Calibration" style="display:flex;flex-direction:column;gap:14px;padding:18px;height:760px;box-sizing:border-box">
+            <div style="padding:12px 16px;background:#fbeee7;border-radius:12px;font:500 13px/1.4 'Public Sans',sans-serif;color:#8a3413">
+              <strong style="font-weight:700">Step 2 · Calibrate.</strong> Mark at least 4 anchor points on the camera image and match each one on the map. <span style="font:600 12px 'IBM Plex Mono',monospace;color:#1e7a43">4/4 matched ✓</span>
+            </div>
+            <div style="position:relative;flex:1;border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,.07);background:repeating-linear-gradient(45deg,#e9e6e0,#e9e6e0 12px,#e2ded7 12px,#e2ded7 24px)">
+              <div style="position:absolute;left:10px;top:10px;padding:3px 9px;background:#fff;border-radius:5px;font:600 10px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.6);box-shadow:0 1px 3px rgba(0,0,0,.1)">CAMERA IMAGE · tap to add anchor</div>
+              <div style="position:absolute;inset:0;display:grid;place-items:center;font:500 11px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.35)">[ camera frame placeholder ]</div>
+              <sc-for list="{{ anchorsImgB }}" as="an" hint-placeholder-count="4">
+                <div style="{{ an.style }}"><span style="font:700 10px 'IBM Plex Mono',monospace;color:#fff">{{ an.n }}</span></div>
+              </sc-for>
+            </div>
+            <div style="position:relative;flex:1;border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,.07);background:#e7ebe2">
+              <div style="position:absolute;left:-5%;top:58%;width:115%;height:12px;background:#f7f4ee;transform:rotate(-5deg)"></div>
+              <div style="position:absolute;left:34%;top:-5%;width:10px;height:115%;background:#f7f4ee;transform:rotate(7deg)"></div>
+              <div style="position:absolute;left:58%;top:12%;width:30%;height:34%;background:#dbe3d4;border-radius:12px"></div>
+              <div style="position:absolute;left:10px;top:10px;padding:3px 9px;background:#fff;border-radius:5px;font:600 10px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.6);box-shadow:0 1px 3px rgba(0,0,0,.1);z-index:2">MAP · match anchors</div>
+              <div style="position:absolute;right:12px;bottom:10px;font:500 10px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.35)">[ map placeholder ]</div>
+              <sc-for list="{{ anchorsMapB }}" as="an" hint-placeholder-count="4">
+                <div style="{{ an.style }}"><span style="font:700 10px 'IBM Plex Mono',monospace;color:#fff">{{ an.n }}</span></div>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:8px;overflow-x:auto">
+              <sc-for list="{{ refPoints }}" as="rp" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:7px;padding:8px 12px;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:10px;white-space:nowrap">
+                  <div style="width:18px;height:18px;border-radius:50%;background:#d9481f;display:grid;place-items:center;font:700 10px 'IBM Plex Mono',monospace;color:#fff">{{ rp.n }}</div>
+                  <span style="font:600 11px 'Public Sans',sans-serif">{{ rp.name }}</span>
+                  <span style="font:600 10px 'IBM Plex Mono',monospace;color:#1e7a43">✓</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:10px">
+              <button onClick="{{ bPrev }}" style="height:46px;padding:0 20px;border:1px solid rgba(0,0,0,.15);border-radius:10px;background:#fff;color:#1c1b18;font:600 13px 'Public Sans',sans-serif;cursor:pointer" style-hover="border-color:rgba(0,0,0,.35)">← Back</button>
+              <div style="flex:1"></div>
+              <button style="height:46px;padding:0 22px;border:1.5px solid #1e7a43;border-radius:10px;background:#eaf5ee;color:#1e7a43;font:700 13px 'Public Sans',sans-serif;cursor:pointer" style-hover="background:#dcefe3">SAVE</button>
+              <button onClick="{{ bNext }}" style="height:46px;padding:0 24px;border:none;border-radius:10px;background:#d9481f;color:#fff;font:700 13px 'Public Sans',sans-serif;cursor:pointer" style-hover="background:#c23e18">Next →</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== B / SCREEN 3 ===== -->
+        <sc-if value="{{ bIs3 }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="1b S3 Zone Marking" style="display:flex;flex-direction:column;gap:14px;padding:18px;height:760px;box-sizing:border-box">
+            <div style="position:relative;flex:1.2;border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,.07);background:repeating-linear-gradient(45deg,#e9e6e0,#e9e6e0 12px,#e2ded7 12px,#e2ded7 24px)">
+              <div style="position:absolute;left:10px;top:10px;padding:3px 9px;background:#fff;border-radius:5px;font:600 10px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.6);box-shadow:0 1px 3px rgba(0,0,0,.1)">CAM-04 · zone workspace</div>
+              <div style="position:absolute;inset:0;display:grid;place-items:center;font:500 11px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.35)">[ camera frame placeholder ]</div>
+              <div style="position:absolute;left:10%;top:28%;width:40%;height:46%;background:rgba(217,72,31,.16);border:2px dashed #d9481f;clip-path:polygon(0 30%,40% 0,100% 18%,88% 100%,10% 92%)"></div>
+              <div style="position:absolute;left:12%;top:23%;padding:3px 9px;background:#d9481f;border-radius:5px;font:700 10px 'IBM Plex Mono',monospace;color:#fff">Z1 · Dry brush · HIGH</div>
+              <div style="position:absolute;left:58%;top:50%;width:32%;height:32%;background:rgba(30,122,67,.13);border:2px dashed #1e7a43;clip-path:polygon(0 20%,60% 0,100% 40%,80% 100%,5% 88%)"></div>
+              <div style="position:absolute;left:60%;top:45%;padding:3px 9px;background:#1e7a43;border-radius:5px;font:700 10px 'IBM Plex Mono',monospace;color:#fff">Z2 · Access road · MED</div>
+            </div>
+            <!-- chat -->
+            <div style="flex:1;display:flex;flex-direction:column;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;overflow:hidden;min-height:0">
+              <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid rgba(0,0,0,.06)">
+                <div style="width:20px;height:20px;border-radius:6px;background:#fbeee7;display:grid;place-items:center;font:700 11px 'Public Sans',sans-serif;color:#d9481f">✦</div>
+                <span style="font:700 13px 'Public Sans',sans-serif">Zone assistant</span>
+                <div style="flex:1"></div>
+                <span style="font:500 10px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.4)">2 zones registered</span>
+              </div>
+              <div style="flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px">
+                <sc-for list="{{ chatB }}" as="m" hint-placeholder-count="5">
+                  <div style="{{ m.rowStyle }}"><div style="{{ m.bubbleStyle }}">{{ m.text }}</div></div>
+                </sc-for>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <button style="padding:7px 12px;border:1.5px solid #d9481f;border-radius:16px;background:#fff;color:#d9481f;font:700 11px 'Public Sans',sans-serif;cursor:pointer" style-hover="background:#fbeee7">Looks right ✓</button>
+                  <button style="padding:7px 12px;border:1px solid rgba(0,0,0,.15);border-radius:16px;background:#fff;color:rgba(0,0,0,.65);font:600 11px 'Public Sans',sans-serif;cursor:pointer" style-hover="border-color:rgba(0,0,0,.35)">Edit outline</button>
+                  <button style="padding:7px 12px;border:1px solid rgba(0,0,0,.15);border-radius:16px;background:#fff;color:rgba(0,0,0,.65);font:600 11px 'Public Sans',sans-serif;cursor:pointer" style-hover="border-color:rgba(0,0,0,.35)">Change priority</button>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;padding:10px;border-top:1px solid rgba(0,0,0,.06)">
+                <div style="flex:1;height:38px;border:1px solid rgba(0,0,0,.12);border-radius:10px;display:flex;align-items:center;padding:0 12px;font:400 12px 'Public Sans',sans-serif;color:rgba(0,0,0,.35)">Describe a zone, e.g. "mark the dry field on the left"…</div>
+                <button style="width:38px;height:38px;border:none;border-radius:10px;background:#d9481f;color:#fff;font:700 14px 'Public Sans',sans-serif;cursor:pointer" style-hover="background:#c23e18">↑</button>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px">
+              <button onClick="{{ bPrev }}" style="height:46px;padding:0 20px;border:1px solid rgba(0,0,0,.15);border-radius:10px;background:#fff;color:#1c1b18;font:600 13px 'Public Sans',sans-serif;cursor:pointer" style-hover="border-color:rgba(0,0,0,.35)">← Back</button>
+              <div style="flex:1"></div>
+              <button onClick="{{ bGoLive }}" style="height:46px;padding:0 26px;border:none;border-radius:10px;background:#1e7a43;color:#fff;font:700 13px 'Public Sans',sans-serif;cursor:pointer" style-hover="background:#186a39">Finish — Go live ✓</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== B / SCREEN 4 ===== -->
+        <sc-if value="{{ bIs4 }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="1b S4 Live Monitoring" style="display:flex;flex-direction:column;gap:14px;padding:18px;height:820px;box-sizing:border-box">
+            <sc-if value="{{ alertActive }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:#d9481f;border-radius:12px;color:#fff">
+                <div style="width:9px;height:9px;border-radius:50%;background:#fff;animation:pf-pulse 1.2s infinite"></div>
+                <span style="font:700 13px 'Public Sans',sans-serif">Smoke detected — Z1 Dry brush slope · 14:32</span>
+                <div style="flex:1"></div>
+                <button style="padding:7px 14px;border:none;border-radius:8px;background:#fff;color:#d9481f;font:700 11px 'Public Sans',sans-serif;cursor:pointer" style-hover="background:#ffe9e0">DISPATCH</button>
+                <button style="padding:7px 14px;border:1px solid rgba(255,255,255,.5);border-radius:8px;background:transparent;color:#fff;font:600 11px 'Public Sans',sans-serif;cursor:pointer" style-hover="background:rgba(255,255,255,.12)">Dismiss</button>
+              </div>
+            </sc-if>
+            <div style="position:relative;flex:1.4;border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,.07);background:repeating-linear-gradient(45deg,#e9e6e0,#e9e6e0 12px,#e2ded7 12px,#e2ded7 24px)">
+              <div style="position:absolute;left:10px;top:10px;padding:3px 9px;background:#fff;border-radius:5px;font:600 10px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.6);box-shadow:0 1px 3px rgba(0,0,0,.1)">LIVE · CAM-04 · Ridge East</div>
+              <div style="position:absolute;inset:0;display:grid;place-items:center;font:500 11px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.35)">[ live camera feed placeholder ]</div>
+              <sc-if value="{{ alertActive }}" hint-placeholder-val="{{ true }}">
+                <div style="position:absolute;left:22%;top:30%;width:170px;height:120px;border:2.5px solid #d9481f;border-radius:6px;box-shadow:0 0 0 4px rgba(217,72,31,.2)"></div>
+                <div style="position:absolute;left:22%;top:calc(30% - 24px);padding:3px 9px;background:#d9481f;border-radius:5px 5px 0 0;font:700 11px 'IBM Plex Mono',monospace;color:#fff;white-space:nowrap">SMOKE {{ confidencePct }}</div>
+              </sc-if>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;flex:1;min-height:0">
+              <div style="position:relative;border-radius:14px;overflow:hidden;border:1px solid rgba(0,0,0,.07);background:#e7ebe2">
+                <div style="position:absolute;left:-5%;top:55%;width:115%;height:12px;background:#f7f4ee;transform:rotate(-5deg)"></div>
+                <div style="position:absolute;left:36%;top:-5%;width:10px;height:115%;background:#f7f4ee;transform:rotate(6deg)"></div>
+                <div style="position:absolute;left:38%;top:18%;width:120px;height:100px;background:rgba(217,72,31,.15);clip-path:polygon(8% 100%,0 18%,100% 0,60% 100%)"></div>
+                <div style="position:absolute;left:calc(38% - 8px);top:calc(18% + 86px);width:16px;height:16px;border-radius:50%;background:#d9481f;border:3px solid #fff"></div>
+                <sc-if value="{{ alertActive }}" hint-placeholder-val="{{ true }}">
+                  <div style="position:absolute;left:46%;top:24%;width:14px;height:14px;border-radius:50%;background:#d9481f;box-shadow:0 0 0 5px rgba(217,72,31,.25);animation:pf-pulse 1.2s infinite"></div>
+                </sc-if>
+                <div style="position:absolute;left:10px;top:10px;padding:3px 9px;background:#fff;border-radius:5px;font:600 10px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.6);box-shadow:0 1px 3px rgba(0,0,0,.1)">MAP</div>
+              </div>
+              <div style="display:flex;flex-direction:column;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;overflow:hidden">
+                <div style="padding:11px 14px;border-bottom:1px solid rgba(0,0,0,.06);font:700 13px 'Public Sans',sans-serif">Ops chat</div>
+                <div style="flex:1;overflow:auto;padding:10px;display:flex;flex-direction:column;gap:7px">
+                  <sc-for list="{{ chatLiveB }}" as="m" hint-placeholder-count="3">
+                    <div style="{{ m.rowStyle }}"><div style="{{ m.bubbleStyle }}">{{ m.text }}</div></div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;gap:8px;padding:9px;border-top:1px solid rgba(0,0,0,.06)">
+                  <div style="flex:1;height:34px;border:1px solid rgba(0,0,0,.12);border-radius:9px;display:flex;align-items:center;padding:0 11px;font:400 11px 'Public Sans',sans-serif;color:rgba(0,0,0,.35)">Ask about the scene…</div>
+                  <button style="width:34px;height:34px;border:none;border-radius:9px;background:#d9481f;color:#fff;font:700 13px 'Public Sans',sans-serif;cursor:pointer" style-hover="background:#c23e18">↑</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- ===== B / SCREEN 5 ===== -->
+        <sc-if value="{{ bIs5 }}" hint-placeholder-val="{{ false }}">
+          <div data-screen-label="1b S5 History" style="display:flex;flex-direction:column;gap:14px;padding:18px;height:820px;box-sizing:border-box">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <span style="font:700 16px 'Public Sans',sans-serif">History</span>
+              <div style="flex:1"></div>
+              <div style="display:flex;align-items:center;gap:6px;font:600 11px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.7)">
+                <div style="padding:7px 11px;background:#fff;border:1px solid rgba(0,0,0,.12);border-radius:9px;white-space:nowrap">Jun 01 2026</div>
+                <span style="color:rgba(0,0,0,.35)">→</span>
+                <div style="padding:7px 11px;background:#fff;border:1px solid rgba(0,0,0,.12);border-radius:9px;white-space:nowrap">Jul 07 2026</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <div style="padding:7px 12px;border-radius:16px;background:#d9481f;color:#fff;font:700 11px 'Public Sans',sans-serif">All</div>
+              <div style="padding:7px 12px;border-radius:16px;background:#fff;border:1px solid rgba(0,0,0,.12);color:rgba(0,0,0,.6);font:600 11px 'Public Sans',sans-serif">Smoke</div>
+              <div style="padding:7px 12px;border-radius:16px;background:#fff;border:1px solid rgba(0,0,0,.12);color:rgba(0,0,0,.6);font:600 11px 'Public Sans',sans-serif">Fire</div>
+              <div style="padding:7px 12px;border-radius:16px;background:#fff;border:1px solid rgba(0,0,0,.12);color:rgba(0,0,0,.6);font:600 11px 'Public Sans',sans-serif">False alarms</div>
+            </div>
+            <div style="background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;padding:14px">
+              <div style="font:700 12px 'Public Sans',sans-serif;margin-bottom:10px">Detections per day <span style="font:500 10px 'Public Sans',sans-serif;color:rgba(0,0,0,.4)">· red = confirmed, gray = false alarm</span></div>
+              <div style="display:flex;align-items:flex-end;gap:5px;height:80px">
+                <sc-for list="{{ histBarsB }}" as="b" hint-placeholder-count="20">
+                  <div style="flex:1;display:flex;flex-direction:column;gap:2px;justify-content:flex-end;height:100%">
+                    <div style="{{ b.redStyle }}"></div>
+                    <div style="{{ b.grayStyle }}"></div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;justify-content:space-between;margin-top:6px;font:500 9px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.35)"><span>Jun 01</span><span>Jun 12</span><span>Jun 24</span><span>Jul 07</span></div>
+            </div>
+            <div style="flex:1;min-height:0;background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:14px;overflow:auto">
+              <sc-for list="{{ eventsB }}" as="e" hint-placeholder-count="5">
+                <div style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid rgba(0,0,0,.05)" style-hover="background:#faf7f3">
+                  <div style="{{ e.dotStyle }}"></div>
+                  <div style="display:flex;flex-direction:column;gap:2px;flex:1">
+                    <span style="font:600 12px 'Public Sans',sans-serif;color:#1c1b18">{{ e.desc }}</span>
+                    <span style="font:500 10px 'IBM Plex Mono',monospace;color:rgba(0,0,0,.45)">{{ e.time }} · {{ e.cam }} · {{ e.conf }}</span>
+                  </div>
+                  <span style="{{ e.typeStyle }}">{{ e.type }}</span>
+                  <button style="padding:6px 11px;border:1px solid rgba(0,0,0,.14);border-radius:8px;background:#fff;color:rgba(0,0,0,.7);font:600 10px 'Public Sans',sans-serif;cursor:pointer" style-hover="border-color:#d9481f;color:#d9481f">Clip</button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+
+  <p style="margin:26px 0 0;font:12px/1.5 'Public Sans',sans-serif;color:rgba(0,0,0,.5)">Try next: "more like <a href="#1a" style="font:600 10.5px 'IBM Plex Mono',monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#1a1a1a;border-radius:5px;text-decoration:none">1a</a> but light theme" · "make the zone chat fully interactive" · "add a multi-camera overview screen"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;alertActive&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Live demo&quot;},&quot;confidence&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:87,&quot;min&quot;:50,&quot;max&quot;:99,&quot;step&quot;:1,&quot;unit&quot;:&quot;%&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Live demo&quot;}}">
+class Component extends DCLogic {
+  state = { a: 1, b: 1 };
+
+  go(v, n) { this.setState({ [v]: n }); }
+
+  renderVals() {
+    const { a, b } = this.state;
+    const alertActive = this.props.alertActive ?? true;
+    const conf = this.props.confidence ?? 87;
+
+    // ---- variant A styles ----
+    const aTab = (act) => `height:34px;padding:0 16px;border:none;border-radius:7px;cursor:pointer;font:600 12px 'Space Grotesk',sans-serif;` +
+      (act ? `background:rgba(255,140,59,.15);color:#ff8c3b;` : `background:transparent;color:rgba(255,255,255,.55);`);
+    const aStep = (n) => {
+      const act = a === n;
+      return {
+        num: String(n),
+        label: ['Place camera', 'Calibrate anchors', 'Mark zones'][n - 1],
+        onClick: () => this.go('a', n),
+        style: `display:flex;align-items:center;gap:8px;margin-right:18px;border:none;background:transparent;cursor:pointer;font:600 12px 'Space Grotesk',sans-serif;color:${act ? '#ff8c3b' : 'rgba(255,255,255,.45)'};padding:0`,
+        numStyle: `width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font:700 11px 'IBM Plex Mono',monospace;${act ? 'background:#ff8c3b;color:#0d1117' : (a > n ? 'background:rgba(126,226,160,.2);color:#7ee2a0' : 'background:rgba(255,255,255,.08);color:rgba(255,255,255,.5)')}`
+      };
+    };
+
+    // ---- variant B styles ----
+    const bTab = (act) => `height:32px;padding:0 18px;border:none;border-radius:8px;cursor:pointer;font:700 12px 'Public Sans',sans-serif;` +
+      (act ? `background:#fff;color:#d9481f;box-shadow:0 1px 3px rgba(0,0,0,.12);` : `background:transparent;color:rgba(0,0,0,.5);`);
+    const bStep = (n) => {
+      const act = b === n;
+      return {
+        num: String(n),
+        label: ['Place', 'Calibrate', 'Zones'][n - 1],
+        onClick: () => this.go('b', n),
+        style: `height:32px;padding:0 14px;border-radius:16px;cursor:pointer;font:700 11px 'Public Sans',sans-serif;border:1px solid ${act ? '#d9481f' : 'rgba(0,0,0,.12)'};background:${act ? '#fbeee7' : '#fff'};color:${act ? '#d9481f' : (b > n ? '#1e7a43' : 'rgba(0,0,0,.5)')}`
+      };
+    };
+
+    // anchors
+    const posImg = [[22, 30], [64, 22], [40, 62], [78, 68]];
+    const posMap = [[30, 40], [70, 25], [46, 70], [80, 58]];
+    const mkAnchor = (pos, dark) => pos.map(([x, y], i) => ({
+      n: String(i + 1),
+      style: `position:absolute;left:${x}%;top:${y}%;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;` +
+        (dark ? `background:#ff8c3b;border:2px solid #0d1117;box-shadow:0 0 0 3px rgba(255,140,59,.3)` : `background:#d9481f;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3)`)
+    }));
+
+    // chat bubbles
+    const mkChat = (msgs, theme) => msgs.map(m => {
+      const ai = m.who === 'ai';
+      const dark = theme === 'dark';
+      return {
+        text: m.text,
+        rowStyle: `display:flex;${ai ? '' : 'justify-content:flex-end;'}`,
+        bubbleStyle: `max-width:85%;padding:8px 11px;border-radius:${ai ? '3px 10px 10px 10px' : '10px 3px 10px 10px'};font:400 11.5px/1.45 'Public Sans',sans-serif;` +
+          (dark
+            ? (ai ? `background:rgba(255,255,255,.06);color:rgba(255,255,255,.85)` : `background:rgba(255,140,59,.16);color:#ffc79b`)
+            : (ai ? `background:#f0ede8;color:#1c1b18` : `background:#fbeee7;color:#8a3413`))
+      };
+    });
+
+    const zoneChat = [
+      { who: 'ai', text: 'Let\u2019s mark detection zones. Do you want to draw them manually or should I detect risk areas with AI?' },
+      { who: 'user', text: 'Use AI detection' },
+      { who: 'ai', text: 'I found a dry brush slope covering the left of the frame. What should I call it, and what priority?' },
+      { who: 'user', text: 'Z1 \u201cDry brush slope\u201d, high priority' },
+      { who: 'ai', text: 'Done \u2014 I segmented the slope and outlined it in orange. I also anchored it to the map. Happy with the shape?' }
+    ];
+    const liveChat = [
+      { who: 'ai', text: 'Smoke plume detected in Z1 at 14:32, confidence ' + conf + '%. Wind NW 12 km/h \u2014 drifting toward the access road.' },
+      { who: 'user', text: 'Any vehicles on the access road?' },
+      { who: 'ai', text: 'No vehicles in Z2 for the last 40 minutes. Nearest crew is 9 min out.' }
+    ];
+
+    // history bars (deterministic pseudo-random)
+    const mkBars = (dark) => Array.from({ length: 24 }, (_, i) => {
+      const red = (i * 7 + 3) % 5 === 0 ? 2 + (i % 3) : (i % 6 === 0 ? 1 : 0);
+      const gray = 1 + ((i * 5 + 2) % 4);
+      const u = 14;
+      return {
+        redStyle: `height:${red * u}px;border-radius:2px;background:${dark ? '#ff4d4d' : '#d9481f'};${red ? '' : 'display:none;'}`,
+        grayStyle: `height:${gray * u}px;border-radius:2px;background:${dark ? '#3a4552' : '#e4ded5'}`
+      };
+    });
+
+    const evData = [
+      { time: 'Jul 07 · 14:32', type: 'SMOKE', desc: 'Smoke plume — Z1 Dry brush slope', cam: 'CAM-04', conf: conf + '%', kind: 'alert' },
+      { time: 'Jul 05 · 09:14', type: 'FIRE', desc: 'Open flame confirmed — dispatched, contained 09:58', cam: 'CAM-02', conf: '96%', kind: 'alert' },
+      { time: 'Jul 02 · 17:45', type: 'FALSE', desc: 'Dust cloud from harvester — auto-dismissed', cam: 'CAM-04', conf: '61%', kind: 'ok' },
+      { time: 'Jun 28 · 12:03', type: 'SMOKE', desc: 'Controlled burn — verified with fire dept.', cam: 'CAM-01', conf: '89%', kind: 'warn' },
+      { time: 'Jun 21 · 15:27', type: 'FALSE', desc: 'Low sun glare on lens', cam: 'CAM-03', conf: '54%', kind: 'ok' },
+      { time: 'Jun 14 · 11:52', type: 'SMOKE', desc: 'BBQ smoke near picnic area — crew checked', cam: 'CAM-02', conf: '78%', kind: 'warn' }
+    ];
+    const mkEvents = (dark) => evData.map(e => {
+      const colors = dark
+        ? { alert: '#ff4d4d', warn: '#ff8c3b', ok: '#4a5560' }
+        : { alert: '#d9481f', warn: '#d97e1f', ok: '#b9b2a6' };
+      const c = colors[e.kind];
+      return {
+        ...e,
+        dotStyle: `width:9px;height:9px;border-radius:50%;background:${c};flex:none`,
+        typeStyle: `font:700 9.5px 'IBM Plex Mono',monospace;padding:3px 7px;border-radius:4px;flex:none;` +
+          (dark ? `background:${c}22;color:${c};border:1px solid ${c}55` : `background:${e.kind === 'ok' ? '#f0ede8' : '#fbeee7'};color:${e.kind === 'ok' ? 'rgba(0,0,0,.5)' : c}`)
+      };
+    });
+
+    const zones = [
+      { id: 'Z1', name: 'Dry brush slope', prio: 'HIGH', mode: 'AI segmented', dotStyle: 'width:10px;height:10px;border-radius:3px;background:#ff8c3b', prioStyle: `font:700 9.5px 'IBM Plex Mono',monospace;padding:2px 7px;border-radius:4px;background:rgba(255,77,77,.15);color:#ff8a8a;border:1px solid rgba(255,77,77,.4)` },
+      { id: 'Z2', name: 'Access road', prio: 'MED', mode: 'manual', dotStyle: 'width:10px;height:10px;border-radius:3px;background:#5ea9ff', prioStyle: `font:700 9.5px 'IBM Plex Mono',monospace;padding:2px 7px;border-radius:4px;background:rgba(94,169,255,.12);color:#8fc4ff;border:1px solid rgba(94,169,255,.4)` }
+    ];
+
+    return {
+      alertActive, confidencePct: conf + '%',
+      // A
+      aIs1: a === 1, aIs2: a === 2, aIs3: a === 3, aIs4: a === 4, aIs5: a === 5,
+      aInSetup: a <= 3,
+      aTabSetupStyle: aTab(a <= 3), aTabLiveStyle: aTab(a === 4), aTabHistStyle: aTab(a === 5),
+      aGoSetup: () => this.go('a', 1), aGoLive: () => this.go('a', 4), aGoHist: () => this.go('a', 5),
+      aNext: () => this.go('a', Math.min(a + 1, 5)), aPrev: () => this.go('a', Math.max(a - 1, 1)),
+      aSteps: [aStep(1), aStep(2), aStep(3)],
+      camFields: [
+        { k: 'Camera ID', v: 'CAM-04' }, { k: 'Name', v: 'Ridge East' }, { k: 'Stream', v: 'rtsp://10.0.4.12' },
+        { k: 'Resolution', v: '2560×1440' }, { k: 'FOV', v: '92°' }, { k: 'Heading', v: '312° NW' },
+        { k: 'Elevation', v: '418 m' }, { k: 'Status', v: 'ONLINE' }
+      ],
+      anchorsImg: mkAnchor(posImg, true), anchorsMap: mkAnchor(posMap, true),
+      refPoints: [
+        { n: '1', name: 'Water tower' }, { n: '2', name: 'Road junction' },
+        { n: '3', name: 'Lone oak tree' }, { n: '4', name: 'Fence corner' }
+      ],
+      zones,
+      chatA: mkChat(zoneChat, 'dark'), chatLive: mkChat(liveChat, 'dark'),
+      histBars: mkBars(true), events: mkEvents(true),
+      // B
+      bIs1: b === 1, bIs2: b === 2, bIs3: b === 3, bIs4: b === 4, bIs5: b === 5,
+      bInSetup: b <= 3,
+      bTabSetupStyle: bTab(b <= 3), bTabLiveStyle: bTab(b === 4), bTabHistStyle: bTab(b === 5),
+      bGoSetup: () => this.go('b', 1), bGoLive: () => this.go('b', 4), bGoHist: () => this.go('b', 5),
+      bNext: () => this.go('b', Math.min(b + 1, 5)), bPrev: () => this.go('b', Math.max(b - 1, 1)),
+      bSteps: [bStep(1), bStep(2), bStep(3)],
+      camFieldsB: [
+        { k: 'Camera ID', v: 'CAM-04' }, { k: 'Name', v: 'Ridge East' },
+        { k: 'Resolution', v: '2560×1440' }, { k: 'FOV', v: '92°' }, { k: 'Status', v: 'ONLINE' }
+      ],
+      anchorsImgB: mkAnchor(posImg, false), anchorsMapB: mkAnchor(posMap, false),
+      chatB: mkChat(zoneChat, 'light'), chatLiveB: mkChat(liveChat, 'light'),
+      histBarsB: mkBars(false), eventsB: mkEvents(false)
+    };
+  }
+}
+</script>
+</body>
+</html>

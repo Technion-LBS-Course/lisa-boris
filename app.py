@@ -21,6 +21,17 @@ from src.dashboards import (
 )
 
 st.set_page_config(page_title="PyroFinder", layout="wide")
+
+# Default landing: send new sessions to the Live Ops dashboard (added as a page in
+# pages/). Guarded so it fires once per session — afterwards the classic multi-
+# dashboard shell below stays reachable via the sidebar page nav without bouncing.
+if "lo_landing_done" not in st.session_state:
+    st.session_state["lo_landing_done"] = True
+    try:
+        st.switch_page("pages/1_Live_Ops.py")
+    except Exception:
+        pass  # page missing or older Streamlit — fall through to the classic shell
+
 inject_pyrofinder_theme(
     background_video_path=Path("design_images") / "Nordic_Forest_LowPolymp_.mp4",
     use_video_background=True,

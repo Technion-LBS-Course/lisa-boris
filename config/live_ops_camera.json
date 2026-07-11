@@ -1,0 +1,272 @@
+{
+  "camera": {
+    "camera_id": "20260709",
+    "customer_id": "ThunderValley",
+    "site_id": "ThunderValley",
+    "camera_name": "ThunderValleyWest",
+    "latitude": 38.840335705966275,
+    "longitude": -121.3152325466259,
+    "camera_height_m": 70.0,
+    "indoor_outdoor": "outdoor",
+    "notes": "https://share.watchduty.org/camera/YWxlcnR3ZXN0OjE3NDE?image_url=https://cameras.alertcalifornia.org/public-camera-data/Axis-ThunderValleyCasinoWest/latest-frame.jpg?rqts=1783596917.94"
+  },
+  "reference_points": [
+    {
+      "point_id": "82fc4c12",
+      "point_name": "1",
+      "map_lat": 38.84304,
+      "map_lon": -121.316998,
+      "image_x_px": 386.2948207171315,
+      "image_y_px": 879.29203539823,
+      "image_x_norm": 0.20119521912350596,
+      "image_y_norm": 0.8141592920353982,
+      "enabled": true,
+      "notes": "38.843065234429915, -121.31704775862902"
+    },
+    {
+      "point_id": "21f813ab",
+      "point_name": "2",
+      "map_lat": 38.84482,
+      "map_lon": -121.316904,
+      "image_x_px": 709.4820717131474,
+      "image_y_px": 753.1327433628319,
+      "image_x_norm": 0.3695219123505976,
+      "image_y_norm": 0.6973451327433628,
+      "enabled": true,
+      "notes": "38.84483224509316, -121.316943499109"
+    },
+    {
+      "point_id": "ba743487",
+      "point_name": "3",
+      "map_lat": 38.857271,
+      "map_lon": -121.305292,
+      "image_x_px": 1897.0517928286852,
+      "image_y_px": 602.1238938053098,
+      "image_x_norm": 0.9880478087649401,
+      "image_y_norm": 0.5575221238938053,
+      "enabled": true,
+      "notes": "38.85731137698563, -121.30535278360567"
+    },
+    {
+      "point_id": "c2925592",
+      "point_name": "4",
+      "map_lat": 38.857259,
+      "map_lon": -121.313486,
+      "image_x_px": 1279.3625498007968,
+      "image_y_px": 598.3008849557522,
+      "image_x_norm": 0.6663346613545816,
+      "image_y_norm": 0.5539823008849557,
+      "enabled": true,
+      "notes": "38.85725565718632, -121.3135402068228"
+    },
+    {
+      "point_id": "f51295c1",
+      "point_name": "5",
+      "map_lat": 38.86096,
+      "map_lon": -121.316912,
+      "image_x_px": 1049.8804780876494,
+      "image_y_px": 583.0088495575221,
+      "image_x_norm": 0.546812749003984,
+      "image_y_norm": 0.5398230088495575,
+      "enabled": true,
+      "notes": "38.86089397941224, -121.3169766033816"
+    },
+    {
+      "point_id": "08922093",
+      "point_name": "6",
+      "map_lat": 38.861799,
+      "map_lon": -121.322535,
+      "image_x_px": 734.3426294820717,
+      "image_y_px": 581.0973451327434,
+      "image_x_norm": 0.38247011952191234,
+      "image_y_norm": 0.5380530973451327,
+      "enabled": true,
+      "notes": "38.86154592018643, -121.32245150081017"
+    },
+    {
+      "point_id": "905615ae",
+      "point_name": "7",
+      "map_lat": 38.842004,
+      "map_lon": -121.316882,
+      "image_x_px": 43.98406374501992,
+      "image_y_px": 1066.6194690265486,
+      "image_x_norm": 0.02290836653386454,
+      "image_y_norm": 0.9876106194690265,
+      "enabled": true,
+      "notes": "38.84202604418475, -121.31693142511834"
+    }
+  ],
+  "image_zones": [
+    {
+      "zone_id": "ad33a512",
+      "zone_name": "isolated house",
+      "zone_type": "barn",
+      "alert_label": "isolated house",
+      "priority": 9,
+      "priority_label": "high",
+      "object_to_find": "farmhouse",
+      "requires_user_confirmation": true,
+      "vertices_px": [
+        [
+          317.4282433983926,
+          879.4285714285714
+        ],
+        [
+          328.4500574052813,
+          850.7755102040817
+        ],
+        [
+          416.6245694603904,
+          844.1632653061224
+        ],
+        [
+          416.6245694603904,
+          890.4489795918367
+        ]
+      ],
+      "vertices_norm": [
+        [
+          0.16532721010332949,
+          0.8142857142857143
+        ],
+        [
+          0.17106773823191734,
+          0.7877551020408163
+        ],
+        [
+          0.21699196326061998,
+          0.7816326530612244
+        ],
+        [
+          0.21699196326061998,
+          0.8244897959183674
+        ]
+      ],
+      "zone_ref_point_px": [
+        386.2948207171315,
+        879.29203539823
+      ],
+      "zone_ref_point_norm": [
+        0.20119521912350596,
+        0.8141592920353982
+      ],
+      "enabled": true,
+      "notes": "",
+      "polygon_status": "drawn"
+    },
+    {
+      "zone_id": "6eba8d2f",
+      "zone_name": "Lincoln Crossing",
+      "zone_type": "custom",
+      "alert_label": "Lincoln Crossing East",
+      "priority": 9,
+      "priority_label": "high",
+      "object_to_find": "neighborhood",
+      "requires_user_confirmation": true,
+      "vertices_px": [
+        [
+          1280.7347876004592,
+          595.1020408163265
+        ],
+        [
+          1878.1171067738233,
+          601.7142857142857
+        ],
+        [
+          1856.0734787600459,
+          570.8571428571429
+        ],
+        [
+          1335.8438576349024,
+          557.6326530612245
+        ]
+      ],
+      "vertices_norm": [
+        [
+          0.6670493685419058,
+          0.5510204081632653
+        ],
+        [
+          0.9781859931113662,
+          0.557142857142857
+        ],
+        [
+          0.9667049368541906,
+          0.5285714285714286
+        ],
+        [
+          0.695752009184845,
+          0.5163265306122449
+        ]
+      ],
+      "zone_ref_point_px": [
+        1587.1412169919633,
+        579.6734693877551
+      ],
+      "zone_ref_point_norm": [
+        0.8266360505166476,
+        0.536734693877551
+      ],
+      "enabled": true,
+      "notes": "",
+      "polygon_status": "drawn"
+    },
+    {
+      "zone_id": "d4390237",
+      "zone_name": "Lincoln Crossing West",
+      "zone_type": "custom",
+      "alert_label": "Lincoln Crossing West",
+      "priority": 5,
+      "priority_label": "medium",
+      "object_to_find": "neighborhood",
+      "requires_user_confirmation": true,
+      "vertices_px": [
+        [
+          1293.9609644087257,
+          564.2448979591836
+        ],
+        [
+          967.715269804822,
+          555.4285714285714
+        ],
+        [
+          656.9001148105626,
+          573.0612244897959
+        ],
+        [
+          1212.3995407577497,
+          597.3061224489796
+        ]
+      ],
+      "vertices_norm": [
+        [
+          0.6739380022962113,
+          0.5224489795918367
+        ],
+        [
+          0.5040183696900115,
+          0.5142857142857143
+        ],
+        [
+          0.3421354764638347,
+          0.5306122448979592
+        ],
+        [
+          0.6314580941446614,
+          0.553061224489796
+        ]
+      ],
+      "zone_ref_point_px": [
+        1128.633754305396,
+        573.0612244897959
+      ],
+      "zone_ref_point_norm": [
+        0.5878300803673937,
+        0.5306122448979592
+      ],
+      "enabled": true,
+      "notes": "",
+      "polygon_status": "drawn"
+    }
+  ]
+}

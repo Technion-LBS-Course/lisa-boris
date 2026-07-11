@@ -70,6 +70,19 @@ wandb/
 !data/market-survey/
 !data/market-survey/**
 
+# Exception: Live Ops demo assets — committed so the public Streamlit Cloud app runs
+# the Live demo on a fresh clone (lightweight extracted frames + reference frame).
+# Re-include the directory first, then its contents (a parent dir excluded by
+# `data/*` cannot otherwise be re-included). The large raw source video is
+# re-ignored last so it never gets committed. Runtime data/live_events.jsonl stays
+# ignored via the earlier `data/*` rule.
+!data/live_demo/
+!data/live_demo/**
+data/live_demo/*.mp4
+data/live_demo/*.mov
+data/live_demo/*.avi
+data/live_demo/*.mkv
+
 # Exception: UI design assets used by the Streamlit app
 !design_images/
 !design_images/DANI_PERSONA.png

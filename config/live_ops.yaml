@@ -1,0 +1,36 @@
+# Live Ops dashboard — runtime configuration (all paths are repo-relative).
+# Edit these to point at a different camera / clip. Secrets (GROQ_API_KEY) stay
+# in .streamlit/secrets.toml, never here.
+
+# Prepared camera mapping config: camera metadata + >=4 reference points (anchors)
+# + image zones. Same shape the Central Control "Export" produces.
+camera_config: config/live_ops_camera.json
+
+# Stable reference frame used for Setup (Place / Calibrate / Zones).
+reference_frame: data/live_demo/frame-1.jpg
+
+# Pre-extracted demo frames used by the Live tab (committed, lightweight).
+frames_dir: data/live_demo/frames
+
+# Optional: a real video to sample instead of frames_dir (git-ignored if dropped
+# into data/live_demo/). Leave empty to use the committed frames.
+video_path: ""
+
+# Detection + confirmation tuning (exposed in the Live sidebar settings too).
+detection_interval_sec: 2.0     # 1 sampled frame every N seconds when reading a video
+confidence_threshold: 0.50      # default per spec; NOTE: the demo clip's smoke is faint
+                                # (~0.25-0.32) so lower Confidence to ~0.25 in the sidebar
+                                # to see the auto-detect + freeze on this particular clip
+confirmation_frames: 2          # alert confirmed once >= N of the last N+1 frames are positive
+
+# Routine "Watch" agent cadence + playback speed.
+routine_report_interval_min: 30
+playback_speed_ms: 700
+
+# Emergency "Response" agent notification targets. DEMO ONLY — messages are drafted
+# and logged on-screen; PyroFinder never contacts anyone or dispatches automatically.
+contacts:
+  - {name: "Site owner", role: owner}
+  - {name: "Fire department", role: fire_dept}
+  - {name: "Field crew", role: worker}
+  - {name: "Neighbour", role: neighbor}
