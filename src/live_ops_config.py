@@ -26,8 +26,16 @@ DEFAULT_SETTINGS: dict = {
     "reference_frame": "data/live_demo/frame-1.jpg",
     "frames_dir": "data/live_demo/frames",
     "video_path": "",
+    # Optional operational context (landmarks / sensitive receptors / contact policy),
+    # used only for Live incident reasoning + concise first messages. Both optional.
+    "operational_context_json": "data/live_ops/live_ops_operational_context.json",
+    "operational_context_md": "data/live_ops/live_ops_operational_context.md",
     "detection_interval_sec": 2.0,
     "confidence_threshold": 0.20,
+    # Per-class confidence thresholds for the Live tab (smoke can require a higher
+    # bar than fire). Fall back to confidence_threshold if either is absent.
+    "smoke_confidence_threshold": 0.40,
+    "fire_confidence_threshold": 0.40,
     "confirmation_frames": 3,
     "routine_report_interval_min": 30,
     "playback_speed_ms": 700,
@@ -109,6 +117,60 @@ def validate_camera_config(config: dict) -> list[str]:
     if len(enabled_refs) < 4:
         issues.append(f"only {len(enabled_refs)} enabled reference points (need >= 4).")
     return issues
+
+
+# ── Optional operational context (landmarks / receptors / contact policy) ─────
+#
+# Both files are optional. Deterministic code reads the JSON; the Markdown is a
+# human/LLM-readable companion. Loaders never raise and never make network calls —
+# a missing or malformed file simply means Live Ops runs without operational
+# context (graceful degradation).
+
+
+def load_operational_context_json(path) -> dict | None:
+    """Return the structured operational-context JSON as a dict, or ``None``.
+
+    ``None`` is returned when ``path`` is empty/None, the file is absent, it cannot
+    be read, the JSON is malformed, or the top level is not an object. Never raises.
+    """
+    if not path:
+        return None
+    p = resolve_path(path)
+    if not p.exists():
+        return None
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def load_operational_context_md(path) -> str | None:
+    """Return the human-readable operational-context Markdown text, or ``None``.
+
+    ``None`` when ``path`` is empty/None, the file is absent, or it cannot be read.
+    Never raises.
+    """
+    if not path:
+        return None
+    p = resolve_path(path)
+    if not p.exists():
+        return None
+    try:
+        return p.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def load_operational_context(settings: dict) -> dict:
+    """Load both optional operational-context files into ``{"json", "md"}``.
+
+    Either value may be ``None`` (missing/invalid). Never raises, never networks.
+    """
+    return {
+        "json": load_operational_context_json(settings.get("operational_context_json")),
+        "md": load_operational_context_md(settings.get("operational_context_md")),
+    }
 
 
 # ── Reference frame + demo sequence ───────────────────────────────────────────

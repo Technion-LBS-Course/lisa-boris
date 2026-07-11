@@ -187,3 +187,86 @@ def test_select_confirmed_event_none_when_no_detections_in_window():
 
 def test_select_confirmed_event_empty_window():
     assert inference.select_confirmed_event_detection([]) is None
+
+
+# ── run_detection per-class confidence (fake model — no ultralytics/torch) ────
+
+
+class _FakeArr:
+    def __init__(self, data):
+        self._data = data
+
+    def tolist(self):
+        return self._data
+
+
+class _FakeBoxes:
+    def __init__(self, cls, conf, xywhn):
+        self.cls = _FakeArr(cls)
+        self.conf = _FakeArr(conf)
+        self.xywhn = _FakeArr(xywhn)
+
+    def __len__(self):
+        return len(self.cls._data)
+
+
+class _FakeResult:
+    # Deliberately not indexable (no __getitem__): the per-class pre-plot filter
+    # falls back to the extraction-loop threshold enforcement, which is what we test.
+    def __init__(self, names, boxes, plot_arr):
+        self.names = names
+        self.boxes = boxes
+        self._plot_arr = plot_arr
+
+    def plot(self):
+        return self._plot_arr
+
+
+class _FakeModel:
+    def __init__(self, result):
+        self._result = result
+        self.last_conf = None
+
+    def predict(self, source=None, conf=None, imgsz=None, verbose=None):
+        self.last_conf = conf
+        return [self._result]
+
+
+def _fake_model_two_boxes():
+    import numpy as np
+
+    boxes = _FakeBoxes(
+        cls=[0, 1],                       # 0=smoke, 1=fire
+        conf=[0.45, 0.42],
+        xywhn=[[0.2, 0.2, 0.1, 0.1], [0.6, 0.6, 0.2, 0.2]],
+    )
+    result = _FakeResult({0: "smoke", 1: "fire"}, boxes,
+                         np.zeros((4, 4, 3), dtype=np.uint8))
+    return _FakeModel(result)
+
+
+def test_run_detection_per_class_confidence_filters_each_class():
+    from PIL import Image
+
+    model = _fake_model_two_boxes()
+    out = inference.run_detection(
+        model, Image.new("RGB", (8, 8)),
+        conf=min(0.5, 0.4), conf_by_class={"smoke": 0.5, "fire": 0.4},
+    )
+    # smoke 0.45 < 0.5 → dropped; fire 0.42 ≥ 0.4 → kept.
+    assert out["smoke_count"] == 0
+    assert out["fire_count"] == 1
+    assert [d["class"] for d in out["detections"]] == ["fire"]
+    # Inference ran at the lowest per-class threshold so all candidates are returned.
+    assert model.last_conf == pytest.approx(0.4)
+
+
+def test_run_detection_single_conf_unchanged_behavior():
+    from PIL import Image
+
+    model = _fake_model_two_boxes()
+    out = inference.run_detection(model, Image.new("RGB", (8, 8)), conf=0.4)
+    # No conf_by_class → single threshold, both boxes (0.45, 0.42) kept.
+    assert out["smoke_count"] == 1
+    assert out["fire_count"] == 1
+    assert model.last_conf == pytest.approx(0.4)

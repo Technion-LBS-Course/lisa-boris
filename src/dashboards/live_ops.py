@@ -9,10 +9,12 @@ modules read-only. Three views:
   pick on image + map); mark detection zones with the framed **zone assistant** —
   box an area with two clicks → segment it → name + priority (all in the chat), with
   a manual "draw the contour" fallback if the segmentation is not good enough.
-* **Live** — autoplays a demo sequence, runs YOLO11s per frame, and on an
+* **Live** — autoplays a demo sequence, runs YOLO11s per frame (per-class
+  confidence: smoke and fire have separate thresholds), and on an
   N-frame-confirmed detection freezes on that frame (keeping the box) until the
-  operator resolves it **inside the ops chat** (confirm / false alarm / dispatch —
-  no external buttons). Notifications appear as chat messages.
+  operator resolves it **inside the ops chat** (confirm / false alarm). Any
+  message drafting or contact suggestion happens conversationally in the chat,
+  grounded in the incident + operational context — no separate dispatch panel.
 * **History** — date/type-filtered event log persisted to ``data/live_events.jsonl``.
 
 No module-level ML imports: ``ultralytics`` loads lazily inside ``src.inference``;
@@ -65,6 +67,8 @@ def _init_lo_state() -> None:
         "lo_tab": "Setup",
         "lo_step": 1,
         "lo_config_loaded": False,
+        "lo_operational_context": None,     # optional structured operational context (JSON)
+        "lo_operational_context_md": None,  # optional human-readable operational context (MD)
         "lo_ops_chat": [],          # Live ops chat [{agent, role, content}]
         "lo_zone_chat": [],         # Setup zone-assistant chat [{role, content}]
         "lo_zone_pts": [],          # clicked points [[x, y], ...] (pixels)
@@ -72,15 +76,17 @@ def _init_lo_state() -> None:
         "lo_zone_poly": None,       # proposed polygon (normalized [{x, y}]) or None
         "lo_zone_name": "",         # zone name — set only via the chat (Groq parse)
         "lo_zone_priority": "medium",  # zone priority — set only via the chat (Groq parse)
+        "lo_selected_zone": None,   # zone_id of the zone card selected for edit/delete
+        "lo_zone_ref_prompt": None,     # zone_id awaiting a Yes/No reference-point decision
+        "lo_zone_ref_picking": None,    # zone_id whose reference point is being picked
+        "lo_zone_ref_pending_pt": None,  # clicked reference-point pixel awaiting Save
         "lo_selected_anchor": None,  # point_id of the anchor card selected for edit/delete
-        "lo_notify_log": [],
         "lo_routine_last": None,
         "lo_seq_det": {},
         "lo_seq_det_conf": None,
         "lo_confirmed_idx": None,
         "lo_active_alert": None,
         "lo_suppress_until_clear": False,
-        "lo_dispatch_open": False,
         "lo_autoplay_armed": False,
         "lo_seq_loaded_from": None,
         "lo_show_clip": None,
@@ -113,6 +119,13 @@ def _load_config_once() -> None:
             st.session_state.cc_image_size = Image.open(io.BytesIO(ref)).size
         except Exception:
             pass
+
+    # Optional operational context (landmarks / receptors / contact policy) used only
+    # for Live incident reasoning + first-message wording. Missing files degrade to None.
+    oc = lo_cfg.load_operational_context(settings)
+    st.session_state.lo_operational_context = oc.get("json")
+    st.session_state.lo_operational_context_md = oc.get("md")
+
     st.session_state.lo_config_loaded = True
 
 
@@ -278,11 +291,9 @@ def _camera_data_card() -> None:
     w, h = st.session_state.cc_image_size
     lat, lon = cam.get("latitude"), cam.get("longitude")
     rows = [
-        ("Camera ID", str(cam.get("camera_id", "—"))),
         ("Name", str(cam.get("camera_name", "—"))),
         ("Resolution", f"{w}×{h}"),
         ("Location", f"{lat:.4f}, {lon:.4f}" if lat is not None else "—"),
-        ("FOV", "approx (from anchors)"),
         ("Status", "Configured ✓"),
     ]
     body = (
@@ -493,8 +504,9 @@ def _zone_save() -> None:
         return
     label = st.session_state.get("lo_zone_priority", "medium")
     verts = [list(v) for v in seg.polygon_to_pixel_vertices(poly, w, h)]
+    zone_id = str(uuid.uuid4())[:8]
     st.session_state.cc_image_zones.append({
-        "zone_id": str(uuid.uuid4())[:8],
+        "zone_id": zone_id,
         "zone_name": name,
         "zone_type": "custom",
         "alert_label": name,
@@ -510,10 +522,14 @@ def _zone_save() -> None:
         "notes": "added via zone assistant",
         "polygon_status": zone_agent.POLYGON_DRAWN,
     })
-    _zone_say(f"Saved zone '{name}' ({label} priority). Describe the next area to add more.")
     _zone_reset()
     st.session_state.lo_zone_name = ""
     st.session_state.lo_zone_priority = "medium"
+    # Ask whether to attach an optional per-zone reference point (the map-reporting
+    # point). Handled by _zone_ref_point_row() until the operator answers.
+    st.session_state.lo_zone_ref_prompt = zone_id
+    _zone_say(f"Saved zone '{name}' ({label} priority). "
+              "Do you want to add a reference point to this zone?")
 
 
 def _zone_describe(text: str) -> None:
@@ -564,6 +580,77 @@ def _zone_assistant_panel() -> None:
                 st.rerun()
 
 
+def _zone_ref_save() -> None:
+    """Write the picked reference point onto the zone (image-space; projected via
+    the shared calibration when a detection later falls inside the zone)."""
+    zone_id = st.session_state.get("lo_zone_ref_picking")
+    pend = st.session_state.get("lo_zone_ref_pending_pt")
+    if not zone_id or not pend:
+        return
+    w, h = st.session_state.cc_image_size
+    name = ""
+    for z in st.session_state.cc_image_zones:
+        if z.get("zone_id") == zone_id:
+            z["zone_ref_point_px"] = [float(pend[0]), float(pend[1])]
+            z["zone_ref_point_norm"] = [pend[0] / w if w else 0.0, pend[1] / h if h else 0.0]
+            name = z.get("zone_name", "")
+            break
+    st.session_state.lo_zone_ref_picking = None
+    st.session_state.lo_zone_ref_pending_pt = None
+    _zone_say(f"Reference point saved for '{name}'. Incidents detected in this zone will "
+              "be reported from that point on the map.")
+
+
+def _zone_ref_cancel() -> None:
+    st.session_state.lo_zone_ref_picking = None
+    st.session_state.lo_zone_ref_pending_pt = None
+    _zone_say("No reference point set — this zone will use the shared image-to-map "
+              "calibration, like detections outside any zone.")
+
+
+def _zone_ref_point_row() -> None:
+    """Optional per-zone reference point, asked after a zone is saved.
+
+    Yes → the operator clicks the map-reporting point on the image (stored as
+    ``zone_ref_point_px`` / ``zone_ref_point_norm`` — existing fields, no new zone
+    metadata). No → the zone keeps no reference point and future detections inside
+    it are located from the shared image reference points, exactly like detections
+    outside any zone. Optional per zone; never forced.
+    """
+    if st.session_state.get("lo_zone_ref_picking"):
+        pend = st.session_state.get("lo_zone_ref_pending_pt")
+        st.caption(
+            f"Reference point at ({pend[0]:.0f}, {pend[1]:.0f}) — save it or click again."
+            if pend else "Click the reference location on the image for this zone."
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Save reference point ✓", type="primary", key="lo_zone_ref_save",
+                         disabled=not pend, use_container_width=True):
+                _zone_ref_save(); st.rerun()
+        with c2:
+            if st.button("Cancel", key="lo_zone_ref_cancel", use_container_width=True):
+                _zone_ref_cancel(); st.rerun()
+        return
+
+    st.caption("Add a reference point to this zone?")
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Yes", type="primary", key="lo_zone_ref_yes", use_container_width=True):
+            st.session_state.lo_zone_ref_picking = st.session_state.lo_zone_ref_prompt
+            st.session_state.lo_zone_ref_prompt = None
+            st.session_state.lo_zone_ref_pending_pt = None
+            _zone_say("Click the reference location on the image — incidents detected in "
+                      "this zone will be reported from that point.")
+            st.rerun()
+    with c2:
+        if st.button("No", key="lo_zone_ref_no", use_container_width=True):
+            st.session_state.lo_zone_ref_prompt = None
+            _zone_say("No reference point set — incidents in this zone will use the shared "
+                      "image-to-map calibration, like detections outside any zone.")
+            st.rerun()
+
+
 def _zone_action_row() -> None:
     """Segmentation-first zone flow — all inside the chat frame.
 
@@ -571,6 +658,11 @@ def _zone_action_row() -> None:
     segmentation runs automatically. Save / Delete / Draw only appear once the
     proposed polygon is on screen — there is no manual "run segmentation" choice.
     """
+    # After a save, the reference-point prompt/picking takes over the action row.
+    if st.session_state.get("lo_zone_ref_prompt") or st.session_state.get("lo_zone_ref_picking"):
+        _zone_ref_point_row()
+        return
+
     mode = st.session_state.lo_zone_mode
     pts = st.session_state.lo_zone_pts
     poly = st.session_state.lo_zone_poly
@@ -627,37 +719,91 @@ def _zone_action_row() -> None:
 
 
 def _zone_list() -> None:
+    """Existing zones as clickable cards — clicking a card selects it (highlighted)
+    for rename / priority change / delete below. Mirrors the anchor card list in
+    Step 2; no dropdown involved.
+    """
     zones = st.session_state.cc_image_zones
     if not zones:
         return
     st.markdown("**Zones**")
-    for z in zones:
-        label = z.get("priority_label") or "medium"
-        c1, c2 = st.columns([5, 1])
-        with c1:
-            st.markdown(f"<span style='color:{_PRIORITY_DOT.get(label, '#8a3413')}'>●</span> "
-                        f"**{z.get('zone_name', '')}** · {label.upper()}", unsafe_allow_html=True)
-        with c2:
-            if st.button("Delete", key=f"lo_zdel_{z['zone_id']}", use_container_width=True):
-                st.session_state.cc_image_zones = [
-                    x for x in zones if x["zone_id"] != z["zone_id"]]
-                st.rerun()
+    selected = st.session_state.get("lo_selected_zone")
+    if selected is not None and not any(z["zone_id"] == selected for z in zones):
+        st.session_state.lo_selected_zone = None
+        selected = None
+    per_row = 3
+    for start in range(0, len(zones), per_row):
+        row = zones[start:start + per_row]
+        cols = st.columns(len(row))
+        for col, z in zip(cols, row):
+            with col:
+                is_sel = z["zone_id"] == selected
+                label = f"● {z.get('zone_name', '')} · {(z.get('priority_label') or 'medium').upper()}"
+                if st.button(label, key=f"lo_zone_card_{z['zone_id']}",
+                             type="primary" if is_sel else "secondary",
+                             use_container_width=True):
+                    st.session_state.lo_selected_zone = None if is_sel else z["zone_id"]
+                    st.rerun()
+    _zone_edit_delete()
+
+
+def _zone_edit_delete() -> None:
+    """Rename / change priority / delete the selected zone.
+
+    Edits only fields that already exist on the zone record (zone_name, its
+    alert_label/object_to_find mirror, and priority) — no new zone metadata.
+    """
+    zones = st.session_state.cc_image_zones
+    target = next((z for z in zones if z["zone_id"] == st.session_state.get("lo_selected_zone")), None)
+    if target is None:
+        return
+    zid = target["zone_id"]
+    c1, c2, c3 = st.columns([2, 1, 1])
+    with c1:
+        new_name = st.text_input("Zone name", value=target.get("zone_name", ""),
+                                 key=f"lo_zone_rename_{zid}")
+    with c2:
+        cur = target.get("priority_label") if target.get("priority_label") in PRIORITY_LABELS else "medium"
+        new_priority = st.selectbox("Priority", PRIORITY_LABELS,
+                                    index=PRIORITY_LABELS.index(cur), key=f"lo_zone_priority_{zid}")
+    with c3:
+        st.write("")
+        if st.button("Save", key=f"lo_zone_saveedit_{zid}", use_container_width=True):
+            name = new_name.strip()
+            if name:
+                target["zone_name"] = name
+                target["alert_label"] = name
+                target["object_to_find"] = name
+            target["priority_label"] = new_priority
+            target["priority"] = priority_label_to_int(new_priority)
+            st.rerun()
+    if st.button("Delete zone", key=f"lo_zone_delsel_{zid}", use_container_width=True):
+        st.session_state.cc_image_zones = [z for z in zones if z["zone_id"] != zid]
+        st.session_state.lo_selected_zone = None
+        st.rerun()
 
 
 def _setup_step3() -> None:
-    _step_title("Step 3 · Mark detection zones.",
-                "Click two corners to box an area, then say what to detect.")
+    _step_title("Step 3 · Mark detection zones.")
     left, right = st.columns([1.3, 1])
     with left:
+        picking = bool(st.session_state.get("lo_zone_ref_picking"))
+        pending_ref = st.session_state.get("lo_zone_ref_pending_pt")
         comp = cc._composite_image(
             st.session_state.cc_uploaded_image,
             zones=st.session_state.cc_image_zones,
-            pending_vertices=_zone_overlay_vertices(),
+            pending_vertices=None if picking else _zone_overlay_vertices(),
+            pending_zone_ref_pt=(tuple(pending_ref) if picking and pending_ref else None),
         )
         click = cc._consume_image_click(comp, key="lo_zone_img")
         if click:
-            _zone_on_click(click)
+            if picking:
+                st.session_state.lo_zone_ref_pending_pt = list(click)
+            else:
+                _zone_on_click(click)
             st.rerun()
+        if picking:
+            st.caption("Click the reference location on the image for the saved zone.")
         if not cc.IMG_CLICK_AVAILABLE:
             st.info("Interactive clicking unavailable (streamlit-image-coordinates not installed).")
         _zone_list()
@@ -712,13 +858,16 @@ def _ensure_sequence_loaded() -> None:
     st.session_state.lo_autoplay_armed = False
 
 
-def _detect_seq_frame(idx: int, conf: float):
+def _detect_seq_frame(idx: int, conf_by_class: dict):
     from src import inference
 
     cache = st.session_state.lo_seq_det
-    if st.session_state.lo_seq_det_conf != conf:
+    # Cache key is the per-class threshold pair; changing either clears the cache.
+    key = (round(float(conf_by_class.get("smoke", 0.0)), 4),
+           round(float(conf_by_class.get("fire", 0.0)), 4))
+    if st.session_state.lo_seq_det_conf != key:
         cache.clear()
-        st.session_state.lo_seq_det_conf = conf
+        st.session_state.lo_seq_det_conf = key
     if idx in cache:
         return cache[idx]
     seq = st.session_state.get("cc_seq") or []
@@ -732,7 +881,8 @@ def _detect_seq_frame(idx: int, conf: float):
     img = Image.open(io.BytesIO(seq[idx]["bytes"])).convert("RGB")
     try:
         model = cc._load_detector_cached(name)
-        result = inference.run_detection(model, img, conf=conf)
+        result = inference.run_detection(
+            model, img, conf=min(conf_by_class.values()), conf_by_class=conf_by_class)
     except Exception as exc:  # noqa: BLE001
         st.error(f"Detection failed: {exc}")
         return None
@@ -741,9 +891,9 @@ def _detect_seq_frame(idx: int, conf: float):
     return result
 
 
-def _window_results(idx: int, n_req: int, conf: float) -> list:
+def _window_results(idx: int, n_req: int, conf_by_class: dict) -> list:
     start = max(0, idx - n_req)
-    return [_detect_seq_frame(i, conf) for i in range(start, idx + 1)]
+    return [_detect_seq_frame(i, conf_by_class) for i in range(start, idx + 1)]
 
 
 def _maybe_confirm(idx: int, window: list, n_req: int) -> None:
@@ -772,6 +922,8 @@ def _maybe_confirm(idx: int, window: list, n_req: int) -> None:
         centroid_norm=anchor,
         weather=wx,
         timestamp=_now_iso(),
+        operational_context=st.session_state.get("lo_operational_context"),
+        operational_context_md=st.session_state.get("lo_operational_context_md"),
     )
     st.session_state.cc_incident_ctx = ctx
     st.session_state.cc_incident_weather = wx
@@ -786,7 +938,7 @@ def _maybe_confirm(idx: int, window: list, n_req: int) -> None:
     st.session_state.cc_seq_playing = False  # freeze on the verified detection frame
     st.session_state.lo_ops_chat.append(
         {"agent": agents.RESPONSE, "role": "assistant",
-         "content": agents.emergency_open_text(ctx) + "\n\nChoose an action below."})
+         "content": agents.emergency_open_text(ctx)})
 
 
 def _maybe_routine_report(force: bool = False) -> None:
@@ -841,7 +993,6 @@ def _resolve_incident(status: str) -> None:
                         "Monitoring will resume."})
     st.session_state.cc_incident_ctx = None
     st.session_state.lo_active_alert = None
-    st.session_state.lo_dispatch_open = False
     st.session_state.lo_confirmed_idx = None
     st.session_state.lo_suppress_until_clear = True
     n = len(st.session_state.get("cc_seq") or [])
@@ -862,51 +1013,28 @@ def _render_live_frame(det, seq, idx, alerting: bool) -> None:
 
 
 def _incident_actions_in_chat(ctx) -> None:
-    """Confirm / false-alarm / dispatch + notification drafts — all inside the chat frame."""
+    """Confirm / false-alarm — inside the chat frame.
+
+    There is no separate 'dispatch' panel: any message drafting or contact
+    suggestion happens conversationally in the ops chat, where the Response agent
+    replies to what the operator asks, grounded in the incident + operational
+    context (wind direction, fire location, landmarks, contact policy). PyroFinder
+    never contacts anyone automatically.
+    """
     if ctx is None or st.session_state.lo_active_alert is None:
         return
-    if not st.session_state.lo_dispatch_open:
-        st.caption("Respond to the incident:")
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            if st.button("Confirm ✓", type="primary", key="lo_act_confirm", use_container_width=True):
-                st.session_state.lo_ops_chat.append(
-                    {"agent": None, "role": "user", "content": "Confirm the alert."})
-                _resolve_incident("confirmed")
-        with c2:
-            if st.button("False alarm", key="lo_act_false", use_container_width=True):
-                st.session_state.lo_ops_chat.append(
-                    {"agent": None, "role": "user", "content": "Mark as a false alarm."})
-                _resolve_incident("false_alarm")
-        with c3:
-            if st.button("Dispatch", key="lo_act_dispatch", use_container_width=True):
-                st.session_state.lo_dispatch_open = True
-                st.session_state.lo_ops_chat.append({"agent": None, "role": "user", "content": "Dispatch."})
-                st.session_state.lo_ops_chat.append(
-                    {"agent": agents.RESPONSE, "role": "assistant",
-                     "content": "Prepared notification drafts below — review and log each as sent. "
-                                "PyroFinder never contacts anyone automatically."})
-                st.rerun()
-        return
-
-    for audience, text in agents.notification_drafts(ctx).items():
-        st.markdown(f"**🚨 Response · {audience}**")
-        st.text_area(audience, value=text, height=110, key=f"lo_draft_{audience}",
-                     label_visibility="collapsed")
-        if st.button(f"Log as sent — {audience}", key=f"lo_send_{audience}", use_container_width=True):
-            st.session_state.lo_notify_log.append({"audience": audience, "text": text, "ts": _now_iso()})
+    st.caption("Respond to the incident, or ask me what to do:")
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button("Confirm ✓", type="primary", key="lo_act_confirm", use_container_width=True):
             st.session_state.lo_ops_chat.append(
-                {"agent": agents.RESPONSE, "role": "assistant",
-                 "content": f"Logged a notification to {audience} (demo — not actually sent)."})
-            st.rerun()
-    d1, d2 = st.columns(2)
-    with d1:
-        if st.button("Confirm & close ✓", type="primary", key="lo_disp_confirm", use_container_width=True):
+                {"agent": None, "role": "user", "content": "Confirm the alert."})
             _resolve_incident("confirmed")
-    with d2:
-        if st.button("Back", key="lo_disp_back", use_container_width=True):
-            st.session_state.lo_dispatch_open = False
-            st.rerun()
+    with c2:
+        if st.button("False alarm", key="lo_act_false", use_container_width=True):
+            st.session_state.lo_ops_chat.append(
+                {"agent": None, "role": "user", "content": "Mark as a false alarm."})
+            _resolve_incident("false_alarm")
 
 
 def _ops_chat(ctx) -> None:
@@ -947,14 +1075,18 @@ def _ops_chat(ctx) -> None:
             st.rerun()
 
 
-def _live_sidebar_settings(settings: dict) -> tuple[float, int]:
+def _live_sidebar_settings(settings: dict) -> tuple[dict, int]:
+    """Return ``({"smoke": thr, "fire": thr}, n_req)`` — per-class confidence."""
+    legacy = float(settings.get("confidence_threshold", 0.50))
     with st.sidebar:
         st.markdown("### Detection settings")
-        default_pct = int(round(float(settings.get("confidence_threshold", 0.50)) * 100))
-        pct = st.slider("Confidence (%)", 5, 95, default_pct, 5, key="lo_conf_pct")
+        smoke_default = int(round(float(settings.get("smoke_confidence_threshold", legacy)) * 100))
+        fire_default = int(round(float(settings.get("fire_confidence_threshold", legacy)) * 100))
+        smoke_pct = st.slider("Smoke confidence (%)", 5, 95, smoke_default, 5, key="lo_conf_pct_smoke")
+        fire_pct = st.slider("Fire confidence (%)", 5, 95, fire_default, 5, key="lo_conf_pct_fire")
         n_req = st.number_input("Confirmation frames (N)", 1, 10,
                                 int(settings.get("confirmation_frames", 2)), 1, key="lo_confirm_n")
-    return pct / 100.0, int(n_req)
+    return {"smoke": smoke_pct / 100.0, "fire": fire_pct / 100.0}, int(n_req)
 
 
 def _live_section() -> None:
@@ -967,7 +1099,7 @@ def _live_section() -> None:
                    "`video_path` in `config/live_ops.yaml`.")
         return
 
-    conf, n_req = _live_sidebar_settings(_settings())
+    conf_by_class, n_req = _live_sidebar_settings(_settings())
 
     if not st.session_state.lo_ops_chat:
         _maybe_routine_report(force=True)
@@ -977,7 +1109,7 @@ def _live_section() -> None:
         st.session_state.lo_autoplay_armed = True
 
     idx = min(int(st.session_state.get("cc_seq_idx", 0)), n - 1)
-    window = _window_results(idx, n_req, conf)
+    window = _window_results(idx, n_req, conf_by_class)
     det = window[-1] if window else None
     from src import inference
     current_top = inference.top_hazard_detection(det) if det else None

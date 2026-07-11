@@ -83,6 +83,11 @@ data/live_demo/*.mov
 data/live_demo/*.avi
 data/live_demo/*.mkv
 
+# Exception: Live Ops operational context (landmarks / contacts / policy) — committed
+# so the public Streamlit Cloud app has incident context on a fresh clone.
+!data/live_ops/
+!data/live_ops/**
+
 # Exception: UI design assets used by the Streamlit app
 !design_images/
 !design_images/DANI_PERSONA.png

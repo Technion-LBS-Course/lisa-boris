@@ -10,15 +10,41 @@ from src.incident_agent import (
     build_incident_context,
     build_incident_system_prompt,
     compass_label,
+    contact_guidance,
     create_incident_alert,
     downwind_direction,
     draft_farm_worker_message,
     draft_owner_message,
+    find_nearest_zones,
+    format_initial_incident_message,
     incident_narrative,
+    incident_reasoning,
+    initial_incident_message,
     polish_message,
     recommend_actions,
     respond_to_operator,
+    summarize_operational_context,
 )
+
+# A small operational-context sample (mirrors the shape of the committed file) —
+# hermetic, so these tests never depend on the on-disk operational context file.
+OP_CONTEXT = {
+    "primary_site_context": {
+        "name": "Thunder Valley Casino Resort",
+        "operational_relevance": "Populated resort area — treat movement toward it as sensitive.",
+    },
+    "nearby_operational_landmarks": [
+        {"name": "Lincoln Crossing", "sensitivity": "high",
+         "recommended_action_hint": "notify the relevant local authority"},
+        {"name": "Wetland / slough", "sensitivity": "low_to_medium",
+         "recommended_action_hint": "lower priority unless moving toward structures"},
+    ],
+    "authorities_and_contacts": [
+        {"name": "Emergency services", "contact": "911", "usage_rule": "immediate danger"},
+        {"name": "Lincoln Fire Department", "contact": "916-645-4040"},
+        {"name": "Farm owner / site operator", "contact": None, "source_status": "missing"},
+    ],
+}
 
 CAMERA = {
     "camera_id": "giloCAM", "camera_name": "gilo", "site_id": "1", "customer_id": "1",
@@ -204,6 +230,202 @@ def test_recommendations_smoke_verifies_source():
 
 
 # ── conversation ──────────────────────────────────────────────────────────────
+
+
+# ── find_nearest_zones ────────────────────────────────────────────────────────
+
+
+def test_find_nearest_zones_contains_sorts_first():
+    zones = find_nearest_zones((0.5, 0.5), [CENTER_ZONE])
+    assert zones and zones[0]["zone_name"] == "East Grove"
+    assert zones[0]["contains"] is True
+    assert zones[0]["distance_norm"] == 0.0
+    assert zones[0]["priority_label"] == "high"
+
+
+def test_find_nearest_zones_outside_reports_distance():
+    zones = find_nearest_zones((0.0, 0.0), [CENTER_ZONE])
+    assert zones and zones[0]["contains"] is False
+    assert zones[0]["distance_norm"] > 0.0
+
+
+def test_context_carries_nearest_zones():
+    ctx = _ctx(zones=(CENTER_ZONE,), centroid=(0.1, 0.1))
+    assert ctx.matched_zone is None
+    assert any(z["zone_name"] == "East Grove" for z in ctx.nearest_zones)
+
+
+# ── initial incident message (concise, structured-context-driven) ─────────────
+
+
+def test_initial_message_is_concise_and_omits_telemetry():
+    ctx = _ctx()  # fire, matched high-priority East Grove, wind from W -> downwind E
+    msg = format_initial_incident_message(ctx)
+    assert "gilo" in msg                         # camera name
+    assert "East Grove" in msg                   # operational 'where'
+    assert "fire" in msg.lower()
+    assert "drifting east" in msg                # downwind expanded to a word
+    assert msg.strip().endswith("?")             # one next-action question
+    # No raw telemetry leaks into the opener.
+    assert "82%" not in msg and "confidence" not in msg.lower()
+    assert "°C" not in msg and "33" not in msg
+
+
+def test_initial_message_outside_zones_uses_nearest_zone():
+    ctx = _ctx(zones=(CENTER_ZONE,), centroid=(0.1, 0.1))
+    msg = format_initial_incident_message(ctx)
+    assert "outside the marked zones" in msg
+    assert "East Grove" in msg
+
+
+def test_initial_message_low_priority_smoke_suggests_monitoring():
+    zone = {**CENTER_ZONE, "priority_label": "low", "priority": 2}
+    ctx = _ctx(zones=(zone,), cls="smoke", weather=None)
+    msg = format_initial_incident_message(ctx)
+    assert "smoke" in msg.lower()
+    assert msg.strip().endswith("?")
+
+
+def test_initial_message_no_zone_no_refs_uses_quadrant_no_contact_invented():
+    ctx = _ctx(zones=(), refs=[], cls="smoke", centroid=(0.9, 0.9), weather=None)
+    msg = format_initial_incident_message(ctx)
+    assert "frame" in msg.lower()          # quadrant fallback, operational terms
+    # never invents a specific contact — only generic wording is allowed
+    assert "sheriff" not in msg.lower()
+
+
+def test_initial_incident_message_deterministic_without_groq(monkeypatch):
+    monkeypatch.setattr(ia, "_groq_ready", lambda: False)
+    ctx = _ctx()
+    assert initial_incident_message(ctx) == format_initial_incident_message(ctx)
+
+
+def test_initial_incident_message_polished_by_groq(monkeypatch):
+    monkeypatch.setattr(ia, "_groq_ready", lambda: True)
+    monkeypatch.setattr(llm, "ask", lambda prompt, *a, **k: "Short polished line?")
+    assert initial_incident_message(_ctx()) == "Short polished line?"
+
+
+# ── incident_reasoning (detailed, only shown when the operator asks) ──────────
+
+
+def test_incident_reasoning_has_context_and_recommendations():
+    text = incident_reasoning(_ctx())
+    assert "East Grove" in text
+    assert "Recommended actions:" in text
+    # Detailed reasoning MAY surface telemetry rows the opener omits.
+    assert "confidence" in text.lower()
+
+
+def test_deterministic_reply_why_returns_reasoning(monkeypatch):
+    monkeypatch.setattr(ia, "_groq_ready", lambda: False)
+    reply = respond_to_operator(_ctx(), "why did you flag this?")
+    assert "how i read this incident" in reply.lower()
+    assert "Recommended actions:" in reply
+
+
+# ── operational context (landmarks / receptors / contact policy) ──────────────
+
+
+def _ctx_with_context(operational_context=OP_CONTEXT, operational_context_md=None,
+                      cls="smoke", zones=(CENTER_ZONE,), centroid=(0.5, 0.5), weather=WEATHER):
+    return build_incident_context(
+        camera=CAMERA, image_zones=list(zones), reference_points=[],
+        detected_class=cls, confidence=0.5, centroid_norm=centroid, weather=weather,
+        timestamp="2026-07-01T10:00:00+00:00",
+        operational_context=operational_context, operational_context_md=operational_context_md,
+    )
+
+
+def test_summarize_operational_context_has_landmarks_and_policy():
+    brief = summarize_operational_context(OP_CONTEXT)
+    assert "Lincoln Crossing" in brief
+    assert "Thunder Valley Casino Resort" in brief
+    assert "Contact policy" in brief
+    assert "911" in brief and "916-645-4040" in brief  # verified contacts included by default
+
+
+def test_summarize_operational_context_excludes_contacts_when_asked():
+    brief = summarize_operational_context(OP_CONTEXT, include_contacts=False)
+    assert "Lincoln Crossing" in brief
+    assert "911" not in brief and "916-645-4040" not in brief  # no phone leak into the opener
+    assert "Contact policy" in brief
+
+
+def test_summarize_operational_context_md_fallback_and_empty():
+    md = summarize_operational_context(None, "# MD context\nLincoln Crossing area")
+    assert md.strip().startswith("# MD context")
+    assert summarize_operational_context(None, None) == ""
+    assert summarize_operational_context({}, None) == ""
+
+
+def test_context_stores_operational_context():
+    ctx = _ctx_with_context(operational_context_md="# md")
+    assert ctx.operational_context is OP_CONTEXT
+    assert ctx.operational_context_md == "# md"
+
+
+def test_context_without_operational_context_is_none():
+    ctx = _ctx()  # no operational context supplied
+    assert ctx.operational_context is None
+    assert ctx.operational_context_md is None
+    # Missing context must not break the concise opener.
+    assert format_initial_incident_message(ctx).strip().endswith("?")
+
+
+def test_initial_message_passes_operational_context_to_llm(monkeypatch):
+    monkeypatch.setattr(ia, "_groq_ready", lambda: True)
+    captured = {}
+
+    def fake_ask(prompt, *a, **k):
+        captured["prompt"] = prompt
+        return "ThunderValleyWest detected smoke near Lincoln Crossing. Notify the relevant local authority?"
+
+    monkeypatch.setattr(llm, "ask", fake_ask)
+    out = initial_incident_message(_ctx_with_context())
+    assert out.startswith("ThunderValleyWest")
+    # Place names reach the LLM prompt, but verified phone numbers do not (opener brief).
+    assert "Lincoln Crossing" in captured["prompt"]
+    assert "916-645-4040" not in captured["prompt"] and "911" not in captured["prompt"]
+
+
+def test_first_message_never_contains_phone_number():
+    import re
+
+    msg = format_initial_incident_message(_ctx_with_context(cls="fire"))
+    assert not re.search(r"\d{3}[-.\s]?\d{3,4}", msg)  # no phone-like sequence
+    assert "916-645-4040" not in msg and "911" not in msg
+
+
+def test_system_prompt_includes_operational_context_and_contact_rule():
+    prompt = build_incident_system_prompt(_ctx_with_context())
+    assert "Lincoln Crossing" in prompt
+    assert "never invent a contact" in prompt.lower()
+
+
+def test_incident_reasoning_appends_operational_context():
+    text = incident_reasoning(_ctx_with_context())
+    assert "Operational context:" in text
+    assert "Lincoln Crossing" in text
+
+
+def test_contact_guidance_lists_verified_contacts():
+    text = contact_guidance(_ctx_with_context())
+    assert "911" in text and "916-645-4040" in text
+    assert "never contacts anyone automatically" in text.lower()
+
+
+def test_contact_guidance_without_context_offers_search_no_invention():
+    text = contact_guidance(_ctx())
+    assert "relevant local authority" in text.lower()
+    assert "search" in text.lower()
+    assert "916-645-4040" not in text  # nothing invented
+
+
+def test_deterministic_reply_contact_question_uses_verified_contacts(monkeypatch):
+    monkeypatch.setattr(ia, "_groq_ready", lambda: False)
+    reply = respond_to_operator(_ctx_with_context(), "who do i call?")
+    assert "911" in reply
 
 
 def test_incident_narrative_mentions_zone_and_wind():

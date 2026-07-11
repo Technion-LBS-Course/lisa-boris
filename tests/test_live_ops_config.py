@@ -61,6 +61,50 @@ def test_extract_video_frames_missing_path_returns_empty():
     assert lo.extract_video_frame_items("data/live_demo/nope.mp4") == []
 
 
+# ── Optional operational context (landmarks / receptors / contact policy) ─────
+
+
+def test_operational_context_keys_in_defaults():
+    s = lo.load_settings("does/not/exist.yaml")
+    assert "operational_context_json" in s
+    assert "operational_context_md" in s
+
+
+def test_load_operational_context_json_present():
+    data = lo.load_operational_context_json("data/live_ops/live_ops_operational_context.json")
+    assert isinstance(data, dict)
+    assert data.get("context_type") == "operational_context"
+    assert data.get("nearby_operational_landmarks")
+
+
+def test_load_operational_context_md_present():
+    text = lo.load_operational_context_md("data/live_ops/live_ops_operational_context.md")
+    assert isinstance(text, str) and "Operational Context" in text
+
+
+def test_operational_context_missing_returns_none():
+    assert lo.load_operational_context_json("data/live_ops/nope.json") is None
+    assert lo.load_operational_context_md("data/live_ops/nope.md") is None
+    assert lo.load_operational_context_json("") is None
+    assert lo.load_operational_context_md(None) is None
+
+
+def test_load_operational_context_json_malformed_returns_none(tmp_path):
+    bad = tmp_path / "bad.json"
+    bad.write_text("{ not valid json ", encoding="utf-8")
+    assert lo.load_operational_context_json(str(bad)) is None
+    # A JSON array (non-object) is also rejected gracefully.
+    arr = tmp_path / "arr.json"
+    arr.write_text("[1, 2, 3]", encoding="utf-8")
+    assert lo.load_operational_context_json(str(arr)) is None
+
+
+def test_load_operational_context_combined():
+    both = lo.load_operational_context(lo.load_settings())
+    assert isinstance(both["json"], dict)
+    assert isinstance(both["md"], str)
+
+
 def test_approx_fov_cone_from_real_config():
     cfg = lo.load_camera_config("config/live_ops_camera.json")
     cone = lo.approx_fov_cone(cfg["camera"], cfg["reference_points"])

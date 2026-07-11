@@ -122,11 +122,19 @@ def load_detector(model_name: str):
     return model
 
 
-def run_detection(model, pil_image, conf: float = 0.25, imgsz: int = 640) -> dict:
+def run_detection(model, pil_image, conf: float = 0.25, imgsz: int = 640,
+                  conf_by_class: dict | None = None) -> dict:
     """Run one-image inference and return an annotated overlay plus a summary.
 
     ``pil_image`` is a PIL image. Inference time is measured during this call —
     no estimated value is ever inserted.
+
+    ``conf_by_class`` optionally maps a class name (``"fire"`` / ``"smoke"``) to
+    its own confidence threshold. When given, inference runs at the lowest of the
+    per-class thresholds and each detection is then kept only if it meets its own
+    class threshold (e.g. smoke ≥ 0.5 while fire ≥ 0.4); the annotated overlay is
+    filtered to match. When ``None`` (the default) a single ``conf`` threshold
+    applies to both classes — unchanged behavior for existing callers.
 
     Returns::
 
@@ -144,23 +152,51 @@ def run_detection(model, pil_image, conf: float = 0.25, imgsz: int = 640) -> dic
 
     from PIL import Image
 
+    def _class_conf(label: str) -> float:
+        if conf_by_class and label in conf_by_class:
+            return float(conf_by_class[label])
+        return conf
+
+    # Run at the lowest per-class threshold so all candidate boxes are returned,
+    # then enforce each class's own threshold below.
+    predict_conf = min([conf, *conf_by_class.values()]) if conf_by_class else conf
+
     rgb = pil_image.convert("RGB")
     start = time.perf_counter()
     # Pass the PIL Image directly so Ultralytics handles BGR conversion internally.
     # Passing np.array(rgb) would give an RGB array treated as BGR, swapping R↔B.
     results = model.predict(
-        source=rgb, conf=conf, imgsz=imgsz, verbose=False
+        source=rgb, conf=predict_conf, imgsz=imgsz, verbose=False
     )
     inference_ms = (time.perf_counter() - start) * 1000.0
 
     result = results[0]
     names = result.names if isinstance(result.names, dict) else dict(enumerate(result.names))
 
+    boxes = getattr(result, "boxes", None)
+    # Best-effort: drop boxes below their per-class threshold BEFORE plotting so the
+    # annotated overlay matches the counted detections. Uses a plain list of kept
+    # indices (no torch import); an Ultralytics Results object accepts index-list
+    # selection. If this version cannot index a Results object, the extraction loop
+    # below still enforces the per-class thresholds (only the overlay would differ).
+    if conf_by_class and boxes is not None and len(boxes) > 0:
+        try:
+            cls_list = [int(c) for c in boxes.cls.tolist()]
+            conf_list = [float(c) for c in boxes.conf.tolist()]
+            keep_idx = [
+                i for i, (cid, cf) in enumerate(zip(cls_list, conf_list))
+                if cf >= _class_conf(str(names.get(cid, "")).strip().lower())
+            ]
+            if len(keep_idx) != len(cls_list):
+                result = result[keep_idx]
+                boxes = getattr(result, "boxes", None)
+        except Exception:
+            pass
+
     fire_count = 0
     smoke_count = 0
     max_confidence = None
     detections: list[dict] = []
-    boxes = getattr(result, "boxes", None)
     if boxes is not None and len(boxes) > 0:
         cls_ids = [int(c) for c in boxes.cls.tolist()]
         confidences = [float(c) for c in boxes.conf.tolist()]
@@ -168,6 +204,9 @@ def run_detection(model, pil_image, conf: float = 0.25, imgsz: int = 640) -> dic
         xywhn = boxes.xywhn.tolist() if getattr(boxes, "xywhn", None) is not None else [None] * len(cls_ids)
         for cls_id, confidence, box in zip(cls_ids, confidences, xywhn):
             label = str(names.get(cls_id, "")).strip().lower()
+            # Enforce the per-class threshold (no-op when conf_by_class is None).
+            if label in ("fire", "smoke") and confidence < _class_conf(label):
+                continue
             if label == "fire":
                 fire_count += 1
             elif label == "smoke":

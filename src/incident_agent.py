@@ -34,6 +34,7 @@ from src.mapping import (
     estimate_map_position,
     image_quadrant,
     point_in_polygon,
+    polygon_centroid_norm,
     zone_reference_point_norm,
 )
 from src.tracking import estimate_apparent_direction
@@ -43,8 +44,14 @@ __all__ = [
     "downwind_direction",
     "IncidentContext",
     "build_incident_context",
+    "find_nearest_zones",
+    "summarize_operational_context",
+    "contact_guidance",
     "recommend_actions",
     "incident_narrative",
+    "format_initial_incident_message",
+    "initial_incident_message",
+    "incident_reasoning",
     "respond_to_operator",
     "build_incident_system_prompt",
     "conversation_uses_llm",
@@ -88,6 +95,15 @@ class IncidentContext:
     customer_id: str | None = None
     timestamp: str | None = None
     notes: str = ""
+    # Nearest defined zones to the detection (approximate image-space distance),
+    # used to reason about incidents near — but outside — a marked zone. This is
+    # derived incident context, not zone metadata.
+    nearest_zones: list = field(default_factory=list)
+    # Optional operational context (landmarks, sensitive receptors, contact policy)
+    # loaded from an external file. Used only for reasoning + first-message wording;
+    # it is NOT zone metadata and never changes the zone schema.
+    operational_context: dict | None = None
+    operational_context_md: str | None = None
 
     def display_rows(self) -> list[tuple[str, str]]:
         """Return (label, value) rows for a compact incident summary table."""
@@ -155,6 +171,144 @@ def _match_zone(centroid_norm: tuple[float, float], image_zones: list[dict]) -> 
     return None
 
 
+def find_nearest_zones(
+    centroid_norm: tuple[float, float],
+    image_zones: list[dict],
+    limit: int = 3,
+) -> list[dict]:
+    """Return the nearest enabled, drawn zones to a normalized image point.
+
+    Distance is the approximate image-space distance from the point to each zone
+    polygon's centroid, in normalized [0, 1] units — approximate, never a
+    geographic distance. A zone that contains the point sorts first with distance
+    0. Each result is ``{"zone_name", "priority_label", "distance_norm",
+    "contains"}``. Pure and testable — used to reason about an incident that is
+    near, but outside, a marked zone.
+    """
+    import math
+
+    px, py = centroid_norm
+    scored: list[dict] = []
+    for zone in image_zones:
+        if not zone.get("enabled", True):
+            continue
+        vertices_norm = [tuple(v) for v in zone.get("vertices_norm", [])]
+        if len(vertices_norm) < 3:
+            continue
+        center = polygon_centroid_norm(vertices_norm)
+        if center is None:
+            continue
+        contains = point_in_polygon(px, py, vertices_norm)
+        distance = 0.0 if contains else math.hypot(px - center[0], py - center[1])
+        scored.append({
+            "zone_name": zone.get("zone_name") or zone.get("alert_label"),
+            "priority_label": zone.get("priority_label")
+            or int_to_priority_label(int(zone.get("priority", 5))),
+            "distance_norm": round(distance, 4),
+            "contains": contains,
+        })
+    scored.sort(key=lambda z: (not z["contains"], z["distance_norm"]))
+    return scored[:limit]
+
+
+# ── Optional operational context (landmarks / receptors / contact policy) ─────
+#
+# An external file (loaded by src/live_ops_config.py) supplies operational meaning
+# around the scene. It is consumed ONLY for incident reasoning and first-message
+# wording — never for detection, and never merged into zone records. Missing
+# context degrades gracefully (helpers return "" / generic wording).
+
+
+def _verified_contacts(operational_context: dict | None) -> list[dict]:
+    """Contacts from the operational context that carry a real value (not null)."""
+    if not isinstance(operational_context, dict):
+        return []
+    return [
+        c for c in (operational_context.get("authorities_and_contacts") or [])
+        if isinstance(c, dict) and c.get("contact")
+    ]
+
+
+def summarize_operational_context(
+    operational_context: dict | None,
+    operational_context_md: str | None = None,
+    *,
+    include_contacts: bool = True,
+    max_landmarks: int = 6,
+) -> str:
+    """Return a compact operational-context brief for grounding, or ``""``.
+
+    Prefers the structured JSON (deterministic, bounded); falls back to a truncated
+    Markdown excerpt when only the Markdown is available. Used to ground the LLM
+    (concise first message, operator chat) and to enrich the detailed reasoning.
+    When ``include_contacts`` is False the verified contact list is omitted (so raw
+    phone numbers never leak into the short first message) while the generic contact
+    policy line is kept. Pure — no file/network access.
+    """
+    oc = operational_context if isinstance(operational_context, dict) else None
+    if oc:
+        lines: list[str] = []
+        site = oc.get("primary_site_context") or {}
+        if isinstance(site, dict) and site.get("name"):
+            rel = site.get("operational_relevance", "")
+            lines.append(f"Camera site: {site['name']}." + (f" {rel}" if rel else ""))
+        landmarks = oc.get("nearby_operational_landmarks") or []
+        named = [lm for lm in landmarks if isinstance(lm, dict) and lm.get("name")]
+        if named:
+            lines.append("Nearby operational places (approximate, context-based):")
+            for lm in named[:max_landmarks]:
+                sens = lm.get("sensitivity", "")
+                hint = lm.get("recommended_action_hint", "")
+                bits = "; ".join(b for b in (f"sensitivity {sens}" if sens else "", hint) if b)
+                lines.append(f"- {lm['name']}" + (f" ({bits})" if bits else ""))
+        if include_contacts:
+            verified = _verified_contacts(oc)
+            if verified:
+                lines.append("Verified contacts (operator places the call — never automatic):")
+                for c in verified:
+                    usage = f" — {c['usage_rule']}" if c.get("usage_rule") else ""
+                    lines.append(f"- {c.get('name')}: {c.get('contact')}{usage}")
+        lines.append(
+            "Contact policy: never invent a contact. Use a verified contact when relevant, "
+            "else generic wording (relevant local authority / local emergency contact / "
+            "site operator / property owner contact). If a needed contact is missing, you may "
+            "offer to search but must never search automatically. All locations are approximate."
+        )
+        return "\n".join(lines)
+    if operational_context_md:
+        text = operational_context_md.strip()
+        return text if len(text) <= 2400 else text[:2400].rstrip() + "\n… (context truncated)"
+    return ""
+
+
+def contact_guidance(context: IncidentContext) -> str:
+    """Deterministic answer to a 'who do I contact?' question.
+
+    Lists verified contacts from the operational context when present; otherwise
+    uses generic authority wording and offers (without performing) a contact search.
+    Never invents a contact. PyroFinder never contacts anyone automatically.
+    """
+    verified = _verified_contacts(context.operational_context)
+    if verified:
+        lines = [
+            "Verified contacts from the operational context (you place the call — PyroFinder "
+            "never contacts anyone automatically):"
+        ]
+        for c in verified:
+            usage = f" — {c['usage_rule']}" if c.get("usage_rule") else ""
+            lines.append(f"- {c.get('name')}: {c.get('contact')}{usage}")
+        lines.append(
+            "For any recipient without a verified contact, I use generic wording and never "
+            "invent a name or number."
+        )
+        return "\n".join(lines)
+    return (
+        "I don't have a verified contact on file, so I can only refer to the relevant local "
+        "authority / local emergency contact / site operator / property owner contact. Do you "
+        "want me to search for the relevant contact? I won't search the web unless you say yes."
+    )
+
+
 def build_incident_context(
     *,
     camera: dict,
@@ -166,6 +320,8 @@ def build_incident_context(
     prev_centroid_norm: tuple[float, float] | None = None,
     weather=None,
     timestamp: str | None = None,
+    operational_context: dict | None = None,
+    operational_context_md: str | None = None,
 ) -> IncidentContext:
     """Assemble an :class:`IncidentContext` from a confirmed detection and config.
 
@@ -177,6 +333,7 @@ def build_incident_context(
     """
     cx, cy = centroid_norm
 
+    nearest_zones = find_nearest_zones(centroid_norm, image_zones)
     zone = _match_zone(centroid_norm, image_zones)
     matched_zone = zone_type = zone_priority_label = None
     if zone is not None:
@@ -259,6 +416,9 @@ def build_incident_context(
         weather_source=_wget(weather, "source"),
         weather_is_live=bool(_wget(weather, "is_live")),
         timestamp=timestamp,
+        nearest_zones=nearest_zones,
+        operational_context=operational_context if isinstance(operational_context, dict) else None,
+        operational_context_md=operational_context_md,
     )
 
 
@@ -331,6 +491,159 @@ def incident_narrative(context: IncidentContext) -> str:
     )
 
 
+# ── Concise initial incident message (driven by the structured context) ───────
+#
+# The opening operator-facing line must be short and action-oriented: what was
+# detected, where in operational terms, likely drift, and one next-step question.
+# Raw telemetry (temperature, humidity, confidence, frame coordinates) is kept out
+# of the opener and surfaced only via incident_reasoning() when the operator asks.
+
+_COMPASS_WORDS = {
+    "N": "north", "NE": "northeast", "E": "east", "SE": "southeast",
+    "S": "south", "SW": "southwest", "W": "west", "NW": "northwest",
+}
+
+_INITIAL_MESSAGE_POLISH = (
+    "You are PyroFinder's incident assistant briefing a site operator. Rewrite the "
+    "message below as ONE short, calm, operational line — at most two sentences — that "
+    "ends with a single yes/no question. Do NOT add any number, temperature, humidity, "
+    "confidence value, coordinate, camera ID, or contact name that is not already "
+    "present, and do not invent facts. Return only the rewritten message.\n\n"
+)
+
+
+def _nearest_outside_zone(context: IncidentContext) -> dict | None:
+    """First nearest zone that does NOT contain the detection, else None."""
+    return next(
+        (z for z in (context.nearest_zones or []) if not z.get("contains")), None
+    )
+
+
+def _initial_where(context: IncidentContext) -> str:
+    """Operational 'where' phrase for the opener — no coordinates or telemetry."""
+    if context.matched_zone:
+        return f"near {context.matched_zone}"
+    nearest = _nearest_outside_zone(context)
+    if nearest and nearest.get("zone_name"):
+        return f"outside the marked zones, near {nearest['zone_name']}"
+    cx, cy = context.centroid_norm
+    return f"in the {image_quadrant(cx, cy)} area of the frame"
+
+
+def _initial_priority_label(context: IncidentContext) -> str | None:
+    """Priority driving urgency: the matched zone's, else the nearest zone's."""
+    if context.matched_zone:
+        return context.zone_priority_label
+    nearest = _nearest_outside_zone(context)
+    return nearest.get("priority_label") if nearest else None
+
+
+def format_initial_incident_message(context: IncidentContext) -> str:
+    """Build the concise, action-oriented opening incident line (deterministic).
+
+    Reasons from the structured incident context — what was detected, where in
+    operational terms (matched zone, else nearest zone, else image quadrant), and
+    the likely drift direction — then ends with one recommended next-action
+    question. Deliberately omits raw telemetry (temperature, humidity, confidence,
+    frame coordinates) and never invents a contact: an unknown recipient is
+    referred to generically ('the relevant local authority').
+    """
+    camera = context.camera_name or context.camera_id or "The camera"
+    subject = "a possible fire" if context.detected_class == "fire" else "smoke"
+    where = _initial_where(context)
+
+    drift = ""
+    if context.downwind_risk_direction:
+        word = _COMPASS_WORDS.get(
+            context.downwind_risk_direction, context.downwind_risk_direction
+        )
+        drift = f", drifting {word}"
+
+    high = _initial_priority_label(context) == "high"
+    known_area = bool(context.matched_zone or _nearest_outside_zone(context))
+    if context.detected_class == "fire":
+        question = (
+            "Do you want me to prepare a dispatch to the relevant local authority?"
+            if high or context.matched_zone
+            else "It looks low priority for now — should I keep monitoring?"
+        )
+    else:  # smoke
+        question = (
+            "Should I prepare a response update?"
+            if high or known_area
+            else "Should I keep monitoring, or prepare a notification?"
+        )
+
+    return f"{camera} detected {subject} {where}{drift}. {question}"
+
+
+def initial_incident_message(context: IncidentContext) -> str:
+    """Return the first operator-facing incident line.
+
+    The deterministic :func:`format_initial_incident_message` is the grounded
+    source of truth; when Groq is configured it only *rephrases* that line under a
+    strict no-new-facts instruction. Any failure returns the deterministic text so
+    the opener is always concise and never invents telemetry or contacts.
+    """
+    base = format_initial_incident_message(context)
+    if _groq_ready():
+        try:
+            from src import llm
+
+            # Contacts are excluded from the opener brief so phone numbers / addresses
+            # never leak into the short first message; place names + policy still guide it.
+            brief = summarize_operational_context(
+                context.operational_context, context.operational_context_md,
+                include_contacts=False,
+            )
+            prompt = _INITIAL_MESSAGE_POLISH
+            if brief:
+                prompt += (
+                    "Operational context you MAY use for place names and sensitivity (do not "
+                    "add phone numbers, addresses, coordinates, or invented contacts):\n"
+                    f"{brief}\n\n"
+                )
+            prompt += "Message to rewrite:\n" + base
+            refined = llm.ask(prompt)
+            if refined and refined.strip():
+                return refined.strip()
+        except Exception:
+            pass
+    return base
+
+
+def incident_reasoning(context: IncidentContext) -> str:
+    """Return the detailed reasoning + supporting context for the incident.
+
+    Surfaced only when the operator explicitly asks ('why', 'how did you decide',
+    'explain') — the opening message stays concise. Built from the same structured
+    context: the incident summary rows, the nearest zone, and recommendations.
+    """
+    lines = ["Here's how I read this incident:"]
+    for label, value in context.display_rows():
+        lines.append(f"- {label}: {value}")
+    if not context.matched_zone:
+        nearest = _nearest_outside_zone(context)
+        if nearest:
+            lines.append(
+                f"- Nearest zone: {nearest['zone_name']} "
+                f"({nearest['priority_label']} priority), ~{nearest['distance_norm']:.2f} "
+                "away in the frame (approximate image-space distance)."
+            )
+    lines.append("")
+    lines.append("Recommended actions:")
+    for rec in recommend_actions(context):
+        lines.append(f"- {rec}")
+    brief = summarize_operational_context(
+        context.operational_context, context.operational_context_md
+    )
+    if brief:
+        lines.append("")
+        lines.append("Operational context:")
+        lines.append(brief)
+    return "\n".join(lines)
+
+
 def build_incident_system_prompt(context: IncidentContext) -> str:
     """Build the LLM system prompt: the incident facts + operational guardrails."""
     facts = [
@@ -358,7 +671,7 @@ def build_incident_system_prompt(context: IncidentContext) -> str:
     if context.image_plane_direction:
         facts.append(f"Apparent movement in the camera frame: {context.image_plane_direction}.")
     facts_block = "\n".join(f"- {f}" for f in facts)
-    return (
+    prompt = (
         "You are PyroFinder's Incident Assistant, helping a site operator respond to a "
         "CONFIRMED fire/smoke detection. Be concise, calm, and operational.\n\n"
         "Incident facts (rely on these; do not invent camera IDs, zones, or coordinates):\n"
@@ -377,10 +690,22 @@ def build_incident_system_prompt(context: IncidentContext) -> str:
         "- For a NEIGHBOUR: keep it short and plain, no coordinates.\n"
         "- For a FIRE-DEPARTMENT summary: you may include the estimated coordinates if "
         "available, clearly marked approximate.\n"
+        "- Never invent a contact. Use a verified contact from the operational context when "
+        "relevant, otherwise generic wording (relevant local authority / local emergency "
+        "contact / site operator). Do not perform any web/API contact lookup.\n"
         "- If the operator asks to confirm or dismiss, tell them to use the 'Confirm alert' or "
         "'Mark as false alarm' button.\n"
         "- Keep replies to a few sentences unless asked for a full draft."
     )
+    brief = summarize_operational_context(
+        context.operational_context, context.operational_context_md
+    )
+    if brief:
+        prompt += (
+            "\n\nOperational context (use for place names, sensitivity, and contact policy; "
+            "do not invent facts or contacts):\n" + brief
+        )
+    return prompt
 
 
 def _groq_ready() -> bool:
@@ -429,6 +754,15 @@ def _deterministic_reply(context: IncidentContext, message: str) -> str:
     Returns a worker/owner/neighbor/fire-department draft, or a short menu.
     """
     text = (message or "").lower()
+    if any(k in text for k in (
+        "why", "explain", "reason", "how did you", "how do you", "justif", "detail"
+    )):
+        return incident_reasoning(context)
+    if any(k in text for k in (
+        "who do i call", "who should i call", "who to call", "contact", "phone number",
+        "search for the contact", "search for a contact",
+    )):
+        return contact_guidance(context)
     if any(k in text for k in ("worker", "farm", "staff", "crew", "field team")):
         return draft_farm_worker_message(context)
     if any(k in text for k in ("neighbor", "neighbour")):

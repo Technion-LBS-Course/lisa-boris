@@ -57,31 +57,17 @@ def routine_status_text(weather, advisory) -> str:
     return " ".join(parts)
 
 
-_ANNOUNCE_PROMPT = (
-    "A fire/smoke detection has just been CONFIRMED. Announce it to the site operator in "
-    "2-3 short sentences: what was detected, where (zone or area), the confidence, and any "
-    "wind/weather risk. End with the single most important next step. Do not invent facts."
-)
-
-
 def emergency_open_text(context) -> str:
     """Announce a confirmed fire/smoke detection in the chat.
 
-    Written by Groq (grounded in the incident facts via the Incident Assistant system
-    prompt) when a key is configured; otherwise falls back to the deterministic
-    narrative + top recommendation so the announcement always appears.
+    Delegates to the Incident Assistant's concise, structured-context-driven
+    opening line (:func:`incident_agent.initial_incident_message`): deterministic
+    and grounded, optionally rephrased by Groq under a strict no-new-facts
+    instruction. The opener stays short and operational — the detailed reasoning
+    and supporting context are provided only if the operator asks ("why?",
+    "explain", …).
     """
-    if uses_llm():
-        try:
-            reply = incident_agent.respond_to_operator(context, _ANNOUNCE_PROMPT, history=[])
-            if reply and reply.strip():
-                return reply.strip()
-        except Exception:
-            pass
-    narrative = incident_agent.incident_narrative(context)
-    recommendations = incident_agent.recommend_actions(context)
-    top = recommendations[0] if recommendations else ""
-    return narrative + (f"\n\nTop recommendation: {top}" if top else "")
+    return incident_agent.initial_incident_message(context)
 
 
 def agent_reply(context, message: str, history=None) -> str:
