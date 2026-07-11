@@ -1,1037 +1,262 @@
-# PyroFinder — Project Context Brief
+# PyroFinder — Project Context
 
-**Last updated:** 2026-06-13  
-**Status:** M2 submitted; M3 active  
-**Primary use:** Source-of-truth context for Claude, Claude Code, ChatGPT, Cursor, and future AI coding agents.
+**Canonical source of truth** for product scope, ML, data, and architecture. If another
+file conflicts with this one, this file wins (unless the owners update it). For
+repo/code status see `CLAUDE.md`; for assistant behavior see `ASSISTANT_WORKING_RULES.md`.
 
-This document defines the canonical product context, ML scope, data strategy, architecture, repository expectations, and working rules for PyroFinder. If another project file conflicts with this file, treat this file as the product/source-of-truth document unless the project owners explicitly update it.
+**Status:** M3 complete — sklearn baselines, YOLO11n baseline, and the selected YOLO11s
+primary detector are all measured; the Live Ops operator dashboard has shipped.
+
+- **Live app:** https://pyrofinder.streamlit.app/ · **Run:** `streamlit run app.py`
+- **Course:** Technion 016833 — Location-Based Services: Data Science.
 
 ---
 
-## 1. Project Identity
+## 1. What PyroFinder is
 
-**Project name:** PyroFinder
+Real-time `fire`/`smoke` detection that reuses cameras a site already owns — no new
+hardware. Pipeline: sample frames → **YOLO11s** detection → multi-frame confirmation →
+approximate location → operational alert. It is a monitoring/alerting system built on
+detection outputs, not a pure YOLO demo.
 
-**Tagline:** Real-time fire outbreak detection and monitoring using cameras that already exist at the customer site.
+**One-liner:** property owners in fire-prone areas suffer delayed fire awareness;
+PyroFinder turns their existing cameras into a real-time fire/smoke monitoring layer with
+multi-frame confirmation and approximate map-based alerts.
 
-**Project type:** Location-based data science / computer vision web application.
+## 2. Problem & audience
 
-**Course context:** Technion course 016833 — Location-Based Services: Data Science.
+Existing wildfire solutions need towers, sensors, drones, or public infrastructure.
+PyroFinder fills the gap for individual owners: homeowners, farm/ranch owners,
+agricultural facility managers, private landowners. Their cameras are passive — someone
+must watch every feed. **Persona — Dani:** a farm owner with boundary cameras; during dry
+months a fire can start at a field edge or neighbouring land, and Dani can't watch every
+feed, so PyroFinder alerts on a confirmed detection and shows roughly where. Secondary
+users (municipalities, fire/rescue) may receive approximate alert info for shared areas.
 
-**Live app:** https://pyrofinder.streamlit.app/
+## 3. Product surfaces
 
-**Local run command:**
+- **Live Ops dashboard — the default landing surface** (`pages/1_Live_Ops.py`). Three
+  views: **Setup** (place camera on a map, calibrate image↔map anchors, mark detection
+  zones with the AI zone assistant + optional per-zone reference point), **Live**
+  (autoplay a camera sequence, per-class smoke/fire detection, N-frame confirmation,
+  freeze-on-confirm, operational chat), **History** (filterable event log).
+- **Central Control dashboard** — operator setup/history: camera metadata, map reference
+  points, image zones, export/import config, incident assistant, weather risk advisory.
+- **Operations & Learning dashboard** — internal ML tool: dataset inspection, D-Fire EDA,
+  inference demo, model comparison, evaluation metrics, false-alarm review.
+- **M2 / M3 / M4 dashboards** — milestone views (problem/EDA, model results, operator flow).
+- **Mobile customer app** and **emergency viewer** — future / out of scope this semester.
+
+## 4. What PyroFinder is NOT
+
+- Not an "early warning system"; does not predict physical fire spread.
+- No precise geolocation; no automatic image-to-map registration; no true geographic
+  spread direction (only apparent in-frame movement).
+- No emergency-dispatch integration; the assistant only drafts/recommends — never contacts
+  anyone or dispatches automatically.
+- No new/dedicated hardware; no live RTSP production streaming required this semester.
+- Classes are strictly `fire` and `smoke`. No YOLOv12; no generic "YOLO" wording.
+
+---
+
+## 5. ML problem
+
+- **Task:** two-class object detection. Input: RGB frames resized to 640×640. Output per
+  frame: boxes `(x_center, y_center, w, h)` normalized, class `fire`/`smoke`, confidence.
+- **Primary model:** Ultralytics **YOLO11s** fine-tuned on D-Fire — chosen for
+  near-real-time sampled-frame inference with stronger quality than YOLO11n. **Fallback:**
+  **YOLO11n** (lightweight speed baseline; not an equal parallel model).
+- **Loss:** Ultralytics YOLO detection loss (box regression + classification + DFL).
+- **Primary KPI:** the cost-sensitive **Operational Alert Score** (FN weight 10, FP weight
+  1) — at the alert level each image is reduced to hazard detected / not detected, and a
+  missed hazard is 10× worse than a false alarm. It already encodes its components
+  **Hazard Recall** (FN-driven) and **False Alert Rate** (FP-driven); those are reported as
+  diagnostics, not separate ranking tiers. Detection mAP@0.5 / Recall / F1 and inference
+  speed are supporting metrics.
+- **Split:** D-Fire's provided train/test split.
+
+## 6. Results (measured — no synthetic values anywhere)
+
+All numbers are measured on the **D-Fire test split (4,306 images)**, confidence 0.25 for
+the operational evaluation (evaluation only, no training). YOLO11s is the **selected**
+detector: it wins the primary KPI and leads on its components and on supporting detection
+metrics. Full analysis: `docs/M3_RESULTS_SUMMARY.md`; raw files in `results/`.
+
+**Object detection (boxes/classes — never compared to sklearn accuracy):**
+
+| Model | mAP@0.5 | mAP@0.5:0.95 | Precision | Recall | F1 |
+|---|---:|---:|---:|---:|---:|
+| YOLO11s (primary) | **0.7668** | 0.4414 | 0.7573 | 0.6967 | 0.7257 |
+| YOLO11n (fallback) | 0.7470 | 0.4249 | 0.7397 | 0.6825 | 0.7099 |
+
+YOLO11s per-class: smoke mAP@0.5 0.8222 / fire 0.7115. Training: 30 epochs, image size
+640, batch 16, Kaggle Tesla T4.
+
+**Operational alert level (`fire` or `smoke` = hazard; image-level):**
+
+| Model | Hazard Recall | False Alert Rate | Alert F1 | Operational Alert Score |
+|---|---:|---:|---:|---:|
+| YOLO11s | **0.9370** | 0.0185 | 0.9595 | **0.9406** |
+| YOLO11n | 0.9331 | 0.0209 | 0.9563 | 0.9368 |
+| Random Forest* | 0.8779 | 0.0828 | — | 0.8810 |
+| Logistic Regression* | 0.8057 | 0.5037 | — | 0.7809 |
+| DummyClassifier* | 0.0000 | 0.0000 | — | 0.0802 |
+
+\* sklearn baselines are **image-level classifiers** (60-dim colour features, no boxes);
+kept only as a reference floor — they can't replace YOLO11s. Detection classification
+scores (full D-Fire): Random Forest ≈ 0.858 acc / 0.849 macro-F1, Logistic Regression ≈
+0.608 / 0.615, Dummy 0.47 / 0.21.
+
+**Approximate fire-location** (bottom-center anchor of class-1 fire boxes; image-space
+only, never precise geolocation): YOLO11s coverage 1,040/1,115, mean error 0.0135, 3×3
+grid-hit 0.9644 (YOLO11n 1,020/1,115, 0.0134, 0.9559). Smoke-only images are never treated
+as a fire epicenter.
+
+Result files: `results/baseline_{dummy_classifier,logistic_regression,random_forest,yolo11n,yolo11s}.json`,
+`results/*_operational_metrics.json`, `results/*_test_predictions.csv`. Reproduce YOLO
+operational/location metrics (evaluation only):
 
 ```bash
-streamlit run app.py
+python scripts/evaluate_yolo_alert_metrics.py --raw-root "<D-Fire root>" \
+  --weights models/yolo11s_dfire_best.pt --model-name YOLO11s --conf 0.25 \
+  --output-json results/yolo11s_operational_metrics.json \
+  --output-csv results/yolo11s_test_predictions.csv
 ```
 
 ---
 
-## 2. One-Liner
+## 7. Data
 
-Private property owners in fire-prone areas suffer from delayed fire awareness, and PyroFinder turns existing cameras into a real-time fire/smoke monitoring layer using YOLO11s detection, multi-frame confirmation, and approximate map-based alerts.
+**D-Fire** (https://github.com/gaia-solutions-on-demand/DFireDataset, CC0). Verified class
+mapping: **0 = smoke, 1 = fire** (do not invert). The committed `data/dfire_metadata.csv`
+(21,527 rows × 36 cols) lets the app run on a fresh clone with no raw dataset.
 
----
-
-## 3. Problem Being Solved
-
-Private property owners in fire-prone areas often already have security cameras, but those cameras are passive: someone must actively watch the feed to notice smoke or fire. During dry seasons, fires can start at property edges, agricultural fields, forest borders, parking areas, or neighboring land, and delayed awareness can turn a small incident into a dangerous event.
-
-Existing wildfire monitoring solutions often require dedicated towers, sensors, drones, satellite services, or public-sector infrastructure. PyroFinder fills a practical gap by reusing cameras the customer already owns and adding automated fire/smoke detection, alerting, approximate location context, and operational monitoring.
-
----
-
-## 4. Core Product Definition
-
-PyroFinder is a real-time fire outbreak detection and monitoring system built around customer-owned cameras.
-
-The system:
-
-1. Samples images or video frames from existing cameras or uploaded media.
-2. Detects `fire` and `smoke` using a fine-tuned YOLO11s detector.
-3. Confirms detections across multiple consecutive frames to reduce false alarms.
-4. Estimates an approximate event location using image-space polygons, quadrants, or camera metadata when available.
-5. Creates alert records and displays them in operational dashboards.
-6. Supports ongoing model evaluation, EDA, experiment tracking, and model improvement through the Operations & Learning Dashboard.
-
-YOLO11s is the detection engine inside the system. PyroFinder is not a pure YOLO demo; it is a monitoring and alerting system built on top of detection outputs.
-
----
-
-## 5. What PyroFinder Is Not
-
-PyroFinder must not be described as an **early warning system**.
-
-PyroFinder does not:
-
-- Predict true physical fire spread during the MVP.
-- Integrate with live emergency dispatch infrastructure during this semester.
-- Require dedicated towers, drones, acoustic sensors, or new hardware infrastructure.
-- Claim precise geolocation.
-- Claim fully automatic image-to-map registration unless explicitly marked as a future feature.
-- Claim true geographic spread direction unless the camera has registered GPS coordinates and compass orientation.
-- Use YOLOv12.
-- Use generic unspecified “YOLO” wording when the model version matters.
-- Train classes other than `fire` and `smoke`.
-- Treat old classification-only datasets as a substitute for the object-detection task.
-- Treat COCO zero-shot assumptions as a valid project baseline.
-
----
-
-## 6. Target Audience
-
-### Primary users and paying customers
-
-Private property owners in fire-prone areas, including:
-
-- Homeowners
-- Farm owners
-- Ranch owners
-- Agricultural facility managers
-- Private landowners
-
-### Primary persona
-
-Dani is a farm owner in central Israel who manages a 120-dunam farm with outdoor security cameras installed at boundary points. During dry summer months, fire risk from neighboring fields or agricultural equipment is high. Dani cannot continuously watch every camera feed, so PyroFinder monitors the feeds automatically and alerts Dani when fire or smoke is confirmed.
-
-### Main use case
-
-A fire ignites at the edge of Dani's property. PyroFinder detects smoke or fire in a camera feed, confirms the detection across multiple frames, creates an alert within seconds, and shows the approximate event location as a named image polygon, image quadrant, or approximate map point when camera metadata is available.
-
-### Secondary users
-
-Municipalities, emergency response teams, rescue teams, forest authorities, and park authorities may receive approximate alert information when a detected fire may affect public or shared-responsibility areas.
-
-### Internal users
-
-PyroFinder team members and developers use the Operations & Learning Dashboard to inspect data, run EDA, compare models, test inference, analyze false alarms, and improve the system.
-
----
-
-## 7. Product Structure
-
-PyroFinder consists of three operational products and one internal product.
-
-### 7.1 Central Control Dashboard
-
-**Users:** PyroFinder operator / admin.
-
-**Purpose:** Operational control center for managing customers, sites, cameras, mapping setup, and alert history.
-
-**Core capabilities:**
-
-- Show customers, sites, and cameras on a basic map.
-- Show camera health, active detections, alert history, camera metadata, and mapping status.
-- Support manual editing of camera location, height, azimuth, indoor/outdoor flag, responsibility zones, and image polygons.
-- Display active fire/smoke events with approximate location and status.
-- Support alert review, confirmation, rejection, and false-alarm marking.
-
-**Operational agent flow (implemented):** Central Control hosts three text/config agents (six tabs; no YOLO runs in this dashboard):
-
-- **Setup / Configuration Agent** (Image Zones) — turns a free-text description of the areas in a camera frame into structured image-zone records (`object_to_find`, `zone_name`, low/medium/high priority, optional `zone_type`/`notes`, `requires_user_confirmation`). Uses Groq when `GROQ_API_KEY` is set, otherwise a deterministic local parser; prompt-injection / off-intent input is filtered and never adds a detection class. Zones can be accepted as pending and drawn later. A config-import uploader restores camera + reference points from a saved `camera_mapping_config.json`.
-- **Incident Assistant** — runs after a confirmed fire/smoke detection and assembles the event location, matched image zone, approximate map point, and apparent image-plane direction, then produces operational recommendations and draft messages (property owner / neighbor / farm worker / fire-department summary), with confirm / false-alarm actions and a session alert log. It only drafts and recommends — it never contacts anyone or dispatches automatically.
-- **Risk Advisory** — a preventive, weather-aware advisory (Open-Meteo, which requires no API key, with a deterministic offline mock fallback) compared against configured zones and priorities, with a user-set check interval and manual refresh. If live weather is unavailable the app shows clearly-labelled fallback data. Advisory guidance only — not an early-warning alert, an ignition prediction, or a dispatch.
-
-**MVP status:** A basic version is part of the course MVP.
-
-### 7.2 Mobile Customer App
-
-**Users:** End customer / property owner.
-
-**Purpose:** Customer-facing interface for receiving alerts and monitoring their own sites.
-
-**Core capabilities:**
-
-- Receive fire/smoke alerts with approximate event location.
-- Show customer cameras, sites, and responsibility areas.
-- Allow confirming, rejecting, or marking alerts as false alarms.
-- Show active events on a map relative to the property.
-
-**MVP status:** Future / out of scope this semester.
-
-### 7.3 Emergency / Third-Party Viewer Dashboard
-
-**Users:** Firefighting teams, rescue services, municipalities, forest authorities, and similar third parties.
-
-**Purpose:** Read-only or limited-access view of active alerts and approximate locations relevant to public or shared-responsibility areas.
-
-**MVP status:** Future / optional product anchor. Not part of the first MVP unless explicitly prioritized later.
-
-### 7.4 Operations & Learning Dashboard
-
-**Users:** PyroFinder internal team — developers, data scientists, and researchers.
-
-**Purpose:** Primary course MVP deliverable and internal tool for building, testing, evaluating, and improving the detection system.
-
-**Core capabilities:**
-
-- Dataset loading and inspection.
-- D-Fire Data Card and EDA.
-- Model comparison: sklearn baselines, YOLO11n baseline/fallback, YOLO11s primary detector (measured; selected).
-- Uploaded image/video inference demo.
-- Detection overlay with bounding boxes.
-- Evaluation metrics: mAP@0.5, mAP@0.5:0.95, precision, recall, F1, false alarm rate, and inference speed.
-- Performance breakdown by conditions when such metadata exists.
-- False positive / false negative review.
-- Experiment tracking.
-- Manual image polygon definition.
-- Basic polygon-to-map linking placeholders.
-- Camera metadata table.
-- Basic map display.
-- Alert log from test runs.
-
----
-
-## 8. Data Strategy
-
-All ML training data must be normalized to a strict two-class detection schema:
-
-- `fire`
-- `smoke`
-
-Other labels such as `human` or `vehicle` must not be trained as fire/smoke. They may be used only as background negatives or future situational-awareness context.
-
-Large raw datasets must stay outside Git. Model weights must stay outside Git unless explicitly approved and small enough for repository policy.
-
----
-
-## 9. Primary Dataset — D-Fire
-
-**Dataset:** D-Fire  
-**URL:** https://github.com/gaia-solutions-on-demand/DFireDataset  
-**Role:** Primary training and held-out test evaluation dataset.  
-**License:** CC0 1.0 Universal.  
-**Annotation format:** YOLO-format normalized bounding boxes.  
-**Classes used by PyroFinder:** `fire`, `smoke`.
-
-### Current verified counts
-
-| Item | Value |
+| Split / category | Count |
 |---|---:|
-| Total images | 21,527 |
-| Train images | 17,221 |
-| Test images | 4,306 |
-| Background images | 9,838 |
-| Smoke-only images | 5,867 |
-| Fire-only images | 1,164 |
-| Fire-and-smoke images | 4,658 |
-| Fire bounding boxes | 14,692 |
-| Smoke bounding boxes | 11,865 |
+| Total / Train / Test | 21,527 / 17,221 / 4,306 |
+| Background / Smoke-only / Fire-only / Fire+smoke | 9,838 / 5,867 / 1,164 / 4,658 |
+| Fire boxes / Smoke boxes | 14,692 / 11,865 |
 
-### D-Fire class mapping
+EDA highlights: background is the largest class (accuracy alone is misleading); fire-only
+images have a much higher dark-pixel ratio than smoke-only (~64% vs ~9%); smoke boxes are
+~7× larger than fire boxes; in fire+smoke images the smoke centroid sits above the fire
+centroid ~95% of the time. Known gaps: few night/indoor/close-range scenes; smoke confused
+with cloud/fog/haze/glare; real deployment needs validation beyond D-Fire.
 
-D-Fire has no reliable `data.yaml` in the local download. The class mapping was verified empirically by comparing generated category counts against the official D-Fire counts.
+Regenerate metadata: `python scripts/build_dfire_metadata.py --raw-root "<D-Fire root>" --output data/dfire_metadata.csv`.
 
-| Class ID | Class name |
-|---:|---|
-| 0 | smoke |
-| 1 | fire |
+**Supplementary / validation** (verify + normalize to `fire`/`smoke` before use): Smart
+Fire System (supplementary/external), Aerial Rescue OD (robustness; Fire class only,
+vehicle/human as negatives), Fire Detection in YOLO Format (small, after class check), FURG
+Fire (video/temporal validation). Large raw datasets stay outside Git.
 
-Do not invert this mapping.
+## 8. Detection, tracking, mapping
 
-### Generated metadata CSV
+- **Detection** frame-by-frame with fine-tuned YOLO11s (fire/smoke only). The Live tab uses
+  **separate smoke/fire confidence thresholds** (default 0.40 each in `config/live_ops.yaml`).
+- **Confirmation:** no alert from a single frame. Live uses one-miss-tolerant confirmation
+  (`tracking.is_confirmed_with_tolerance`): the current frame must be positive AND ≥ N of the
+  last N+1 frames positive. `N` is configurable (`confirmation_frames`, shipped default 1).
+- **Location (approximate):** named image polygon → image quadrant → camera-projected map
+  point (reference-point homography). A class-1 fire box is anchored bottom-center. Inside a
+  zone with an operator-set reference point, that point is projected; a matched zone without
+  one gets no invented point; otherwise the detection anchor is projected. Never precise
+  geolocation.
+- **Direction:** apparent image-plane movement + wind-driven downwind direction (Open-Meteo).
+  Never claimed as true fire spread.
+- **Operational context** (`data/live_ops/live_ops_operational_context.{json,md}`): optional
+  landmarks, sensitive receptors, and verified authority contacts + a contact policy. Feeds
+  incident reasoning and first-message wording only — never zone metadata, never detection
+  input; missing degrades gracefully.
+- **Incident messaging** is audience-relevant: camera by **name** (no ID), never confidence
+  (already confirmed), never temperature/humidity/wind-speed (direction only); approximate
+  **coordinates only for field responders** (fire department). It uses a verified contact's
+  phone when the context has one, else offers to search (never auto). Drafts/recommends only.
 
-`data/dfire_metadata.csv` is generated by `scripts/build_dfire_metadata.py` and is committed to Git. The app should be able to run on a fresh clone using this CSV without requiring the raw D-Fire dataset.
+## 9. Mapping strategy
 
-Current CSV shape: **21,527 rows × 36 columns**.
-
-Important columns include:
-
-- `image_id`
-- `split`
-- `image_category`
-- `has_fire`
-- `has_smoke`
-- `num_fire_boxes`
-- `num_smoke_boxes`
-- `total_boxes`
-- `fire_bbox_coverage`
-- `smoke_bbox_coverage`
-- `mean_brightness`
-- `dark_pixel_ratio`
-- `color_std_mean`
-- `fire_mean_x_center`
-- `fire_mean_y_center`
-- `smoke_mean_x_center`
-- `smoke_mean_y_center`
-- `fire_thirds_col`
-- `fire_thirds_row`
-- `smoke_thirds_col`
-- `smoke_thirds_row`
-- `smoke_dy_vs_fire`
-- `smoke_dx_vs_fire`
-- `fire_smoke_mean_iou`
-
-Regeneration command:
-
-```bash
-python scripts/build_dfire_metadata.py --raw-root "<path-to-D-Fire-root>" --output data/dfire_metadata.csv
-```
-
-Optional sample-copy command:
-
-```bash
-python scripts/build_dfire_metadata.py --raw-root "<path-to-D-Fire-root>" --output data/dfire_metadata.csv --copy-samples data/samples/dfire --sample-count 20
-```
-
-### Current EDA findings
-
-These findings are based on the current generated metadata CSV:
-
-- Background images are the largest category: **9,838 / 21,527 images**.
-- A naive classifier can achieve non-trivial accuracy by predicting background; therefore accuracy alone is misleading.
-- Fire-only images have a much higher dark-pixel ratio than smoke-only images in the current metadata: about **64.1%** vs **8.5%** on average.
-- Smoke bounding boxes are much larger than fire bounding boxes on average: about **7.3×** larger by mean normalized area.
-- In fire-and-smoke images, the smoke centroid appears above the fire centroid in about **94.6%** of cases.
-
-### Known dataset gaps and biases
-
-- Limited representation of night scenes, indoor fires, and close-range agricultural fires.
-- Dataset skews toward outdoor wildland scenes.
-- Ordinary private-property camera angles may differ from benchmark imagery.
-- Smoke may be confused with clouds, fog, dust, haze, glare, or bright sky backgrounds.
-- Real deployment requires validation beyond D-Fire.
+Mapping is an **offline, pre-event setup stage** (operational config, not YOLO training
+data). Modes: responsibility zones, named image polygons, image↔map polygon/point linking,
+manual/GPS camera location, camera metadata (height/azimuth/FOV/indoor-outdoor),
+reference-point mapping. Libraries: Folium, streamlit-folium, Shapely (GeoPandas/PyProj only
+if advanced GIS is added later). Automatic image-to-map registration is future work.
 
 ---
 
-## 10. Supplementary and Validation Datasets
-
-These datasets are candidates only. Before use, labels must be verified and normalized to `fire` / `smoke`.
-
-| Dataset | Role | Notes |
-|---|---|---|
-| Smart Fire System Dataset | Supplementary training / external validation | Use the dataset only; do not assume repository code or trained model quality. |
-| Aerial Rescue Object Detection | Robustness validation | Use Fire class for evaluation; Vehicle/Human only as background negatives. |
-| Fire Detection in YOLO Format | Supplementary training after verification | Small dataset; class compatibility must be verified. |
-| FURG Fire Dataset | Video validation | Useful for temporal behavior, multi-frame confirmation, tracking, and apparent direction estimation. |
-
----
-
-## 11. Formal ML Problem
-
-**Task:** Two-class object detection.
-
-**Input X:** RGB images or sampled video frames from outdoor cameras, resized to 640 × 640 pixels.
-
-**Output y:** Per-frame set of detections. Each detection contains:
-
-- Bounding box: `(x_center, y_center, width, height)` in normalized coordinates.
-- Class label: `fire` or `smoke`.
-- Confidence score: value in `[0, 1]`.
-
-**Primary model:** Ultralytics YOLO11s, initialized from `yolo11s.pt`, fine-tuned on D-Fire.
-
-**Reason for model choice:** YOLO11s is the primary detector because PyroFinder needs near-real-time sampled-frame inference with stronger detection quality than the smallest YOLO11n model. Its measured results now confirm this (see §12.5).
-
-**Baseline / fallback:** Ultralytics YOLO11n, initialized from `yolo11n.pt`, fine-tuned on the same data. YOLO11n is the lightweight speed baseline and fallback only. It is not an equal parallel model.
-
-**Loss:** Ultralytics YOLO detection loss, including bounding-box regression, classification loss, and distribution focal loss as implemented by YOLO11.
-
-**Metrics:**
-
-- mAP@0.5
-- mAP@0.5:0.95
-- Precision
-- Recall
-- F1-score
-- False Alarm Rate, measured as false positives per hour or per 1,000 sampled frames
-- Inference speed, measured in FPS or milliseconds per frame
-
-**Primary KPI statement:** This is a two-class object-detection model. The primary operational KPI / model-selection metric is the **Operational Alert Score** (FN weight 10, FP weight 1), the cost-sensitive summary that already encodes its components — **Hazard Recall** (driven by false negatives, since missing a real fire or smoke hazard is more costly than triggering a false alarm) and **False Alert Rate** (driven by false positives) — at the documented 10:1 weight. Hazard Recall and False Alert Rate are therefore reported as components / diagnostics of the Operational Alert Score, not as separate higher-priority ranking tiers. Detection Recall and mAP@0.5 are supporting object-detection quality metrics, distinct from Hazard Recall (see §12.3).
-
-**Split:** Use D-Fire's provided train/test split. If a different dataset has no split, use a reproducible stratified split by image category.
-
----
-
-## 12. Baselines and Current M3 Results
-
-### 12.1 Sklearn image-level baselines
-
-The sklearn baselines are image-level classifiers, not object detectors. They classify an entire image as `background`, `fire`, or `smoke` based on handcrafted color features.
-
-Feature vector:
-
-- RGB mean per channel — 3 values
-- RGB std per channel — 3 values
-- HSV mean per channel — 3 values
-- HSV std per channel — 3 values
-- RGB color histogram, 16 bins × 3 channels — 48 values
-- Total: 60 values
-- Image resize: 64 × 64
-
-Label derivation:
-
-- Class 1 present → `fire`
-- Class 0 only → `smoke`
-- Empty label file → `background`
-
-Current results on full D-Fire:
-
-| Model | Accuracy | Macro F1 | Fire recall | Smoke recall | Notes |
-|---|---:|---:|---:|---:|---|
-| DummyClassifier | 0.4700 | 0.2100 | 0.0000 | 0.0000 | Minimum bar only; always predicts background. |
-| Logistic Regression | 0.6078 | 0.6151 | 0.7462 | 0.6661 | Shows color features contain useful signal, but false alarms remain high. |
-| Random Forest | 0.8579 | 0.8486 | 0.7973 | 0.8145 | Strongest classical image-level baseline. |
-
-Result files:
-
-- `results/baseline_dummy_classifier.json`
-- `results/baseline_logistic_regression.json`
-- `results/baseline_random_forest.json`
-
-Important distinction: these classifiers do not produce bounding boxes. They cannot replace YOLO11s because PyroFinder requires object localization for approximate location and alert context.
-
-### 12.2 YOLO11n object-detection baseline
-
-YOLO11n is the lightweight object-detection baseline and fallback. It must be compared to YOLO11s using detection metrics, not sklearn accuracy or macro F1.
-
-Training/evaluation details:
-
-| Item | Value |
-|---|---|
-| Platform | Kaggle Notebook |
-| GPU | Tesla T4 |
-| Dataset | D-Fire |
-| Train images | 17,221 |
-| Test images | 4,306 |
-| Classes | 0 = smoke, 1 = fire |
-| Image size | 640 px |
-| Epochs requested | 30 |
-| Batch size | 16 |
-
-Final YOLO11n metrics:
-
-| Metric | Value |
-|---|---:|
-| mAP@0.5 | 0.7470 |
-| mAP@0.5:0.95 | 0.4249 |
-| Precision | 0.7397 |
-| Recall | 0.6825 |
-| F1 | 0.7099 |
-
-Result files:
-
-- `results/baseline_yolo11n.json`
-- `results/results_yolo11n.csv`
-- `models/yolo11n_dfire_best.pt` — local only, Git-ignored
-- `scripts/YOLO11n_baseline.py` — reproducible runner
-
-YOLO11s is the current primary detector and now has measured results that improve on YOLO11n; see §12.5 for the measured detection and operational metrics and the selection outcome.
-
-### 12.3 Operational alert metrics (cost-sensitive comparison)
-
-Standard detection/classification metrics do not capture PyroFinder's real operating cost, so a cost-sensitive **operational alert** layer is used to rank models. At the alert level, `fire` and `smoke` both count as a hazard:
-
-- `hazard_present` = ground truth has fire OR smoke
-- `hazard_detected` = prediction has fire OR smoke
-
-A **missed hazard** (false negative) is the worst failure and is weighted **10×** a **false alert** (false positive). Decision metrics:
-
-- **Primary decision metric: Operational Alert Score** = 1 − weighted_error_cost / max_possible_cost, with FN weight 10 and FP weight 1 (higher is better) — the cost-sensitive summary that already encodes Hazard Recall and False Alert Rate at the documented 10:1 weight
-- **Component / diagnostic: Hazard Recall** = TP / (TP + FN) (driven by false negatives)
-- **Component / diagnostic: False Alert Rate** = FP / (FP + TN) (driven by false positives)
-
-**Location metrics apply only to object detectors** (YOLO11n / YOLO11s). They use the fire-box (class 1) **bottom-center anchor** (`anchor_x = x_center`, `anchor_y = y_center + height/2`) as an approximate image-space event point (normalized location error + 3×3 grid hit). Image-level sklearn classifiers produce no boxes, so their location metrics are N/A. All location outputs are approximate, never precise geolocation. Smoke-only images are never treated as a fire epicenter.
-
-Operational alert metrics on the D-Fire test split (sklearn baselines — alert-level reduction of the same predictions; no retraining):
-
-| Model | Hazard Recall | False Alert Rate | Operational Alert Score |
-|---|---:|---:|---:|
-| DummyClassifier | 0.0000 | 0.0000 | 0.0802 |
-| Logistic Regression | 0.8057 | 0.5037 | 0.7809 |
-| Random Forest | 0.8779 | 0.0828 | 0.8810 |
-
-DummyClassifier scores near zero because it misses every hazard. Random Forest is the strongest classical baseline but remains an image-level classifier — not a replacement for YOLO11s.
-
-Implementation: `src/evaluation.py` (pure, dependency-light, no ML imports). Unit tests: `tests/test_evaluation.py` (alert confusion, cost weighting, location helpers). Result files: `results/baseline_*.json` (each with an `operational_metrics` block). YOLO11n / YOLO11s operational and approximate-location metrics are produced by `scripts/evaluate_yolo_alert_metrics.py` (evaluation only, no training).
-
-### 12.4 YOLO11n operational alert evaluation — complete
-
-The YOLO11n operational alert evaluation is **complete** (2026-06-10). It is an **evaluation/inference-only** run — no training or retraining occurred. The fine-tuned YOLO11n checkpoint was run on the full D-Fire test split and reduced to image-level alert metrics, plus approximate image-space fire-location metrics.
-
-Run configuration:
-
-| Item | Value |
-|---|---|
-| Evaluation date | 2026-06-10 |
-| Platform | Kaggle Notebook |
-| GPU | Tesla T4 |
-| Dataset | D-Fire test split |
-| Images evaluated | 4,306 |
-| Confidence threshold | 0.25 |
-| Image size | 640 |
-| FN weight | 10 |
-| FP weight | 1 |
-
-Alert-level confusion (image-level, `fire` or `smoke` = hazard):
-
-| Outcome | Count |
-|---|---:|
-| TP alert | 2,147 |
-| FN alert | 154 |
-| FP alert | 42 |
-| TN alert | 1,963 |
-
-Operational alert metrics:
-
-| Metric | Value |
-|---|---:|
-| Hazard Recall | 0.9331 |
-| False Alert Rate | 0.0209 |
-| Alert Precision | 0.9808 |
-| Alert F1 | 0.9563 |
-| Weighted Error Cost | 1,582 |
-| Operational Alert Score | 0.9368 |
-
-Approximate fire-location metrics (bottom-center anchor of class-1 fire boxes; image-space only):
-
-| Metric | Value |
-|---|---:|
-| Ground-truth fire images | 1,115 |
-| Location coverage | 1,020 / 1,115 |
-| Location coverage rate | 0.9148 |
-| Mean fire location error | 0.01343 |
-| Median fire location error | 0.005704 |
-| 3×3 fire-location grid hit rate | 0.9559 |
-
-Output files:
-
-- `results/yolo11n_operational_metrics.json`
-- `results/yolo11n_test_predictions.csv` — per-image alert outcome + fire-location error table, used for failure analysis.
-
-Key distinctions — the two YOLO11n evaluations are **complementary and must not be presented as interchangeable**:
-
-- The **alert-level** evaluation treats both `fire` and `smoke` as a single hazard, then reduces each image to hazard detected / not detected.
-- Missing a hazard (false negative) is weighted **10×** a false alert (false positive).
-- The operational metrics above are **image-level alert metrics**.
-- The standard YOLO11n metrics in `results/baseline_yolo11n.json` (§12.2) remain **object-detection metrics** (mAP, precision, recall, F1 over boxes and classes).
-- These two evaluations answer different questions and must never be mixed or treated as the same score.
-
-The operational location metric uses the **bottom-center anchor** of a class-1 fire bounding box (`anchor_x = x_center`, `anchor_y = y_center + height/2`), not the box centroid. It is an approximate image-space location only — never precise geolocation. Centroids may still be used for tracking, motion analysis, or polygon lookup where appropriate, but the completed operational location metric is bottom-center-anchor-based.
-
-### 12.5 YOLO11s primary detector — measured results (2026-06-12)
-
-YOLO11s is the **current primary detector**. Its fine-tuning and evaluation are **complete**, and the real measured result files now exist in `results/`. **No synthetic or placeholder performance values are used anywhere** in the app, comparison code, or result files. YOLO11n remains the lightweight speed baseline / fallback, not an equal parallel model.
-
-Measured result files:
+## 10. Repository structure
 
 ```text
-models/yolo11s_dfire_best.pt              — fine-tuned checkpoint (local only, Git-ignored)
-results/baseline_yolo11s.json             — object-detection metrics (mAP, precision, recall, F1)
-results/results_yolo11s.csv               — per-epoch training curves
-results/yolo11s_operational_metrics.json  — operational alert + approximate fire-location metrics
-results/yolo11s_test_predictions.csv      — per-image alert outcome + fire-location error table
-```
-
-#### YOLO11s object-detection metrics (D-Fire test split)
-
-These are object-detection metrics over boxes and classes — never to be compared against sklearn accuracy or Macro F1.
-
-| Metric | YOLO11s | YOLO11n (baseline) |
-|---|---:|---:|
-| mAP@0.5 | 0.7668 | 0.7470 |
-| mAP@0.5:0.95 | 0.4414 | 0.4249 |
-| Precision | 0.7573 | 0.7397 |
-| Recall | 0.6967 | 0.6825 |
-| F1 | 0.7257 | 0.7099 |
-
-Per-class (YOLO11s): smoke — mAP@0.5 0.8222, mAP@0.5:0.95 0.5054, Precision 0.8028, Recall 0.7563, F1 0.7789; fire — mAP@0.5 0.7115, mAP@0.5:0.95 0.3774, Precision 0.7119, Recall 0.6370, F1 0.6724. Training: 30 epochs requested, image size 640, batch 16, Kaggle Tesla T4.
-
-#### YOLO11s operational alert metrics (D-Fire test split — evaluation only)
-
-Cost-sensitive alert-level evaluation (no training/retraining), confidence 0.25, FN weight 10, FP weight 1, 4,306 images. These are **image-level alert metrics** and are kept separate from the object-detection metrics above.
-
-Alert-level confusion (`fire` or `smoke` = hazard): TP alert 2,156 · FN alert 145 · FP alert 37 · TN alert 1,968.
-
-| Metric | YOLO11s | YOLO11n |
-|---|---:|---:|
-| Hazard Recall | 0.9370 | 0.9331 |
-| False Alert Rate | 0.0185 | 0.0209 |
-| Alert Precision | 0.9831 | 0.9808 |
-| Alert F1 | 0.9595 | 0.9563 |
-| Operational Alert Score | 0.9406 | 0.9368 |
-
-Approximate fire-location metrics (bottom-center anchor of class-1 fire boxes; image-space only, never precise geolocation): ground-truth fire images 1,115 · location coverage 1,040 / 1,115 (rate 0.9327) · mean fire location error 0.013499 · median 0.005478 · 3×3 grid hit rate 0.9644.
-
-#### Selection outcome
-
-YOLO11s is now the **selected detector**. Complete measured detection and operational result files make it *eligible*; what *selects* it is winning the measured operational comparison. Applying the decision ranking (Operational Alert Score → detection Recall / mAP@0.5 → inference speed when measured, where the Operational Alert Score already encodes its component Hazard Recall and False Alert Rate at the documented 10:1 weight), YOLO11s wins on the primary metric — higher Operational Alert Score (0.9406 vs 0.9368) — and also leads on its components (Hazard Recall 0.9370 vs 0.9331, False Alert Rate 0.0185 vs 0.0209), with stronger supporting detection mAP@0.5 (0.7668 vs 0.7470) and Recall (0.6967 vs 0.6825). Eligibility (`src/results_loader.select_operational_winner`) is gated on existing files, measured values, a non-synthetic/non-pending status, and non-null required metrics; if the YOLO11s files were absent it would not be eligible — eligibility alone does not select it, the measured comparison does. Object-detection metrics and operational alert metrics remain in separate tables and are never compared against sklearn Macro F1.
-
-Implementation: `src/results_loader.py` (load/classify detection vs operational JSON + winner selection; pure stdlib, no ML imports) and `src/inference.py` (lazy YOLO11n/YOLO11s loading + single-image detection; fine-tuned D-Fire checkpoints only, never pretrained weights). Tests: `tests/test_results_loader.py`, `tests/test_inference.py` (temporary files only; no model weights required). The YOLO11s operational/location metrics are reproducible (evaluation only, no training) with:
-
-```bash
-python scripts/evaluate_yolo_alert_metrics.py \
-  --raw-root "<path-to-D-Fire-root>" \
-  --weights "models/yolo11s_dfire_best.pt" \
-  --model-name "YOLO11s" --conf 0.25 \
-  --output-json "results/yolo11s_operational_metrics.json" \
-  --output-csv "results/yolo11s_test_predictions.csv"
-```
-
----
-
-## 13. Detection, Tracking, and Alert Logic
-
-### Detection
-
-Detection is performed frame-by-frame using a fine-tuned YOLO11s detector. The detector outputs only two classes: `fire` and `smoke`.
-
-### Multi-frame confirmation
-
-PyroFinder does not trigger an alert from a single-frame detection. A confirmed alert requires a fire or smoke detection above the configured confidence threshold across `N` consecutive frames from the same camera.
-
-`N` is configurable. The default working value is 3 unless changed through configuration.
-
-### Fire location estimation
-
-Fire detections are used to estimate an approximate fire location in image space. The completed YOLO11n operational location metric (§12.4) anchors a class-1 fire box at its **bottom-center** point (`anchor_x = x_center`, `anchor_y = y_center + height/2`), where flames meet the ground in the frame. Bounding-box centroids may still be used for tracking, motion analysis, and polygon lookup, but the operational location metric is bottom-center-anchor-based, not centroid-based. All outputs are approximate image-space locations — never precise geolocation.
-
-Allowed location outputs:
-
-- Named image polygon, e.g. `north field`
-- Image quadrant, e.g. `lower-left quadrant`
-- Approximate map point when camera metadata and mapping setup are available
-
-Do not claim precise geolocation.
-
-### Smoke direction estimation
-
-Smoke detections are used to estimate apparent smoke movement direction from centroid movement, bounding-box persistence, and shape changes across frames.
-
-Allowed wording:
-
-- `apparent smoke direction`
-- `image-plane direction`
-- `estimated direction based on smoke movement`
-
-Do not claim true wind direction unless explicitly validated.
-
-### Spread-direction estimation
-
-The MVP estimates apparent image-plane direction only. It does not predict true physical fire spread.
-
-Allowed wording:
-
-- `apparent direction in the camera frame`
-- `image-plane spread direction`
-- `expanding toward upper-right of frame`
-- `approximate fire location based on camera projection`
-
----
-
-## 14. Mapping and Geolocation Strategy
-
-Mapping is an offline, pre-event setup stage. It is not solved during a live fire event.
-
-Map and geo data are operational configuration, not YOLO training data.
-
-Supported mapping modes:
-
-1. **Manual responsibility zone definition** — mark areas in the camera image as in-scope or out-of-scope.
-2. **Manual polygon creation and naming** — draw polygons such as `north field`, `parking area`, `forest edge`, `access road`, `fence line`, or `orchard`.
-3. **Image-to-map polygon linking** — link an image polygon to a map polygon, terrain cell, or map point.
-4. **Manual or GPS-based camera location setup** — store camera latitude/longitude when available.
-5. **Camera metadata setup** — height, azimuth, indoor/outdoor flag, field of view, zoom state if available.
-6. **Reference-point mapping** — mark landmarks that appear both in the camera image and on the map.
-
-Automatic image-to-map registration is future/advanced work and is not required for the course MVP.
-
-Candidate mapping libraries:
-
-- Folium
-- streamlit-folium
-- Shapely
-- GeoPandas, if later needed
-- Rasterio / PyProj, only if DEM or advanced GIS work is explicitly added later
-
----
-
-## 15. Technical Architecture
-
-```mermaid
-flowchart TD
-    A[Camera Feed / Uploaded Video / Image Set] --> B[Frame Sampling & Preprocessing\nOpenCV · resize to 640x640]
-    B --> C[YOLO11s Detection\nfire / smoke · confidence · bbox]
-    C --> D[Multi-Frame Confirmation\nN consecutive frames threshold]
-    D --> E[Tracking & Direction Analysis\ncentroid movement · bbox area · apparent direction]
-    E --> F[Mapping & Geolocation\nimage polygon lookup · camera metadata projection · reference points]
-    F --> G[Alert Generation\nalert record · timestamp · class · location · direction]
-
-    G --> H[Central Control Dashboard\noperator · all customers / sites / cameras]
-    G --> I[Mobile Customer App\ncustomer alerts · future]
-    G --> J[Emergency Viewer Dashboard\nread-only · future]
-
-    B --> K[Operations & Learning Dashboard\ndataset EDA · inference · model comparison · experiment tracking]
-    C --> K
-    D --> K
-
-    subgraph Storage
-        L[ML Datasets · outside Git]
-        M[Model Checkpoints & Experiment Logs]
-        N[Camera & Site Config · Geo & Mapping Data]
-        O[Alert History]
-    end
-
-    K --> M
-    G --> O
-    F --> N
-```
-
-Layer summary:
-
-1. Camera / uploaded media input.
-2. Frame sampling and preprocessing.
-3. YOLO11s detection.
-4. Multi-frame confirmation.
-5. Tracking and apparent direction analysis.
-6. Mapping and approximate geolocation.
-7. Alert generation.
-8. Dashboard display and model-evaluation workflow.
-
-Live RTSP ingestion is not required for this semester.
-
----
-
-## 16. Input / Output Schema
-
-| Object | Key fields |
-|---|---|
-| Customer | `customer_id`, `name`, `contact_info` |
-| Site / property | `site_id`, `customer_id`, `name`, `location_polygon`, `address` |
-| Camera | `camera_id`, `site_id`, `name`, `status` |
-| Camera metadata | `camera_id`, `latitude`, `longitude`, `height_m`, `azimuth_deg`, `fov_horizontal_deg`, `fov_vertical_deg`, `indoor_outdoor`, `zoom_state` |
-| Image polygon | `polygon_id`, `camera_id`, `name`, `vertices`, `polygon_type`, `linked_map_polygon_id` |
-| Map polygon | `map_polygon_id`, `site_id`, `name`, `geometry`, `polygon_type` |
-| Reference point | `ref_point_id`, `camera_id`, `image_x`, `image_y`, `map_lat`, `map_lon`, `label` |
-| Frame input | `timestamp`, `camera_id`, `image` |
-| Detection output | `timestamp`, `camera_id`, `class`, `confidence`, `bbox` |
-| Tracking output | `timestamp`, `camera_id`, `track_id`, `centroid`, `bbox_area`, `apparent_direction`, `matched_image_polygon_id`, `approximate_map_location` |
-| Alert | `alert_id`, `timestamp`, `camera_id`, `site_id`, `customer_id`, `detected_class`, `confidence`, `apparent_direction`, `image_polygon_name`, `approximate_lat`, `approximate_lon`, `geographic_bearing`, `status` |
-| Model experiment | `experiment_id`, `model_name`, `dataset`, `split`, `hyperparameters`, `metrics`, `notes`, `timestamp` |
-| Dataset record | `dataset_id`, `name`, `source_url`, `num_images`, `classes`, `split_info`, `license`, `role` |
-| Evaluation run | `run_id`, `experiment_id`, `dataset_id`, `split`, `metrics`, `timestamp` |
-
-Allowed detection classes are only `fire` and `smoke`.
-
----
-
-## 17. Current Repository Structure
-
-```text
-app.py                    # thin Streamlit shell: page config, theme, sidebar mode select, dispatch to dashboards
-requirements.txt
-README.md
-CLAUDE.md
-PROJECT_CONTEXT.md
-ASSISTANT_WORKING_RULES.md
-.env.example
-.gitignore
+app.py                       Streamlit shell (theme, sidebar, dispatch); new sessions open Live Ops
+pages/1_Live_Ops.py          Live Ops default landing page
 
 src/
-  data.py
-  eda.py
-  viz.py
-  ui.py
-  model.py
-  detection.py
-  tracking.py
-  mapping.py
-  alerts.py
-  evaluation.py           # cost-sensitive operational alert metrics + approximate fire-location helpers; pure stdlib, no ML imports
-  llm.py                  # Groq helper (operational text + zone-setup assist); groq imported lazily in get_client(); not the detector
-  agent_schemas.py        # shared vocab for the operational agents (priority, zone-type, prompt-injection filter, compass) — pure
-  zone_agent.py           # Setup/Configuration Agent: free-text -> operational image-zone records (Groq or deterministic local fallback)
-  incident_agent.py       # Incident Assistant: incident context + recommendations + draft messages + alert record (pure; drafts only)
-  weather.py              # Risk Advisory: Open-Meteo (no API key) + deterministic mock fallback; fire-weather risk + preventive advisories (pure logic)
-  dashboards/             # dashboard renderers; app.py dispatches one render() per dashboard mode
-    model_helpers.py      # shared model/comparison rendering helpers + cached detector loader (ML imports lazy)
-    operations_learning.py # Operations & Learning dashboard renderer
-    central_control.py    # Central Control dashboard renderer (6 tabs incl. AI zone setup, Incident Assistant, Risk Advisory)
-    m2_dashboard.py       # M2 dashboard orchestrator -> m2/
-    m2/                   # M2 tab modules: problem_understanding, literature_review, market_review, dataset_eda
-    m3_dashboard.py       # M3 dashboard orchestrator -> m3/
-    m3/                   # M3 tab modules: overview, models, model_comparison, inference_demo
+  inference.py               lazy YOLO11n/YOLO11s + run_detection (per-class conf) + hazard/anchor helpers
+  tracking.py                N-frame confirmation (strict + one-miss) + apparent direction
+  mapping.py                 polygons, quadrant, reference-point homography, zone ref points, downwind
+  incident_agent.py          Incident Assistant: context, concise/audience-relevant messages, contacts
+  live_ops_config.py         Live Ops config + demo assets + operational-context loader + FOV cone
+  live_ops_cache.py          pre-computed per-frame detection cache (redraw boxes, no YOLO in default mode)
+  live_ops_agents.py         dual-agent ops chat (Watch weather / Response incident)
+  zone_agent.py, agent_schemas.py   text→operational zone records; priority/zone-type/compass helpers
+  segmentation_assist.py     local OpenCV GrabCut box→polygon (no weights/network/YOLO/Groq)
+  weather.py                 Open-Meteo (no key) + offline mock; fire-weather risk
+  llm.py                     Groq helper (lazy); reads GROQ_API_KEY; not the detector
+  evaluation.py, results_loader.py   operational metrics + result JSON loading/winner (pure)
+  data.py, eda.py, viz.py, model.py, detection.py, alerts.py, ui.py   dataset/EDA/annotation/etc.
+  dashboards/                live_ops · central_control · operations_learning · m2(+m2/) · m3(+m3/) · m4 · model_helpers
 
-scripts/
-  build_dfire_metadata.py
-  dummy_try.py
-  simple_baselines.py
-  YOLO11n_baseline.py
-  evaluate_yolo_alert_metrics.py   # evaluation-only operational alert + fire-location metrics for a YOLO checkpoint (no training)
-
-data/
-  dfire_metadata.csv
-  samples/dfire/images/
-  samples/dfire/labels/
-
-results/
-  baseline_dummy_classifier.json
-  baseline_logistic_regression.json
-  baseline_random_forest.json
-  baseline_yolo11n.json
-  results_yolo11n.csv
-  yolo11n_operational_metrics.json   # YOLO11n operational alert + location metrics
-  yolo11n_test_predictions.csv       # per-image alert outcome + fire-location error table
-  baseline_yolo11s.json              # YOLO11s detection metrics (measured)
-  results_yolo11s.csv                # YOLO11s per-epoch training curves
-  yolo11s_operational_metrics.json   # YOLO11s operational alert + location metrics (measured)
-  yolo11s_test_predictions.csv       # YOLO11s per-image alert outcome + fire-location error table
-
-models/
-  yolo11n_dfire_best.pt   # local only, Git-ignored
-  yolo11s_dfire_best.pt   # local only, Git-ignored
-
-docs/
-  M2_DATA_EDA.md
-  M2_dashboard.md
-  M2_GAP_LIST.md
-  Literature_review.md
-  market_survey_wildfire_existing_sensors.md
-  AI_AGENT_SYSTEM.md      # agent roles, workflows, prompts (canonical location)
-
-tests/
-  test_smoke.py
-  test_evaluation.py      # unit tests for src/evaluation.py (alert confusion, cost weighting, location helpers)
-  test_zone_agent.py      # unit tests for src/zone_agent + src/agent_schemas (parse, priority, injection filter, fallback) — pure
-  test_incident_agent.py  # unit tests for src/incident_agent (context, recommendations, drafts, alert record) — pure
-  test_weather.py         # unit tests for src/weather (risk scoring, advisories, provider selection, fallback) — pure
-  test_dashboards_smoke.py # dashboard import smoke tests (no ultralytics/torch imported at module import)
+config/                      live_ops.yaml, live_ops_camera.json
+data/                        dfire_metadata.csv · samples/ · live_demo/ (26 frames + cache/detections.json) · live_ops/ (context) · live_events.jsonl (History, git-ignored)
+results/                     measured metric JSON/CSV (baselines, YOLO11n, YOLO11s)
+models/                      yolo11n_dfire_best.pt, yolo11s_dfire_best.pt  (COMMITTED — gitignore exception)
+scripts/                     build_dfire_metadata, dummy_try, simple_baselines, YOLO11n_baseline,
+                             evaluate_yolo_alert_metrics, build_live_ops_cache
+tests/                       pytest suite (pure helpers incl. test_live_ops_*; no weights required)
+docs/                        M2_DATA_EDA, M3_RESULTS_SUMMARY, M3_SUBMISSION_REQUIREMENTS,
+                             AI_AGENT_SYSTEM, Literature_review, market survey, design_handoff
 ```
 
-The Streamlit app opens on the **M3 Dashboard** (first sidebar option), which has four tabs — **Overview**, **Models**, **Model comparison (KPI)**, and **Inference Demo** — reorganized from the Operations & Learning Dashboard content. The **M2 Dashboard**, **Operations & Learning Dashboard**, and **Central Control Dashboard** remain selectable from the same sidebar. `app.py` only builds the sidebar and dispatches; each dashboard is rendered by a module under `src/dashboards/`.
+## 11. Runtime, secrets, and policy
 
-Important note: `ASSISTANT_WORKING_RULES.md` should be kept at the repository root next to `PROJECT_CONTEXT.md`, `CLAUDE.md`, and `README.md`, because it is a source-of-truth instruction file for all future AI sessions.
+- **Dependencies** (`requirements.txt`): streamlit, pandas, plotly, numpy, Pillow,
+  opencv-python-headless, scikit-learn, ultralytics, PyYAML, folium, streamlit-folium,
+  streamlit-image-coordinates, shapely, groq, truststore, pytest.
+- **Secrets:** `GROQ_API_KEY` is the only optional key (AI zone setup + incident-chat
+  wording) — read from `st.secrets`/env, never logged or committed; absent → deterministic
+  local fallback, and `groq` imports lazily. Weather (Open-Meteo) needs **no** key.
+- **Do not commit:** raw datasets, training runs, secrets, local machine paths, large
+  media, caches. **Committed exceptions:** `data/dfire_metadata.csv`, sample/demo assets,
+  `results/`, docs, and the two fine-tuned checkpoints in `models/` (so the public app runs
+  on a fresh clone).
+- **Commands:** `python -m pytest tests` after code changes; `streamlit run app.py` after
+  layout changes.
 
----
+## 12. User stories (acceptance-tested)
 
-## 18. Requirements and Runtime
+1. Confirmed alert — YOLO11s detects fire/smoke above threshold across N frames → dashboard
+   shows a confirmed alert with camera, time, class, and approximate location.
+2. Operator map — cameras appear as map markers; clicking shows status/metadata.
+3. Image polygons — operator draws a named zone; a test detection inside returns the name.
+4. Model comparison — dashboard shows detection vs operational metrics (never sklearn
+   accuracy for YOLO).
+5. False-alarm review — test alerts can be confirmed / rejected / marked false alarm.
 
-Current Python dependencies are defined in `requirements.txt`:
+Market gap: a low-friction **software** layer for sites that already have cameras (vs
+tower/acoustic/drone/satellite/suppression competitors). Don't invent market-size numbers.
 
-- pandas
-- streamlit
-- plotly
-- scikit-learn
-- pytest
-- numpy
-- Pillow
-- opencv-python-headless
-- ultralytics
-- PyYAML
-- folium
-- streamlit-folium
-- streamlit-image-coordinates
-- shapely
-- groq
-- truststore
-
-**Optional secret (never committed):** `GROQ_API_KEY` powers the AI-assisted zone setup and the optional incident-message wording polish. It is read from `st.secrets` (`.streamlit/secrets.toml`) or an environment variable only, and is never logged or committed. When it is absent the zone agent degrades gracefully to a deterministic local parser, and `groq` is imported lazily so the app runs even if the package is not installed. The **Risk Advisory uses Open-Meteo, which requires no API key, signup, or credit card**; if live weather is unavailable it falls back to a deterministic offline mock (clearly labelled in the UI). No weather API key is used anywhere.
-
-Run tests:
-
-```bash
-python -m pytest tests
-```
-
-Run app:
-
-```bash
-streamlit run app.py
-```
-
----
-
-## 19. Git and File Policy
-
-Do not commit:
-
-- Raw datasets
-- Full training runs
-- Model weights
-- Local `.env` files
-- Secrets
-- Local machine paths in reusable code
-- Cache files
-- Large video files
-- Large raster / DEM data
-
-Allowed committed data/artifacts:
-
-- `data/dfire_metadata.csv`
-- Small committed sample images and labels under `data/samples/dfire/`
-- Result JSON files under `results/`
-- Training curve CSV under `results/`
-- Documentation under `docs/`
-- Design assets explicitly allowed by `.gitignore`
-
----
-
-## 20. Current MVP Priority
-
-M2 is submitted. M3 is active.
-
-Current status:
-
-1. Streamlit shell running — done.
-2. Dataset inspection and metadata display — done.
-3. D-Fire EDA — done.
-4. Uploaded image/video inference placeholder — done.
-5. DummyClassifier baseline — done.
-6. Logistic Regression and Random Forest baselines — done.
-7. YOLO11n object-detection baseline — done.
-8. Cost-sensitive operational alert metric framework (`src/evaluation.py` + `tests/test_evaluation.py`) — done.
-9. YOLO11n operational alert evaluation — done (2026-06-10, evaluation only).
-10. Approximate fire-location evaluation for YOLO11n — done (2026-06-10).
-11. YOLO11s fine-tuning + detection and operational evaluation — done (2026-06-12, Kaggle); YOLO11s is now the selected primary detector — see §12.5.
-12. Alert log from test runs — next.
-13. Camera metadata table — next.
-14. Manual image polygon and map-linking placeholders — next.
-
-Recommended next M3 work order:
-
-1. Detailed analysis of YOLO11s and YOLO11n results — false negatives, false positives, hazard subtypes, confidence-threshold implications, and approximate location errors — using `results/yolo11s_test_predictions.csv` and `results/yolo11n_test_predictions.csv`.
-2. Create `docs/M3_RESULTS_SUMMARY.md` only after that analysis is reviewed and stable.
-3. Add alert log and N-frame confirmation tests.
-4. Add camera metadata table and basic map view.
-5. Run `python -m pytest tests` after code changes.
-6. Run `streamlit run app.py` after Streamlit layout changes.
-
----
-
-## 21. Documentation Map
+## 13. Documentation map
 
 | File | Role |
 |---|---|
-| `PROJECT_CONTEXT.md` | Canonical product context, ML scope, data strategy, architecture, current status. |
-| `CLAUDE.md` | Coding-agent context: repo structure, module responsibilities, current implementation status. |
-| `README.md` | External-facing project description and reproducibility notes. |
-| `docs/AI_AGENT_SYSTEM.md` | Agent roles, workflows, prompts, operating procedures. |
-| `ASSISTANT_WORKING_RULES.md` | General communication, accuracy, coding, and session rules for AI assistants. |
-| `docs/M2_DATA_EDA.md` | D-Fire data workflow, class mapping, EDA documentation. |
-| `docs/M2_dashboard.md` | M2 dashboard requirements and dashboard design notes. |
-| `docs/M2_GAP_LIST.md` | Historical M2 audit and known M2 gaps. Keep as archive unless still needed. |
-| `docs/Literature_review.md` | Literature review and project lessons. |
-| `docs/market_survey_wildfire_existing_sensors.md` | Market survey and competitor positioning. |
-| `docs/M3_RESULTS_SUMMARY.md` | To be created after deeper M3 result analysis. |
+| `PROJECT_CONTEXT.md` | Product/ML/data/architecture source of truth (this file). |
+| `CLAUDE.md` | Coding-agent repo map + current status. |
+| `README.md` | External-facing overview. |
+| `ASSISTANT_WORKING_RULES.md` | Assistant communication/coding/session rules. |
+| `docs/AI_AGENT_SYSTEM.md` | Agent roles, workflows, prompts. |
+| `docs/M2_DATA_EDA.md` | D-Fire workflow, class mapping, EDA. |
+| `docs/M3_RESULTS_SUMMARY.md` | Detailed M3 result analysis. |
+| `docs/Literature_review.md`, `docs/market_survey_wildfire_existing_sensors.md` | Related work / market. |
 
-Update rule:
-
-- If product scope, model choice, data strategy, or terminology changes — update `PROJECT_CONTEXT.md`.
-- If repo structure, module responsibilities, or current coding status changes — update `CLAUDE.md`.
-- If agent workflows or prompts change — update `docs/AI_AGENT_SYSTEM.md`.
-- If assistant behavior or working style changes — update `ASSISTANT_WORKING_RULES.md`.
-- If public-facing project claims change — update `README.md`.
-
----
-
-## 22. User Stories
-
-### Story 1 — Customer receives confirmed fire/smoke alert
-
-As a property owner, I want to receive an alert when fire or smoke is confirmed in any of my camera feeds, so that I can respond without manually watching every camera.
-
-**Acceptance criterion:** When YOLO11s detects fire or smoke above the configured threshold across `N` consecutive frames, the dashboard displays a confirmed alert with camera identifier, timestamp, class, confidence, and approximate location if available.
-
-### Story 2 — Operator sees cameras on a central map
-
-As a PyroFinder operator, I want to see all customers, sites, and cameras on a basic map so that I can monitor operational status from one screen.
-
-**Acceptance criterion:** The Central Control Dashboard displays registered cameras as map markers. Clicking a marker shows camera status, recent alerts, and metadata.
-
-### Story 3 — Operator defines image polygons and links them to map areas
-
-As a PyroFinder operator, I want to draw named polygons on each camera image and link them to map areas so that detections can be reported as approximate property locations.
-
-**Acceptance criterion:** The operator can define at least one named image polygon and a test detection inside that polygon returns the polygon name.
-
-### Story 4 — Internal user compares model performance
-
-As a PyroFinder developer, I want to compare sklearn baselines, YOLO11n, and YOLO11s so that I can justify the production model choice.
-
-**Acceptance criterion:** The Operations & Learning Dashboard displays metric cards and comparison tables. YOLO11n and YOLO11s are evaluated with detection metrics, not sklearn classification metrics.
-
-### Story 5 — Internal user reviews false alarms
-
-As a PyroFinder developer, I want to review false positives and false negatives so that I can understand model failure modes and improve training and thresholds.
-
-**Acceptance criterion:** The dashboard records test alerts and allows marking them as confirmed, rejected, or false alarm.
-
----
-
-## 23. Research Gap
-
-Existing models often perform well on curated benchmark datasets but are less often validated as practical camera-ready monitoring systems for ordinary private-property camera feeds.
-
-PyroFinder addresses this gap by combining two-class fire/smoke object detection, multi-frame confirmation, false-alarm review, approximate location output, and an operations dashboard built around existing cameras.
-
----
-
-## 24. Market Positioning
-
-PyroFinder's market gap is a low-friction software layer for sites that already have cameras.
-
-Competitor categories:
-
-- Camera tower solutions: strong visual detection, but require dedicated camera stations.
-- Acoustic sensor networks: useful in blind spots, but require specialized hardware.
-- Drones: flexible, but operationally complex.
-- Satellites: strong wide-area intelligence, but not based on local customer-owned cameras.
-- Suppression systems: focus on defense/suppression rather than software-first detection from existing cameras.
-
-PyroFinder's positioning: use customer-owned camera infrastructure first, then add AI detection, multi-frame confirmation, approximate location, and alert workflow.
-
-Do not invent market-size numbers unless a verified source is provided.
-
----
-
-## 25. AI Agent Instructions
-
-Future AI coding agents should:
-
-- Use this file as the source of truth.
-- Use Python and Streamlit.
-- Use YOLO11s as the primary detector.
-- Use YOLO11n only as the lightweight speed baseline/fallback.
-- Keep classes strictly `fire` and `smoke`.
-- Do not load heavy ML models at import time.
-- Keep code modular, readable, and testable.
-- Use English for files, code, comments, documentation, and UI text.
-- Keep large datasets, model weights, and secrets outside Git.
-- Treat mapping and geo data as operational configuration, not ML training data.
-- Mark all location outputs as approximate.
-- Run tests after code changes:
-
-```bash
-python -m pytest tests
-```
-
-- Run the app after Streamlit layout changes:
-
-```bash
-streamlit run app.py
-```
-
-Do not:
-
-- Describe PyroFinder as an early warning system.
-- Add emergency dispatch integration to the MVP.
-- Add full mobile app implementation to the MVP.
-- Make live RTSP production streaming mandatory for the MVP.
-- Add dedicated hardware assumptions.
-- Claim precise geolocation.
-- Claim automatic image-to-map registration.
-- Claim true physical fire-spread prediction.
-- Use YOLOv12.
-- Use generic “YOLO” wording when YOLO11s or YOLO11n is meant.
-- Train classes other than `fire` and `smoke`.
-
----
-
-## 26. Future Prompt Rule
-
-When asking an AI agent to write code, update documentation, or plan work for PyroFinder, include this instruction:
-
-```text
-Use PROJECT_CONTEXT.md as the source of truth. Do not change the product scope, model choice, dataset strategy, terminology, or target audience unless explicitly requested. Prefer CLAUDE.md for current code/repo status, docs/AI_AGENT_SYSTEM.md for agent workflows, and ASSISTANT_WORKING_RULES.md for assistant behavior.
-```
+Update rule: product/model/data/terminology → this file; repo/code status → `CLAUDE.md`;
+agent workflows → `docs/AI_AGENT_SYSTEM.md`; assistant behavior → `ASSISTANT_WORKING_RULES.md`;
+public claims → `README.md`.
