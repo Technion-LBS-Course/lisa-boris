@@ -482,11 +482,24 @@ def test_respond_to_operator_falls_back_when_llm_errors(monkeypatch):
 
 def test_incident_system_prompt_has_facts_and_guardrails():
     prompt = build_incident_system_prompt(_ctx())
+    low = prompt.lower()
     assert "East Grove" in prompt
-    assert "confidence" in prompt.lower()
-    assert "gps" in prompt.lower()  # worker no-coordinates rule
-    assert "cannot send" in prompt.lower()
-    assert "fire spread" in prompt.lower()
+    assert "cannot send" in low
+    assert "fire spread" in low
+    # Relevance rules: confirmed (no confidence value), camera by name, coords only
+    # for field responders, contacts never invented.
+    assert "confirmed" in low
+    assert "do not state a confidence value" in low
+    assert "coordinates" in low and "field responders" in low
+    assert "never invent" in low
+
+
+def test_incident_system_prompt_omits_camera_id_and_telemetry():
+    ctx = _ctx()  # camera_id giloCAM, weather with temp/RH/wind speed
+    prompt = build_incident_system_prompt(ctx)
+    assert "giloCAM" not in prompt            # camera by NAME only, never the ID
+    assert "°C" not in prompt and "RH " not in prompt and "km/h" not in prompt
+    assert "gilo" in prompt                    # the camera name is present
 
 
 # ── drafts: worker (no coords) / owner (weather) / neighbor / fire-dept ────────
@@ -503,17 +516,51 @@ def test_worker_draft_has_zone_task_and_no_coordinates():
     assert "31." not in draft and "35." not in draft  # no lat/lon leakage
 
 
-def test_owner_draft_includes_weather_and_camera():
-    draft = draft_owner_message(_ctx())
-    assert "giloCAM" in draft
-    assert "Wind from the W" in draft
-    assert "km/h" in draft
-    assert "°C" in draft
+def test_owner_draft_is_relevant_and_omits_telemetry():
+    # Owner response update: camera NAME + place + direction + who to notify.
+    # No camera ID, no confidence, no coordinates, no raw weather telemetry.
+    draft = draft_owner_message(_ctx(refs=_square_reference_points()))
+    assert "gilo" in draft and "giloCAM" not in draft
+    assert "East Grove" in draft
+    assert "confidence" not in draft.lower()
+    assert "°C" not in draft and "km/h" not in draft and "RH " not in draft
+    assert "~" not in draft  # no coordinates for the owner
+
+
+def test_owner_draft_uses_verified_contact_phone_when_available():
+    ctx = _ctx_with_context()  # OP_CONTEXT has 911 / Lincoln Fire 916-645-4040
+    draft = draft_owner_message(ctx)
+    assert "916-645-4040" in draft or "911" in draft
+
+
+def test_owner_draft_offers_search_when_no_verified_contact():
+    draft = draft_owner_message(_ctx())  # no operational context
+    assert "search the web" in draft.lower()
+    assert "916-645-4040" not in draft  # nothing invented
 
 
 def test_owner_draft_without_weather_does_not_crash():
     draft = draft_owner_message(_ctx(weather=None))
-    assert "giloCAM" in draft
+    assert "gilo" in draft
+
+
+def test_coordinates_only_in_fire_department_draft():
+    # Approximate coordinates go ONLY to field responders; never to the owner,
+    # neighbour, or worker.
+    drafts = build_drafts(_ctx(refs=_square_reference_points()))
+    assert "~" in drafts["Fire department summary"]
+    assert "~" not in drafts["Property owner"]
+    assert "~" not in drafts["Neighbor"]
+    assert "~" not in drafts["Farm worker"]
+
+
+def test_deterministic_affirmative_prepares_owner_update(monkeypatch):
+    # "yes" to the opener's response-update question → concise owner update, not a
+    # telemetry dump, with a verified contact phone when one is on file.
+    monkeypatch.setattr(ia, "_groq_ready", lambda: False)
+    reply = respond_to_operator(_ctx_with_context(), "yes")
+    assert "confidence" not in reply.lower()
+    assert "916-645-4040" in reply or "911" in reply
 
 
 def test_no_geolocation_disclaimer_in_any_draft():
@@ -528,8 +575,12 @@ def test_no_geolocation_disclaimer_in_any_draft():
 def test_firedept_summary_includes_coords_when_available():
     drafts = build_drafts(_ctx(refs=_square_reference_points()))
     fd = drafts["Fire department summary"]
-    assert "Estimated coordinates" in fd
-    assert "does not contact emergency services automatically" in fd
+    assert "coordinates" in fd.lower()   # responders need coordinates
+    assert "never contacts emergency services automatically" in fd
+    # No confidence / camera-ID / raw telemetry even in the responder summary.
+    assert "confidence" not in fd.lower()
+    assert "giloCAM" not in fd
+    assert "km/h" not in fd and "°C" not in fd
 
 
 def test_neighbor_draft_is_short_without_coords():

@@ -47,6 +47,7 @@ __all__ = [
     "find_nearest_zones",
     "summarize_operational_context",
     "contact_guidance",
+    "contact_clause",
     "recommend_actions",
     "incident_narrative",
     "format_initial_incident_message",
@@ -309,6 +310,45 @@ def contact_guidance(context: IncidentContext) -> str:
     )
 
 
+def _preferred_contact(
+    context: IncidentContext, prefer: tuple[str, ...] = ("fire", "emergency")
+) -> dict | None:
+    """Most relevant verified authority contact, ranked by ``prefer`` keywords.
+
+    Matches ``prefer`` against each contact's ``type`` + ``name``; returns the
+    best match, or the first verified contact, or ``None`` when none is verified.
+    """
+    verified = _verified_contacts(context.operational_context)
+    if not verified:
+        return None
+
+    def _rank(contact: dict) -> int:
+        blob = f"{contact.get('type', '')} {contact.get('name', '')}".lower()
+        for i, keyword in enumerate(prefer):
+            if keyword in blob:
+                return i
+        return len(prefer)
+
+    return sorted(verified, key=_rank)[0]
+
+
+def contact_clause(
+    context: IncidentContext, prefer: tuple[str, ...] = ("fire", "emergency")
+) -> str:
+    """Short clause naming a verified authority + phone, or an offer to search.
+
+    Gives the verified phone number when the operational context has one; otherwise
+    stays generic and asks whether to search the web (never searches automatically).
+    """
+    best = _preferred_contact(context, prefer)
+    if best:
+        return f"{best.get('name')} ({best.get('contact')})"
+    return (
+        "the relevant local authority — I don't have a verified number on file; want me "
+        "to search the web for it?"
+    )
+
+
 def build_incident_context(
     *,
     camera: dict,
@@ -538,6 +578,20 @@ def _initial_priority_label(context: IncidentContext) -> str | None:
     return nearest.get("priority_label") if nearest else None
 
 
+def _drift_phrase(context: IncidentContext) -> str:
+    """', moving toward the <direction>' from the downwind risk, or '' if unknown.
+
+    Only the wind-driven DIRECTION is surfaced in operator messages — never the
+    wind speed or other telemetry.
+    """
+    if context.downwind_risk_direction:
+        word = _COMPASS_WORDS.get(
+            context.downwind_risk_direction, context.downwind_risk_direction
+        )
+        return f", moving toward the {word}"
+    return ""
+
+
 def format_initial_incident_message(context: IncidentContext) -> str:
     """Build the concise, action-oriented opening incident line (deterministic).
 
@@ -563,7 +617,7 @@ def format_initial_incident_message(context: IncidentContext) -> str:
     known_area = bool(context.matched_zone or _nearest_outside_zone(context))
     if context.detected_class == "fire":
         question = (
-            "Do you want me to prepare a dispatch to the relevant local authority?"
+            "Do you want me to notify the relevant local authority?"
             if high or context.matched_zone
             else "It looks low priority for now — should I keep monitoring?"
         )
@@ -645,55 +699,63 @@ def incident_reasoning(context: IncidentContext) -> str:
 
 
 def build_incident_system_prompt(context: IncidentContext) -> str:
-    """Build the LLM system prompt: the incident facts + operational guardrails."""
+    """Build the LLM system prompt: the relevant incident facts + relevance rules.
+
+    The facts deliberately EXCLUDE confidence and raw weather telemetry
+    (temperature, humidity, wind speed) and give the camera by NAME only — the
+    detection is already confirmed, so those are not operationally useful in a
+    message. Approximate coordinates are provided but the rules restrict them to
+    field responders. This keeps the assistant focused on what each recipient
+    actually needs.
+    """
+    cam = context.camera_name or "the site camera"
     facts = [
-        f"Detected: {context.detected_class} (confidence {context.confidence:.0%}).",
-        f"Camera: {context.camera_id}"
-        + (f" ({context.camera_name})" if context.camera_name else "") + ".",
-        f"Event location: {context.location_text}.",
+        f"Detected: {context.detected_class} (already confirmed).",
+        f"Camera: {cam} (refer to it by this name, never a numeric ID).",
+        f"Event location: {_initial_where(context)}.",  # operational place, no coordinates
     ]
     if context.matched_zone:
         prio = f" ({context.zone_priority_label} priority)" if context.zone_priority_label else ""
         facts.append(f"Mapped zone: {context.matched_zone}{prio}.")
-    if context.wind_compass and context.wind_speed_kmh is not None:
-        wind = f"Wind: from the {context.wind_compass} at {context.wind_speed_kmh:.0f} km/h"
-        if context.downwind_risk_direction:
-            wind += f"; risk may move toward the {context.downwind_risk_direction}"
-        facts.append(wind + ".")
-    if context.temperature_c is not None or context.relative_humidity is not None:
-        cond = []
-        if context.temperature_c is not None:
-            cond.append(f"{context.temperature_c:.0f}°C")
-        if context.relative_humidity is not None:
-            cond.append(f"RH {context.relative_humidity:.0f}%")
-        src = f" (source {context.weather_source})" if context.weather_source else ""
-        facts.append("Conditions: " + ", ".join(cond) + src + ".")
-    if context.image_plane_direction:
-        facts.append(f"Apparent movement in the camera frame: {context.image_plane_direction}.")
+    if context.downwind_risk_direction:
+        word = _COMPASS_WORDS.get(context.downwind_risk_direction, context.downwind_risk_direction)
+        facts.append(f"Likely movement: toward the {word} (wind-driven; direction only).")
+    if context.approximate_lat is not None and context.approximate_lon is not None:
+        facts.append(
+            f"Approximate coordinates (field responders only): ~{context.approximate_lat:.5f}, "
+            f"{context.approximate_lon:.5f}."
+        )
     facts_block = "\n".join(f"- {f}" for f in facts)
     prompt = (
         "You are PyroFinder's Incident Assistant, helping a site operator respond to a "
         "CONFIRMED fire/smoke detection. Be concise, calm, and operational.\n\n"
-        "Incident facts (rely on these; do not invent camera IDs, zones, or coordinates):\n"
+        "Incident facts (rely on these; do not invent facts, zones, coordinates, or contacts):\n"
         f"{facts_block}\n\n"
-        "Rules:\n"
-        "- You only draft messages and give operational recommendations. You cannot send "
-        "anything, contact anyone, or dispatch emergency services — produce drafts for the "
-        "operator to send.\n"
-        "- Never claim automatic emergency dispatch, and never predict physical fire spread. "
-        "PyroFinder detects only fire and smoke.\n"
-        "- For a WORKER / farm hand / field team: give the zone name and a concrete task, the "
-        "urgency, what to check, what to avoid, and how to report back. Do NOT include GPS "
-        "coordinates or lat/lon in worker messages.\n"
-        "- For the OWNER / operator: you may include the camera, zone, class, confidence, "
-        "weather/wind, and a recommended next step.\n"
-        "- For a NEIGHBOUR: keep it short and plain, no coordinates.\n"
-        "- For a FIRE-DEPARTMENT summary: you may include the estimated coordinates if "
-        "available, clearly marked approximate.\n"
-        "- Never invent a contact. Use a verified contact from the operational context when "
-        "relevant, otherwise generic wording (relevant local authority / local emergency "
-        "contact / site operator). Do not perform any web/API contact lookup.\n"
-        "- If the operator asks to confirm or dismiss, tell them to use the 'Confirm alert' or "
+        "Relevance rules — include ONLY what the recipient needs:\n"
+        "- The detection is already CONFIRMED: do NOT state a confidence value.\n"
+        "- Do NOT include temperature, humidity, wind speed, camera IDs, or pixel/frame "
+        "coordinates in any message. You MAY state the wind-driven movement DIRECTION "
+        "(e.g. 'moving toward the north').\n"
+        "- Refer to the camera by its NAME only.\n"
+        "- Approximate map COORDINATES are for FIELD RESPONDERS (fire department / emergency "
+        "services) only. Do NOT put coordinates in messages to an owner, neighbour, local "
+        "police, a school, or any non-responder — for them use operational place names + "
+        "direction.\n"
+        "- WORKER / farm hand / field team: zone name + a concrete task, urgency, what to "
+        "check, what to avoid, how to report back. No coordinates.\n"
+        "- OWNER / site operator: what, where (place name), direction, one recommended next "
+        "step, and who to contact. No coordinates.\n"
+        "- NEIGHBOUR / SCHOOL / other sensitive receptor: short and plain — what is near them "
+        "and which way it is moving. No coordinates.\n"
+        "- FIRE DEPARTMENT / emergency responder: you MAY include the approximate coordinates "
+        "(clearly marked approximate) plus zone and access.\n"
+        "- Contacts: never invent one. When recommending who to notify, include the PHONE "
+        "NUMBER of a verified contact from the operational context if one exists; if none "
+        "exists, say so and ASK whether to search the web — never search or look up "
+        "automatically.\n"
+        "- You only draft and recommend: you cannot send anything, contact anyone, or "
+        "dispatch. Never claim automatic dispatch, and never predict physical fire spread.\n"
+        "- If the operator asks to confirm or dismiss, point them to the 'Confirm alert' / "
         "'Mark as false alarm' button.\n"
         "- Keep replies to a few sentences unless asked for a full draft."
     )
@@ -702,8 +764,8 @@ def build_incident_system_prompt(context: IncidentContext) -> str:
     )
     if brief:
         prompt += (
-            "\n\nOperational context (use for place names, sensitivity, and contact policy; "
-            "do not invent facts or contacts):\n" + brief
+            "\n\nOperational context (use for place names, sensitivity, and verified contact "
+            "phone numbers; do not invent facts or contacts):\n" + brief
         )
     return prompt
 
@@ -763,6 +825,14 @@ def _deterministic_reply(context: IncidentContext, message: str) -> str:
         "search for the contact", "search for a contact",
     )):
         return contact_guidance(context)
+    # A bare affirmative answers the opener's "prepare a response update?" question.
+    stripped = text.strip().strip(".!")
+    if stripped in {
+        "yes", "y", "sure", "ok", "okay", "yep", "yeah", "please", "please do", "do it",
+        "go ahead", "prepare it", "prepare the update", "prepare a response update",
+        "yes please", "update",
+    } or stripped.startswith(("yes ", "sure ", "please ", "go ahead")):
+        return draft_owner_message(context)
     if any(k in text for k in ("worker", "farm", "staff", "crew", "field team")):
         return draft_farm_worker_message(context)
     if any(k in text for k in ("neighbor", "neighbour")):
@@ -790,34 +860,29 @@ def _time_str(context: IncidentContext) -> str:
 
 
 def draft_owner_message(context: IncidentContext) -> str:
-    """Draft an alert message to the property owner (may include weather + estimated location)."""
-    lines = [
-        f"PyroFinder alert: {context.detected_class} detected on camera "
-        f"{context.camera_id}"
-        + (f" ({context.camera_name})" if context.camera_name else "")
-        + f" at {_time_str(context)}.",
-        f"Confidence: {context.confidence:.0%}.",
-        f"Location: {context.location_text}.",
-    ]
-    if context.image_plane_direction:
-        lines.append(f"Apparent movement in the frame: {context.image_plane_direction}.")
-    if context.wind_compass and context.wind_speed_kmh is not None:
-        wind = f"Wind from the {context.wind_compass} ({context.wind_speed_kmh:.0f} km/h)"
-        if context.downwind_risk_direction:
-            wind += f"; risk may move toward the {context.downwind_risk_direction}"
-        lines.append(wind + ".")
-    if context.temperature_c is not None or context.relative_humidity is not None:
-        cond = []
-        if context.temperature_c is not None:
-            cond.append(f"{context.temperature_c:.0f}°C")
-        if context.relative_humidity is not None:
-            cond.append(f"RH {context.relative_humidity:.0f}%")
-        lines.append("Conditions: " + ", ".join(cond) + ".")
-    lines.append(
-        "Recommended next step: verify on-site and decide whether to escalate. This is an "
-        "operational alert, not an automatic emergency call."
+    """Concise site-owner / operator response update.
+
+    Reports what, where (operational place name), and the wind-driven direction,
+    then recommends verifying on-site and who to notify. Deliberately omits the
+    camera ID, confidence (the detection is confirmed), raw weather telemetry, and
+    coordinates — none are useful to the owner. Uses a verified contact's phone
+    when the operational context has one; otherwise offers to search (never auto).
+    """
+    cam = context.camera_name or "the site camera"
+    where = _initial_where(context)
+    drift = _drift_phrase(context)
+    base = f"{cam} detected {context.detected_class} {where}{drift}. Recommend verifying on-site"
+    best = _preferred_contact(context)
+    if best:
+        return (
+            f"{base}; if confirmed, notify {best.get('name')} ({best.get('contact')}). "
+            "Operational alert only — PyroFinder does not contact anyone automatically."
+        )
+    return (
+        f"{base} and deciding whether to notify the relevant local authority. I don't have a "
+        "verified contact on file — want me to search the web for one? Operational alert only "
+        "— PyroFinder does not contact anyone automatically."
     )
-    return "\n".join(lines)
 
 
 def _worker_task(context: IncidentContext) -> str:
@@ -853,27 +918,32 @@ def draft_neighbor_message(context: IncidentContext) -> str:
 
 
 def prepare_fire_department_summary(context: IncidentContext) -> str:
-    """Prepare a fire-department call summary for the operator to relay (not auto-sent)."""
+    """Fire-department summary for the operator to relay (field responders).
+
+    This is the one audience that needs approximate COORDINATES to navigate. It
+    still omits confidence, camera IDs, site/customer IDs, and raw weather
+    telemetry — only the wind-driven direction is kept.
+    """
     lines = [
-        "PyroFinder incident summary (for the operator to relay — PyroFinder does not "
-        "contact emergency services automatically):",
-        f"- Time: {_time_str(context)}",
-        f"- Site / Customer: {context.site_id or 'n/a'} / {context.customer_id or 'n/a'}",
-        f"- Camera: {context.camera_id}"
-        + (f" ({context.camera_name})" if context.camera_name else ""),
-        f"- Detected: {context.detected_class}, confidence {context.confidence:.0%}",
-        f"- Location: {context.location_text}",
+        "Fire-department summary (relay manually — PyroFinder never contacts emergency "
+        "services automatically):",
+        f"- Detected: {context.detected_class}",
+        f"- Location: {_initial_where(context)}",
     ]
     if context.matched_zone:
         priority = f" ({context.zone_priority_label} priority)" if context.zone_priority_label else ""
-        lines.append(f"- Mapped zone: {context.matched_zone}{priority}")
+        lines.append(f"- Zone: {context.matched_zone}{priority}")
     if context.approximate_lat is not None and context.approximate_lon is not None:
         lines.append(
-            f"- Estimated coordinates: ~{context.approximate_lat:.5f}, "
-            f"{context.approximate_lon:.5f} (approximate — confirm on arrival)"
+            f"- Approximate coordinates: ~{context.approximate_lat:.5f}, "
+            f"{context.approximate_lon:.5f} (confirm on arrival)"
         )
-    if context.wind_compass and context.wind_speed_kmh is not None:
-        lines.append(f"- Wind: from the {context.wind_compass}, {context.wind_speed_kmh:.0f} km/h")
+    if context.downwind_risk_direction:
+        word = _COMPASS_WORDS.get(context.downwind_risk_direction, context.downwind_risk_direction)
+        lines.append(f"- Likely movement: toward the {word}")
+    best = _preferred_contact(context, prefer=("fire", "emergency"))
+    if best:
+        lines.append(f"- Suggested contact: {best.get('name')} ({best.get('contact')})")
     return "\n".join(lines)
 
 

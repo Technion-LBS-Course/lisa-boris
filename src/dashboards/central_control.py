@@ -372,30 +372,13 @@ def _frame_uploader(with_sequence: bool = True) -> None:
 def _build_sequence_frames(items: list[tuple[str, bytes]]) -> list[dict]:
     """Decode (name, raw-bytes) pairs and resize all to one common size.
 
-    Frames of a live camera can arrive at different resolutions; a zone is drawn
-    once and reused across the whole sequence, so every frame is resized to the
-    first frame's size (aspect is ~identical here) and re-encoded as JPEG. Returns
-    [{name, bytes, size}] in the given order.
+    Delegates to ``src.live_ops_cache.build_sequence_frames`` so the dashboard and
+    the offline cache builder resize/re-encode frames identically (single source of
+    truth). Returns [{name, bytes, size}] in the given order.
     """
-    from PIL import Image
+    from src import live_ops_cache
 
-    decoded = []
-    for name, raw in items:
-        try:
-            decoded.append((name, Image.open(io.BytesIO(raw)).convert("RGB")))
-        except Exception:
-            continue  # skip unreadable files
-    if not decoded:
-        return []
-    target = decoded[0][1].size  # (w, h) — the common canvas
-    frames = []
-    for name, img in decoded:
-        if img.size != target:
-            img = img.resize(target)
-        buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=90)
-        frames.append({"name": name, "bytes": buf.getvalue(), "size": target})
-    return frames
+    return live_ops_cache.build_sequence_frames(items)
 
 
 def _store_sequence(frames: list[dict], drive_shared_frame: bool = True) -> None:

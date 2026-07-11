@@ -84,6 +84,10 @@ def _init_lo_state() -> None:
         "lo_routine_last": None,
         "lo_seq_det": {},
         "lo_seq_det_conf": None,
+        "lo_seq_frames_hash": "",     # content fingerprint of the loaded source frames
+        "lo_disk_cache": None,        # pre-computed per-frame detections (default mode only)
+        "lo_disk_cache_fp": None,     # fingerprint the loaded disk cache was prepared for
+        "lo_disk_model": None,        # detector name the disk cache was built with
         "lo_confirmed_idx": None,
         "lo_active_alert": None,
         "lo_suppress_until_clear": False,
@@ -651,12 +655,31 @@ def _zone_ref_point_row() -> None:
             st.rerun()
 
 
+def _zone_maybe_autosegment() -> bool:
+    """Run box→segmentation as soon as a 2-point box and a chat name both exist.
+
+    Called at the top of ``_setup_step3`` — BEFORE the frame is composited — so the
+    proposed polygon replaces the rectangle in the SAME run (previously it only
+    appeared on the next interaction, because the image was drawn before the
+    segmentation ran). Returns True when it produced a new polygon.
+    """
+    if st.session_state.get("lo_zone_ref_prompt") or st.session_state.get("lo_zone_ref_picking"):
+        return False
+    if (st.session_state.lo_zone_mode == "box"
+            and st.session_state.lo_zone_poly is None
+            and len(st.session_state.lo_zone_pts) == 2
+            and (st.session_state.get("lo_zone_name") or "").strip()):
+        _zone_segment()
+        return st.session_state.lo_zone_poly is not None
+    return False
+
+
 def _zone_action_row() -> None:
     """Segmentation-first zone flow — all inside the chat frame.
 
-    Once a rough two-point box and a chat-described name exist (in either order),
-    segmentation runs automatically. Save / Delete / Draw only appear once the
-    proposed polygon is on screen — there is no manual "run segmentation" choice.
+    The box→segmentation step runs in :func:`_zone_maybe_autosegment` before the
+    frame is drawn; here we only render Save / Delete / Draw once the proposed
+    polygon exists, plus the box/draw guidance captions.
     """
     # After a save, the reference-point prompt/picking takes over the action row.
     if st.session_state.get("lo_zone_ref_prompt") or st.session_state.get("lo_zone_ref_picking"):
@@ -667,10 +690,6 @@ def _zone_action_row() -> None:
     pts = st.session_state.lo_zone_pts
     poly = st.session_state.lo_zone_poly
     name = (st.session_state.get("lo_zone_name") or "").strip()
-
-    if mode == "box" and poly is None and len(pts) == 2 and name:
-        _zone_segment()
-        poly = st.session_state.lo_zone_poly
 
     if poly is not None:
         st.caption("Proposed zone outline:")
@@ -785,6 +804,8 @@ def _zone_edit_delete() -> None:
 
 def _setup_step3() -> None:
     _step_title("Step 3 · Mark detection zones.")
+    # Segment BEFORE compositing so the polygon replaces the box in this same run.
+    _zone_maybe_autosegment()
     left, right = st.columns([1.3, 1])
     with left:
         picking = bool(st.session_state.get("lo_zone_ref_picking"))
@@ -844,6 +865,8 @@ def _setup_section() -> None:
 def _ensure_sequence_loaded() -> None:
     if st.session_state.get("cc_seq"):
         return
+    from src import live_ops_cache
+
     items, source = lo_cfg.demo_sequence_items(_settings())
     if not items:
         return
@@ -855,11 +878,83 @@ def _ensure_sequence_loaded() -> None:
     st.session_state.cc_seq_playing = False
     st.session_state.lo_seq_loaded_from = source
     st.session_state.lo_seq_det = {}
+    st.session_state.lo_seq_frames_hash = live_ops_cache.frames_fingerprint(items)
+    st.session_state.lo_disk_cache = None
+    st.session_state.lo_disk_cache_fp = None
     st.session_state.lo_autoplay_armed = False
 
 
+def _default_thresholds(settings: dict) -> dict:
+    legacy = float(settings.get("confidence_threshold", 0.50))
+    return {
+        "smoke": round(float(settings.get("smoke_confidence_threshold", legacy)), 4),
+        "fire": round(float(settings.get("fire_confidence_threshold", legacy)), 4),
+    }
+
+
+def _is_default_mode(conf_by_class: dict, settings: dict) -> bool:
+    """True when the sidebar thresholds equal the configured defaults.
+
+    Only in default mode do we serve the pre-computed disk cache; once the operator
+    moves a slider off-default we run the detector live on the chosen thresholds.
+    """
+    d = _default_thresholds(settings)
+    return (round(float(conf_by_class.get("smoke", -1)), 4) == d["smoke"]
+            and round(float(conf_by_class.get("fire", -1)), 4) == d["fire"])
+
+
+def _prepare_disk_cache(conf_by_class: dict, settings: dict) -> None:
+    """In default mode, load (or one-time rebuild) the pre-computed detection cache.
+
+    The cache is fingerprinted by frames + default thresholds + model, so it stays
+    valid on a fresh clone and rebuilds automatically when the demo frames or the
+    default thresholds change. Off-default (slider moved) → no cache, live YOLO.
+    """
+    from src import inference, live_ops_cache as lc
+
+    if not _is_default_mode(conf_by_class, settings):
+        st.session_state.lo_disk_cache = None
+        return
+    frames = st.session_state.get("cc_seq") or []
+    model_name = "YOLO11s" if inference.checkpoint_exists("YOLO11s") else (
+        "YOLO11n" if inference.checkpoint_exists("YOLO11n") else None)
+    if not frames or model_name is None:
+        st.session_state.lo_disk_cache = None
+        return
+    d = _default_thresholds(settings)
+    fp = lc.build_fingerprint(
+        st.session_state.get("lo_seq_frames_hash", ""), d["smoke"], d["fire"],
+        model_name, len(frames))
+    if st.session_state.get("lo_disk_cache_fp") == fp and st.session_state.get("lo_disk_cache"):
+        return  # already prepared this session
+    manifest = lc.load_manifest()
+    if lc.is_valid(manifest, fp):
+        st.session_state.lo_disk_cache = manifest["frames"]
+    else:
+        from PIL import Image
+        with st.spinner("Preparing detection cache (one-time for these frames/settings)…"):
+            try:
+                model = cc._load_detector_cached(model_name)
+
+                def _detect(frame_bytes):
+                    return inference.run_detection(
+                        model, Image.open(io.BytesIO(frame_bytes)).convert("RGB"),
+                        conf=min(d["smoke"], d["fire"]), conf_by_class=d)
+
+                per_frame = lc.build(frames, _detect)
+                lc.save_manifest(fp, per_frame)
+                st.session_state.lo_disk_cache = per_frame
+            except Exception as exc:  # noqa: BLE001 — fall back to live detection
+                st.warning(f"Could not build detection cache ({exc}); running live.")
+                st.session_state.lo_disk_cache = None
+                st.session_state.lo_disk_cache_fp = None
+                return
+    st.session_state.lo_disk_cache_fp = fp
+    st.session_state.lo_disk_model = model_name
+
+
 def _detect_seq_frame(idx: int, conf_by_class: dict):
-    from src import inference
+    from src import inference, live_ops_cache as lc
 
     cache = st.session_state.lo_seq_det
     # Cache key is the per-class threshold pair; changing either clears the cache.
@@ -873,6 +968,16 @@ def _detect_seq_frame(idx: int, conf_by_class: dict):
     seq = st.session_state.get("cc_seq") or []
     if not (0 <= idx < len(seq)):
         return None
+
+    # Default mode: serve the pre-computed detections (redraw boxes; no YOLO run).
+    disk = st.session_state.get("lo_disk_cache")
+    if disk is not None and idx < len(disk):
+        result = lc.result_from_summary(
+            disk[idx], seq[idx]["bytes"],
+            st.session_state.get("lo_disk_model") or "YOLO11s")
+        cache[idx] = result
+        return result
+
     name = "YOLO11s" if inference.checkpoint_exists("YOLO11s") else (
         "YOLO11n" if inference.checkpoint_exists("YOLO11n") else None)
     if name is None:
@@ -1100,6 +1205,7 @@ def _live_section() -> None:
         return
 
     conf_by_class, n_req = _live_sidebar_settings(_settings())
+    _prepare_disk_cache(conf_by_class, _settings())
 
     if not st.session_state.lo_ops_chat:
         _maybe_routine_report(force=True)

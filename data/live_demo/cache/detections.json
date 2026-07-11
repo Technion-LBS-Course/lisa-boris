@@ -1,0 +1,258 @@
+{
+  "fingerprint": {
+    "version": 1,
+    "smoke": 0.4,
+    "fire": 0.4,
+    "model": "YOLO11s",
+    "n_frames": 26,
+    "frames_sha1": "ebd5429926f4cf591cfd3ae519843894f9baba7d"
+  },
+  "frames": [
+    {
+      "name": "frame_00.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_01.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_02.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_03.jpg",
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.6343212723731995,
+          "bbox_norm": [
+            0.28424423933029175,
+            0.6918641924858093,
+            0.04205131530761719,
+            0.11133405566215515
+          ]
+        }
+      ],
+      "smoke_count": 1,
+      "fire_count": 0,
+      "max_confidence": 0.6343212723731995
+    },
+    {
+      "name": "frame_04.jpg",
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.6343212723731995,
+          "bbox_norm": [
+            0.28424423933029175,
+            0.6918641924858093,
+            0.04205131530761719,
+            0.11133405566215515
+          ]
+        }
+      ],
+      "smoke_count": 1,
+      "fire_count": 0,
+      "max_confidence": 0.6343212723731995
+    },
+    {
+      "name": "frame_05.jpg",
+      "detections": [
+        {
+          "class": "fire",
+          "confidence": 0.4347385764122009,
+          "bbox_norm": [
+            0.21185846626758575,
+            0.7328669428825378,
+            0.07574586570262909,
+            0.0282474085688591
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.40211600065231323,
+          "bbox_norm": [
+            0.2380329668521881,
+            0.6356130242347717,
+            0.11761046946048737,
+            0.20374467968940735
+          ]
+        }
+      ],
+      "smoke_count": 1,
+      "fire_count": 1,
+      "max_confidence": 0.4347385764122009
+    },
+    {
+      "name": "frame_06.jpg",
+      "detections": [
+        {
+          "class": "fire",
+          "confidence": 0.4347385764122009,
+          "bbox_norm": [
+            0.21185846626758575,
+            0.7328669428825378,
+            0.07574586570262909,
+            0.0282474085688591
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.40211600065231323,
+          "bbox_norm": [
+            0.2380329668521881,
+            0.6356130242347717,
+            0.11761046946048737,
+            0.20374467968940735
+          ]
+        }
+      ],
+      "smoke_count": 1,
+      "fire_count": 1,
+      "max_confidence": 0.4347385764122009
+    },
+    {
+      "name": "frame_07.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_08.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_09.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_10.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_11.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_12.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_13.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_14.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_15.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_16.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_17.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_18.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_19.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_20.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_21.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_22.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_23.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_24.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    },
+    {
+      "name": "frame_25.jpg",
+      "detections": [],
+      "smoke_count": 0,
+      "fire_count": 0,
+      "max_confidence": null
+    }
+  ]
+}
