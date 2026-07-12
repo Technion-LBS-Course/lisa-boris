@@ -391,6 +391,8 @@ def _anchor_edit_delete() -> None:
 
 def _setup_step2() -> None:
     _step_title("Step 2 · Calibrate anchors")
+    # The image fills its column at its natural 16:9 ratio (rounded, responsive);
+    # size the map to that same height so the two equal-width columns line up.
     col_img, col_map = st.columns(2)
     with col_img:
         comp = cc._composite_image(
@@ -404,15 +406,15 @@ def _setup_step2() -> None:
             st.rerun()
         pend = st.session_state.get("cc_pending_ref_img")
         st.caption(f"Image point: ({pend[0]:.0f}, {pend[1]:.0f})" if pend
-                   else "Click a point on the image.")
+                   else "Click the matching points on the map and on the image")
     with col_map:
-        latlon = cc._build_and_consume_ref_map()
+        latlon = cc._build_and_consume_ref_map(height=350)
         if latlon:
             st.session_state.cc_pending_ref_map = latlon
             st.rerun()
         pm = st.session_state.get("cc_pending_ref_map")
-        st.caption(f"Map point: {pm[0]:.5f}, {pm[1]:.5f}" if pm
-                   else "Click the matching point on the map.")
+        if pm:
+            st.caption(f"Map point: {pm[0]:.5f}, {pm[1]:.5f}")
 
     a1, a2 = st.columns([3, 1])
     with a1:
@@ -427,11 +429,11 @@ def _setup_step2() -> None:
 
     b1, _, b2 = st.columns([1, 4, 1])
     with b1:
-        if st.button("← Back", key="lo_s2_back"):
+        if st.button("← Back", key="lo_s2_back", use_container_width=True):
             st.session_state.lo_pending_step = 1
             st.rerun()
     with b2:
-        if st.button("Next →", type="primary", key="lo_s2_next"):
+        if st.button("Next →", type="primary", key="lo_s2_next", use_container_width=True):
             st.session_state.lo_pending_step = 3
             st.rerun()
 
@@ -1049,6 +1051,9 @@ def _maybe_confirm(idx: int, window: list, n_req: int) -> None:
     st.session_state.lo_ops_chat.append(
         {"agent": agents.RESPONSE, "role": "assistant",
          "content": agents.emergency_open_text(ctx)})
+    # Confirmation happens inside the frame fragment; rerun the WHOLE app so the
+    # app-scope status bar + ops chat pick up the new incident (opener + red bar).
+    st.rerun(scope="app")
 
 
 def _maybe_routine_report(force: bool = False) -> None:
@@ -1147,7 +1152,6 @@ def _incident_actions_in_chat(ctx) -> None:
     """
     if ctx is None or st.session_state.lo_active_alert is None:
         return
-    st.caption("Respond to the incident, or ask me what to do:")
     c1, c2 = st.columns(2)
     with c1:
         if st.button("Confirm ✓", type="primary", key="lo_act_confirm", use_container_width=True):
@@ -1265,47 +1269,63 @@ def _live_playback_controls(n: int) -> None:
 
 
 def _live_section() -> None:
-    cc._apply_pending_seq_seek()
     _ensure_sequence_loaded()
     seq = st.session_state.get("cc_seq") or []
-    n = len(seq)
-    if n == 0:
+    if not seq:
         st.warning("No demo frames found. Add frames to `data/live_demo/frames` or set "
                    "`video_path` in `config/live_ops.yaml`.")
         return
 
+    # Sidebar + cache prep run on FULL reruns only (they own widgets / a one-time build).
     conf_by_class, n_req = _live_sidebar_settings(_settings())
     _prepare_disk_cache(conf_by_class, _settings())
 
     if not st.session_state.lo_ops_chat:
         _maybe_routine_report(force=True)
-
     if not st.session_state.lo_autoplay_armed and st.session_state.lo_active_alert is None:
         st.session_state.cc_seq_playing = True
         st.session_state.lo_autoplay_armed = True
+
+    # Status bar + ops chat render at APP scope so autoplay (which reruns only the
+    # frame fragment below) never re-renders them — that is what previously left a
+    # ghost/duplicate chat input on screen. A confirmed detection triggers one app
+    # rerun (see _maybe_confirm) so they refresh.
+    _render_alert_status()
+    left, right = st.columns([1.15, 1])
+    with left:
+        _live_stage(conf_by_class, n_req)
+    with right:
+        _ops_chat(st.session_state.cc_incident_ctx)
+
+
+@st.fragment
+def _live_stage(conf_by_class: dict, n_req: int) -> None:
+    """Auto-advancing frame + playback controls + map, isolated in a fragment.
+
+    Autoplay advances by sleeping then calling ``st.rerun()``; inside a fragment that
+    rerun is fragment-scoped, so only this block re-renders every frame — the ops
+    chat and status bar (rendered by the caller, at app scope) stay put and no longer
+    ghost. NOT the detection cache recomputing (default mode runs no YOLO).
+    """
+    cc._apply_pending_seq_seek()
+    seq = st.session_state.get("cc_seq") or []
+    n = len(seq)
+    if n == 0:
+        return
 
     idx = min(int(st.session_state.get("cc_seq_idx", 0)), n - 1)
     window = _window_results(idx, n_req, conf_by_class)
     det = window[-1] if window else None
     from src import inference
     current_top = inference.top_hazard_detection(det) if det else None
-    _maybe_confirm(idx, window, n_req)
+    _maybe_confirm(idx, window, n_req)  # on a new incident: reruns the whole app (scope="app")
     ctx = st.session_state.cc_incident_ctx
     alerting = st.session_state.lo_active_alert is not None
 
-    _render_alert_status()
-
-    left, right = st.columns([1.15, 1])
-    with left:
-        _render_live_frame(det, seq, idx, alerting)
-        _live_playback_controls(n)
-        if alerting:
-            st.caption("Paused on the detection frame — resolve it in the ops chat, or "
-                       "step/play to keep reviewing.")
-        preview = cc._preview_map_point(current_top) if ctx is None else None
-        _render_live_map(ctx, preview_point=preview, height=360)
-    with right:
-        _ops_chat(ctx)
+    _render_live_frame(det, seq, idx, alerting)
+    _live_playback_controls(n)
+    preview = cc._preview_map_point(current_top) if ctx is None else None
+    _render_live_map(ctx, preview_point=preview, height=360)
 
     # Self-gates on cc_seq_playing: a confirmed detection pauses playback (so this is
     # a no-op) but the controls stay usable; chat reruns never advance the frame.

@@ -155,7 +155,7 @@ def _consume_image_click(pil_img, key: str) -> tuple[float, float] | None:
     return _image_click_to_natural(value, natural_w, natural_h)
 
 
-def _consume_map_click(map_obj, key: str, last_key: str) -> tuple[float, float] | None:
+def _consume_map_click(map_obj, key: str, last_key: str, height: int = 320) -> tuple[float, float] | None:
     """Render a folium map and return a NEW (lat, lon) click, else None."""
     try:
         from streamlit_folium import st_folium
@@ -163,7 +163,7 @@ def _consume_map_click(map_obj, key: str, last_key: str) -> tuple[float, float] 
         st.info("Map requires `folium` and `streamlit-folium`.")
         return None
     state = st_folium(
-        map_obj, key=key, height=320, use_container_width=True,
+        map_obj, key=key, height=height, use_container_width=True,
         returned_objects=["last_clicked"],
     )
     clicked = (state or {}).get("last_clicked")
@@ -751,7 +751,7 @@ def _manual_image_point_inputs() -> None:
             st.rerun()
 
 
-def _build_and_consume_ref_map() -> tuple[float, float] | None:
+def _build_and_consume_ref_map(height: int = 320) -> tuple[float, float] | None:
     try:
         import folium
     except ImportError:
@@ -788,7 +788,7 @@ def _build_and_consume_ref_map() -> tuple[float, float] | None:
             popup="Pending",
         ).add_to(m)
     map_tiles.add_layer_control_once(m)
-    return _consume_map_click(m, key="cc_ref_map", last_key="cc_ref_map_last")
+    return _consume_map_click(m, key="cc_ref_map", last_key="cc_ref_map_last", height=height)
 
 
 def _add_reference_point(pt_name: str, pt_notes: str) -> None:
