@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 import pandas as pd
 import streamlit as st
 
-from src.dashboards import central_control as cc
+from src.dashboards import central_control as cc, map_tiles
 from src import (
     incident_agent,
     live_ops_agents as agents,
@@ -202,7 +202,10 @@ def _status_pill(label: str, name: str, tone: str = "live") -> None:
 
 def _base_map(center, zoom=13):
     import folium
-    return folium.Map(location=center, zoom_start=zoom, tiles="OpenStreetMap", control_scale=True)
+
+    m = folium.Map(location=center, zoom_start=zoom, tiles="OpenStreetMap", control_scale=True)
+    map_tiles.add_satellite_basemap(m)
+    return m
 
 
 def _add_camera_and_fov(m) -> None:
@@ -250,6 +253,7 @@ def _render_setup_map(key: str, height: int = 380) -> None:
     m = _base_map(_map_center(), 13)
     _add_camera_and_fov(m)
     _add_reference_points(m)
+    map_tiles.add_layer_control_once(m)
     st_folium(m, key=key, height=height, use_container_width=True, returned_objects=[])
 
 
@@ -284,6 +288,7 @@ def _render_live_map(ctx, preview_point=None, height: int = 360) -> None:
                       icon=folium.Icon(color="beige", icon="exclamation-triangle", prefix="fa"),
                       tooltip="Detection observed — unconfirmed").add_to(m)
 
+    map_tiles.add_layer_control_once(m)
     st_folium(m, key="lo_live_map", height=height, use_container_width=True, returned_objects=[])
 
 

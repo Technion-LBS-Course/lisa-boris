@@ -37,6 +37,7 @@ from src.mapping import (
     zone_reference_point_norm,
 )
 from src import incident_agent, tracking, weather, zone_agent
+from src.dashboards import map_tiles
 from src.agent_schemas import (
     PRIORITY_LABELS,
     compass_label,
@@ -653,8 +654,10 @@ def _build_and_consume_camera_map() -> tuple[float, float] | None:
     elif cam.get("latitude") is not None:
         center = [float(cam["latitude"]), float(cam["longitude"])]
     m = folium.Map(location=center or [32.0853, 34.7818], zoom_start=14 if center else 7)
+    map_tiles.add_satellite_basemap(m)
     if center:
         folium.Marker(center, icon=folium.Icon(color="red", icon="camera", prefix="fa")).add_to(m)
+    map_tiles.add_layer_control_once(m)
     return _consume_map_click(m, key="cc_cam_map", last_key="cc_cam_map_last")
 
 
@@ -764,6 +767,7 @@ def _build_and_consume_ref_map() -> tuple[float, float] | None:
     else:
         center = [32.0853, 34.7818]
     m = folium.Map(location=center, zoom_start=15 if cam.get("latitude") is not None else 7)
+    map_tiles.add_satellite_basemap(m)
 
     if cam.get("latitude") is not None:
         folium.Marker(
@@ -783,6 +787,7 @@ def _build_and_consume_ref_map() -> tuple[float, float] | None:
             [pend[0], pend[1]], radius=7, color=_PENDING, fill=True, fill_color=_PENDING,
             popup="Pending",
         ).add_to(m)
+    map_tiles.add_layer_control_once(m)
     return _consume_map_click(m, key="cc_ref_map", last_key="cc_ref_map_last")
 
 
@@ -1804,6 +1809,7 @@ def _render_estimate() -> None:
         cam = st.session_state.cc_camera
         center = [zones[0]["est_lat"], zones[0]["est_lon"]]
         m = folium.Map(location=center, zoom_start=16)
+        map_tiles.add_satellite_basemap(m)
         if cam.get("latitude") is not None:
             folium.Marker([float(cam["latitude"]), float(cam["longitude"])],
                           icon=folium.Icon(color="red", icon="camera", prefix="fa"),
@@ -1816,6 +1822,7 @@ def _render_estimate() -> None:
             folium.Marker([z["est_lat"], z["est_lon"]],
                           icon=folium.Icon(color="blue", icon="fire", prefix="fa"),
                           popup=f"{z['zone_name']} (zone reference point)").add_to(m)
+        map_tiles.add_layer_control_once(m)
         st_folium(m, key="cc_estimate_map", height=360, use_container_width=True,
                   returned_objects=[])
     except ImportError:
@@ -2049,6 +2056,7 @@ def _render_incident_map(
 
     center = list(incident_point) if incident_point else [float(cam_lat), float(cam_lon)]
     m = folium.Map(location=center, zoom_start=15)
+    map_tiles.add_satellite_basemap(m)
 
     if has_camera:
         folium.Marker(
@@ -2086,6 +2094,7 @@ def _render_incident_map(
                 fill_opacity=1.0, tooltip=tooltip,
             ).add_to(m)
 
+    map_tiles.add_layer_control_once(m)
     st_folium(m, key="cc_incident_map", height=map_height, use_container_width=True,
               returned_objects=[])
     st.caption("Map positions are approximate — not precise geolocation.")
