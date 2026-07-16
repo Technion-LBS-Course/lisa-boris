@@ -81,10 +81,16 @@ test("synchronizes OpenWeather conditions, risk, map wind, and agent context", (
   assert.match(client, /windObservation=\{weatherObservation\}/);
   assert.match(client, /prototype_fire_weather_risk/);
   assert.match(client, /Refresh synchronized weather & risk/);
+  assert.match(client, /generalWindWatchMessage/);
+  assert.match(client, /Current wind near \$\{cameraName\} is generally toward \$\{downwindDirection\}/);
+  assert.match(client, /detailedWeatherMessage/);
+  assert.match(client, /Downwind concern is generally toward/);
   assert.match(windRoute, /calculateFireRisk/);
   assert.match(windRoute, /humidityPct/);
   assert.match(windRoute, /temperatureC/);
   assert.match(chatRoute, /Synchronized current weather and prototype risk/);
+  assert.match(chatRoute, /Use the full weather observation silently/);
+  assert.match(chatRoute, /Unless the operator explicitly asks about weather/);
 });
 
 test("includes the gradual Hanging Tree simulated-fire sequence and aligned detections", () => {

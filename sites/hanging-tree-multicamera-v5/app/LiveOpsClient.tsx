@@ -4,7 +4,7 @@ import { FormEvent, MouseEvent, useCallback, useEffect, useMemo, useRef, useStat
 import { LiveMap } from "./LiveMap";
 import { CAMERAS, DEFAULT_CAMERA_ID, cameraFrameUrl, type Anchor, type CameraConfig, type CameraId, type Detection, type Priority, type Zone } from "./camera-data";
 import { deriveFieldOfView, projectImagePointToMap, type LatLon } from "./field-of-view";
-import { PREPARED_WIND, weatherConditionsLabel, windDirectionLabel, type WindObservation } from "./wind-data";
+import { cardinalDirection, PREPARED_WIND, weatherConditionsLabel, windDirectionLabel, type WindObservation } from "./wind-data";
 
 type View = "Setup" | "Live" | "History";
 type ZoneFlow = "describe" | "box" | "segmenting" | "review" | "manual" | "reference-question" | "reference-pick" | "done";
@@ -24,7 +24,12 @@ function observationTime(observation: WindObservation) {
   return new Date(observation.observedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
 }
 
-function weatherWatchMessage(cameraName: string, observation: WindObservation) {
+function generalWindWatchMessage(cameraName: string, observation: WindObservation) {
+  const downwindDirection = cardinalDirection(observation.directionDeg + 180);
+  return `Current wind near ${cameraName} is generally toward ${downwindDirection}. Synchronized weather and fire-risk context is being considered for guidance.`;
+}
+
+function detailedWeatherMessage(cameraName: string, observation: WindObservation) {
   const source = observation.source === "openweather" ? "OpenWeather observation" : "Prepared weather fallback";
   return `${source} for ${cameraName} at ${observationTime(observation)}: ${weatherConditionsLabel(observation)}. Wind ${windDirectionLabel(observation.directionDeg)} at ${observation.speedMs.toFixed(1)} m/s. Prototype fire-weather risk: ${observation.riskLevel.toLowerCase()}.`;
 }
@@ -112,7 +117,7 @@ function CameraWorkspace({ cameraConfig, onSelectCamera }: { cameraConfig: Camer
   const [speed, setSpeed] = useState(1200);
   const [activeAlert, setActiveAlert] = useState<Detection | null>(null);
   const suppressUntilClear = useRef(false);
-  const [chat, setChat] = useState<ChatMessage[]>([{ agent: "Watch", role: "assistant", text: weatherWatchMessage(cameraConfig.name, PREPARED_WIND) }]);
+  const [chat, setChat] = useState<ChatMessage[]>([{ agent: "Watch", role: "assistant", text: generalWindWatchMessage(cameraConfig.name, PREPARED_WIND) }]);
   const [chatInput, setChatInput] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
   const [modelMode, setModelMode] = useState<"ready" | "live" | "fallback">("ready");
@@ -141,6 +146,7 @@ function CameraWorkspace({ cameraConfig, onSelectCamera }: { cameraConfig: Camer
     [detections, frame, fireThreshold],
   );
   const currentWindLabel = windDirectionLabel(weatherObservation.directionDeg);
+  const currentDownwindDirection = cardinalDirection(weatherObservation.directionDeg + 180);
   const currentConditions = weatherConditionsLabel(weatherObservation);
   const calibratedFov = useMemo(
     () => deriveFieldOfView(
@@ -178,7 +184,7 @@ function CameraWorkspace({ cameraConfig, onSelectCamera }: { cameraConfig: Camer
         setWeatherObservation(observation);
         setWeatherLoading(false);
         setChat(current => current.length === 1 && current[0].agent === "Watch"
-          ? [{ agent: "Watch", role: "assistant", text: weatherWatchMessage(cameraConfig.name, observation) }]
+          ? [{ agent: "Watch", role: "assistant", text: generalWindWatchMessage(cameraConfig.name, observation) }]
           : current);
       })
       .catch(() => {
@@ -208,10 +214,10 @@ function CameraWorkspace({ cameraConfig, onSelectCamera }: { cameraConfig: Camer
       queueMicrotask(() => {
         setActiveAlert(focus);
         setPlaying(false);
-        setChat(c => [...c, { agent: "Response", role: "assistant", text: `${focus.kind === "smoke" ? "Smoke" : "Fire"} confirmed near ${cameraConfig.incidentZone} in the ${cameraConfig.name} view. Current context: ${weatherObservation.riskLevel.toLowerCase()} prototype fire-weather risk, wind ${currentWindLabel} at ${weatherObservation.speedMs.toFixed(1)} m/s. The map location is approximate. Confirm this incident or mark it as a false alarm?` }]);
+        setChat(c => [...c, { agent: "Response", role: "assistant", text: `${focus.kind === "smoke" ? "Smoke" : "Fire"} confirmed near ${cameraConfig.incidentZone} in the ${cameraConfig.name} view. Downwind concern is generally toward ${currentDownwindDirection}; synchronized weather and risk conditions have been considered. The map location is approximate. Confirm this incident or mark it as a false alarm?` }]);
       });
     }
-  }, [frame, currentDetections, activeAlert, confirmationFrames, smokeThreshold, fireThreshold, detections, cameraConfig, currentWindLabel, weatherObservation]);
+  }, [frame, currentDetections, activeAlert, confirmationFrames, smokeThreshold, fireThreshold, detections, cameraConfig, currentDownwindDirection]);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [chat]);
 
@@ -230,13 +236,13 @@ function CameraWorkspace({ cameraConfig, onSelectCamera }: { cameraConfig: Camer
 
   const refreshWeatherRisk = async () => {
     const observation = await loadWeather();
-    setChat(c => [...c, { agent: "Watch", role: "assistant", text: weatherWatchMessage(cameraConfig.name, observation) }]);
+    setChat(c => [...c, { agent: "Watch", role: "assistant", text: detailedWeatherMessage(cameraConfig.name, observation) }]);
   };
 
   const deterministicReply = (value: string) => {
     const lower = value.toLowerCase();
-    if (lower.includes("wind") || lower.includes("weather") || lower.includes("risk")) return weatherWatchMessage(cameraConfig.name, weatherObservation);
-    if (!activeAlert) return `No confirmed incident is active. I’m continuing to watch the camera sequence in the current ${weatherObservation.riskLevel.toLowerCase()} prototype fire-weather context.`;
+    if (lower.includes("wind") || lower.includes("weather") || lower.includes("risk")) return detailedWeatherMessage(cameraConfig.name, weatherObservation);
+    if (!activeAlert) return "No confirmed incident is active. I’m continuing to watch the camera sequence with synchronized weather and fire-risk context considered.";
     if (lower.includes("call") || lower.includes("contact")) return "For a confirmed emergency, call 911. I can draft a concise report using this camera’s approved operational context, but PyroFinder never sends or dispatches automatically.";
     if (lower.includes("where") || lower.includes("location")) return `Approximate location: ${cameraConfig.incidentZone} in the ${cameraConfig.name} view. This is a camera-projected estimate, not precise geolocation.`;
     if (lower.includes("draft") || lower.includes("message")) return `Draft: “PyroFinder ${cameraConfig.name} observed ${activeAlert.kind} near ${cameraConfig.incidentZone}. Please verify conditions and keep access clear.”`;
