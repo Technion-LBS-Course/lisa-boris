@@ -14,7 +14,8 @@ source over the original public PyroFinder site.
 
 ## Local development
 
-Requirements: Node.js 22.13 or newer.
+Requirements: Node.js 22.13 or newer. Regenerating detector outputs additionally
+requires Python and the pinned packages in `tools/yolo-inference/requirements.txt`.
 
 ```powershell
 npm install
@@ -35,21 +36,29 @@ fallback and never commits a secret locally.
 ## Project structure
 
 - `app/`: multi-camera UI, map, weather API, chat API, and isolated camera state
-- `app/data/`: prepared camera mapping and detection result JSON
+- `app/data/`: camera mapping and verified YOLO11s result JSON
 - `public/`: camera references and frame sequences
 - `tests/`: SSR and implementation guardrail tests
 - `tools/mock-fire-remotion/`: deterministic Hanging Tree simulated-fire frame generator
+- `tools/yolo-inference/`: reproducible inference generator and pinned dependency
 
 ## Detector provenance
 
 The original PyroFinder project selected an Ultralytics YOLO11s checkpoint that
-was fine-tuned on D-Fire. In the original repository the checkpoint is stored at
-`models/yolo11s_dfire_best.pt`.
+was fine-tuned on D-Fire. In the original repository the tracked checkpoint is
+stored once at `models/yolo11s_dfire_best.pt`.
 
-This Sites application does not run that PyTorch checkpoint in the browser or at
-the edge. It replays prepared per-frame result JSON. The Hanging Tree simulated
-fire detections are scenario-aligned prepared results, not a fresh inference run
-of the checkpoint. The UI states this distinction.
+Both displayed camera sequences have been processed with that exact checkpoint.
+The committed JSON contains authentic model boxes and confidence values together
+with the checkpoint SHA-256, frame hashes, class mapping, inference settings, and
+runtime versions. The browser filters those verified outputs at the selected
+smoke/fire thresholds; it never fabricates a detection or reruns inference when a
+slider changes.
+
+Sites cannot execute the PyTorch `.pt` checkpoint in its browser or edge runtime,
+so the verified inference step is deliberately reproducible and offline. See
+`tools/yolo-inference/README.md` for the exact regeneration commands. The weight
+file is not duplicated into the public web bundle.
 
 ## Embedded location in the original repository
 

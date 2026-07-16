@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
@@ -70,6 +71,11 @@ test("updates field of view, reveals detections progressively, and uses N=1", ()
   assert.match(client, /revealedFireFrames/);
   assert.match(client, /index <= frame/);
   assert.match(client, /d\.kind === "fire"/);
+  assert.match(client, /selectAlertFocus/);
+  assert.match(client, /Detection settings changed; the current frame no longer meets/);
+  assert.match(client, /const confirmedKinds = useMemo/);
+  assert.match(client, /d\.kind === kind/);
+  assert.match(client, /confirmedKinds\.includes\(detection\.kind\)/);
   assert.match(fieldOfView, /const hull/);
 });
 
@@ -93,14 +99,66 @@ test("synchronizes OpenWeather conditions, risk, map wind, and agent context", (
   assert.match(chatRoute, /Unless the operator explicitly asks about weather/);
 });
 
-test("includes the gradual Hanging Tree simulated-fire sequence and aligned detections", () => {
-  const results = JSON.parse(readFileSync(new URL("../app/data/hanging-tree-yolo11s-results.json", import.meta.url), "utf8"));
-  const remotionPackage = JSON.parse(readFileSync(new URL("../tools/mock-fire-remotion/package.json", import.meta.url), "utf8"));
+test("ships authentic, reproducible YOLO11s outputs for both cameras", () => {
+  const expectedCheckpoint = "6AA0C7DCD60E3572F85F02EDC05293266822F9394944479337BEBB8D178B6903";
+  const resultSets = [
+    {
+      results: JSON.parse(readFileSync(new URL("../app/data/hanging-tree-yolo11s-results.json", import.meta.url), "utf8")),
+      frameBase: new URL("../public/cameras/hanging-tree-1/frames/", import.meta.url),
+      expectedFrames: 28,
+    },
+    {
+      results: JSON.parse(readFileSync(new URL("../app/data/thunder-valley-yolo11s-results.json", import.meta.url), "utf8")),
+      frameBase: new URL("../public/frames/", import.meta.url),
+      expectedFrames: 26,
+    },
+  ];
 
-  assert.equal(results.frames.slice(0, 11).every(frame => frame.detections.length === 0), true);
-  assert.equal(results.frames[11].detections[0].confidence < 0.4, true);
-  assert.equal(results.frames[27].detections.some(detection => detection.class === "fire" && detection.confidence >= 0.9), true);
+  for (const { results, frameBase, expectedFrames } of resultSets) {
+    assert.equal(results.fingerprint.model, "YOLO11s");
+    assert.equal(results.fingerprint.output_kind, "verified-ultralytics-inference");
+    assert.equal(results.fingerprint.checkpoint_sha256, expectedCheckpoint);
+    assert.equal(results.fingerprint.checkpoint_bytes, 19151514);
+    assert.deepEqual(results.fingerprint.classes, { "0": "smoke", "1": "fire" });
+    assert.equal(results.fingerprint.imgsz, 640);
+    assert.equal(results.fingerprint.collection_confidence, 0.05);
+    assert.equal(results.fingerprint.iou, 0.5);
+    assert.equal(results.frames.length, expectedFrames);
+    assert.match(results.fingerprint.frame_set_sha256, /^[A-F0-9]{64}$/);
+
+    for (const frame of results.frames) {
+      const frameBytes = readFileSync(new URL(frame.name, frameBase));
+      const frameHash = createHash("sha256").update(frameBytes).digest("hex").toUpperCase();
+      assert.equal(frame.sha256, frameHash, `${frame.name} provenance hash mismatch`);
+      for (const detection of frame.detections) {
+        assert.match(detection.class, /^(fire|smoke)$/);
+        assert.equal(detection.confidence >= results.fingerprint.collection_confidence, true);
+        assert.equal(detection.confidence <= 1, true);
+        assert.equal(detection.bbox_norm.length, 4);
+        assert.equal(detection.bbox_norm.every(value => value >= 0 && value <= 1), true);
+      }
+    }
+  }
+
+  const hangingTree = resultSets[0].results;
+  const firstDefaultDetection = hangingTree.frames.findIndex(frame =>
+    frame.detections.some(detection => detection.confidence >= 0.4),
+  );
+  assert.equal(firstDefaultDetection, 11);
+  const frame15Smoke = hangingTree.frames[14].detections.find(detection => detection.class === "smoke");
+  assert.equal(frame15Smoke.confidence >= 0.4, true);
+  assert.equal(frame15Smoke.bbox_norm[1] > 0.68, true);
+  assert.equal(hangingTree.frames.some(frame => frame.detections.some(detection => detection.class === "fire")), true);
+});
+
+test("retains the deterministic simulated-fire source assets and inference generator", () => {
+  const remotionPackage = JSON.parse(readFileSync(new URL("../tools/mock-fire-remotion/package.json", import.meta.url), "utf8"));
+  const generator = readFileSync(new URL("../tools/yolo-inference/generate_results.py", import.meta.url), "utf8");
+
   assert.equal(remotionPackage.dependencies.remotion, "4.0.489");
+  assert.match(generator, /EXPECTED_CHECKPOINT_SHA256/);
+  assert.match(generator, /verified-ultralytics-inference/);
+  assert.match(generator, /--conf/);
   for (let stage = 1; stage <= 3; stage += 1) {
     assert.equal(existsSync(new URL(`../tools/mock-fire-remotion/public/keyframes/stage_${stage}.jpg`, import.meta.url)), true);
   }

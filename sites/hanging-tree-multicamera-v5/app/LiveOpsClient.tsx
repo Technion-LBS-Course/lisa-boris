@@ -19,6 +19,13 @@ function boxPolygon(points: [number, number][]): [number, number][] {
 }
 function Icon({ children }: { children: React.ReactNode }) { return <span className="icon" aria-hidden="true">{children}</span>; }
 
+function selectAlertFocus(detections: Detection[]) {
+  return detections.slice().sort((left, right) => {
+    const firePriority = Number(right.kind === "fire") - Number(left.kind === "fire");
+    return firePriority || right.confidence - left.confidence;
+  })[0];
+}
+
 function observationTime(observation: WindObservation) {
   if (!observation.observedAt) return "prepared fallback";
   return new Date(observation.observedAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZoneName: "short" });
@@ -145,6 +152,17 @@ function CameraWorkspace({ cameraConfig, onSelectCamera }: { cameraConfig: Camer
       .filter(index => index <= frame && (detections[index] || []).some(d => d.kind === "fire" && d.confidence * 100 >= fireThreshold)),
     [detections, frame, fireThreshold],
   );
+  const confirmedKinds = useMemo(() => {
+    const start = frame - confirmationFrames + 1;
+    if (start < 0) return [] as Detection["kind"][];
+    const windowFrames = Array.from({ length: confirmationFrames }, (_, offset) => start + offset);
+    return (["fire", "smoke"] as Detection["kind"][]).filter(kind => windowFrames
+      .every(index => (detections[index] || []).some(d => d.kind === kind && d.confidence * 100 >= (kind === "smoke" ? smokeThreshold : fireThreshold))));
+  }, [frame, confirmationFrames, detections, smokeThreshold, fireThreshold]);
+  const confirmedFocus = useMemo(
+    () => selectAlertFocus(currentDetections.filter(detection => confirmedKinds.includes(detection.kind))),
+    [confirmedKinds, currentDetections],
+  );
   const currentWindLabel = windDirectionLabel(weatherObservation.directionDeg);
   const currentDownwindDirection = cardinalDirection(weatherObservation.directionDeg + 180);
   const currentConditions = weatherConditionsLabel(weatherObservation);
@@ -206,18 +224,31 @@ function CameraWorkspace({ cameraConfig, onSelectCamera }: { cameraConfig: Camer
       return;
     }
     if (suppressUntilClear.current) return;
-    const start = frame - confirmationFrames + 1;
-    const confirmedWindow = start >= 0 && Array.from({ length: confirmationFrames }, (_, offset) => start + offset)
-      .every(index => (detections[index] || []).some(d => d.confidence * 100 >= (d.kind === "smoke" ? smokeThreshold : fireThreshold)));
-    if (confirmedWindow) {
-      const focus = currentDetections[0];
+    if (confirmedFocus) {
+      const focus = confirmedFocus;
       queueMicrotask(() => {
         setActiveAlert(focus);
         setPlaying(false);
         setChat(c => [...c, { agent: "Response", role: "assistant", text: `${focus.kind === "smoke" ? "Smoke" : "Fire"} confirmed near ${cameraConfig.incidentZone} in the ${cameraConfig.name} view. Downwind concern is generally toward ${currentDownwindDirection}; synchronized weather and risk conditions have been considered. The map location is approximate. Confirm this incident or mark it as a false alarm?` }]);
       });
     }
-  }, [frame, currentDetections, activeAlert, confirmationFrames, smokeThreshold, fireThreshold, detections, cameraConfig, currentDownwindDirection]);
+  }, [currentDetections, activeAlert, confirmedFocus, cameraConfig, currentDownwindDirection]);
+
+  useEffect(() => {
+    if (!activeAlert) return;
+    const nextFocus = confirmedFocus;
+    if (nextFocus === activeAlert) return;
+    if (nextFocus) {
+      queueMicrotask(() => setActiveAlert(nextFocus));
+      return;
+    }
+    queueMicrotask(() => {
+      setActiveAlert(null);
+      suppressUntilClear.current = false;
+      setPlaying(true);
+      setChat(current => [...current, { agent: "Response", role: "assistant", text: "Detection settings changed; the current frame no longer meets the configured alert rule. Monitoring resumed." }]);
+    });
+  }, [activeAlert, confirmedFocus]);
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [chat]);
 
@@ -278,7 +309,7 @@ function CameraWorkspace({ cameraConfig, onSelectCamera }: { cameraConfig: Camer
             rain_last_hour_mm: weatherObservation.rain1hMm,
             prototype_fire_weather_risk: weatherObservation.riskLevel,
           },
-          incident: activeAlert ? { class: activeAlert.kind, camera: cameraConfig.name, zone: cameraConfig.incidentZone, approximate_location: cameraConfig.incidentLocation, wind_direction: currentWindLabel, wind_speed_m_s: weatherObservation.speedMs, prototype_fire_weather_risk: weatherObservation.riskLevel, operator_status: "awaiting resolution" } : { status: "no confirmed incident" },
+          incident: activeAlert ? { class: activeAlert.kind, camera: cameraConfig.name, zone: cameraConfig.incidentZone, approximate_location: cameraConfig.incidentLocation, wind_direction: currentWindLabel, wind_speed_m_s: weatherObservation.speedMs, prototype_fire_weather_risk: weatherObservation.riskLevel, operator_status: "awaiting resolution", detector: cameraConfig.detector } : { status: "no confirmed incident", detector: cameraConfig.detector },
         }),
       });
       if (!response.ok) throw new Error("model unavailable");
@@ -407,7 +438,7 @@ function CameraWorkspace({ cameraConfig, onSelectCamera }: { cameraConfig: Camer
         <button className="brand" onClick={() => setView("Live")}><span className="brand-mark">P</span><span><strong>PyroFinder</strong><small>LIVE OPERATIONS</small></span></button>
         <nav aria-label="Primary navigation">{(["Setup", "Live", "History"] as View[]).map(item => <button key={item} className={view === item ? "active" : ""} onClick={() => setView(item)}>{item === "Setup" ? "⌁" : item === "Live" ? "◉" : "▤"} {item}</button>)}</nav>
         <div className="camera-switcher"><label htmlFor="camera-select">CAMERA</label><select id="camera-select" value={cameraConfig.id} onChange={event => onSelectCamera(event.target.value as CameraId)}><option value="hanging-tree-1">Hanging Tree 1</option><option value="thunder-valley-west">Thunder Valley West</option></select></div>
-        <div className="system-state"><span className="pulse-dot" /> SYSTEM ONLINE <small>YOLO11s</small></div>
+        <div className="system-state"><span className="pulse-dot" /> SYSTEM ONLINE <small>YOLO11s · VERIFIED OUTPUTS</small></div>
       </header>
 
       <main>
@@ -455,8 +486,8 @@ function CameraWorkspace({ cameraConfig, onSelectCamera }: { cameraConfig: Camer
           <div className="live-heading"><div><p className="eyebrow">{cameraConfig.siteLabel}</p><h1>Live monitoring</h1></div><div className="weather-strip"><span>☀</span><div><small>FIRE WEATHER</small><strong>{weatherObservation.riskLevel} current risk</strong></div><div><small>WIND</small><strong>{currentWindLabel} · {weatherObservation.speedMs.toFixed(1)} m/s</strong></div><div><small>CONDITIONS</small><strong>{currentConditions}</strong></div><div className="weather-observed"><small>{weatherObservation.source === "openweather" ? "OPENWEATHER" : "PREPARED FALLBACK"}</small><strong>{observationTime(weatherObservation)}</strong></div><label className="wind-toggle"><input type="checkbox" checked={showWind} onChange={event => setShowWind(event.target.checked)} /><span>Live wind particles</span></label></div></div>
           <div className={`alert-banner ${activeAlert ? "active" : ""}`}><span className="alert-symbol">{activeAlert ? "!" : "✓"}</span><div><strong>{activeAlert ? `${activeAlert.kind.toUpperCase()} CONFIRMED · ${cameraConfig.incidentZone.toUpperCase()}` : "MONITORING · NO ACTIVE INCIDENT"}</strong><small>{activeAlert ? "Playback paused · Review approximate location and resolve in Ops chat" : "Frame sequence and weather context are being monitored"}</small></div><span className="alert-time">{activeAlert ? "ACTION REQUIRED" : "LIVE"}</span></div>
           <div className="live-grid">
-            <div className="left-stage"><div className="panel camera-live"><div className="panel-title"><span><span className="live-dot" /> {cameraConfig.shortName}</span><span className="status-chip">{activeAlert ? "ALERT" : cameraConfig.id === "hanging-tree-1" ? "SIMULATED SCENARIO" : "LIVE"}</span></div><CameraFrame config={cameraConfig} frame={frame} detections={currentDetections} /><div className="playback"><button onClick={() => { setPlaying(false); setFrame(f => Math.max(0,f-1)); }} disabled={frame === 0}>‹</button><button className="play-main" onClick={() => setPlaying(p => !p)}>{playing ? "Ⅱ" : "▶"}</button><button onClick={() => { setPlaying(false); setFrame(f => Math.min(totalFrames-1,f+1)); }} disabled={frame === totalFrames-1}>›</button><div className="timeline"><i style={{ width: `${((frame + 1) / totalFrames) * 100}%` }} />{revealedFireFrames.map(index => <span key={index} style={{ left: `${(index / Math.max(1, totalFrames - 1)) * 100}%` }} />)}</div><small>{String(frame+1).padStart(2,"0")} / {totalFrames}</small></div></div><div className="panel live-map-card"><div className="panel-title"><span><Icon>⌖</Icon> Live operational map</span><small>Hybrid satellite · synchronized live wind</small></div><LiveMap camera={camera} cameraName={cameraConfig.name} cameraShortName={cameraConfig.shortName} anchors={anchors} incident={!!activeAlert} incidentLocation={cameraConfig.incidentLocation} incidentZone={cameraConfig.incidentZone} fov={calibratedFov} showWind={showWind} windObservation={weatherObservation} /></div></div>
-            <aside className="ops-column"><div className="panel chat-panel"><div className="panel-title"><span><Icon>✦</Icon> Ops chat</span><span className={`status-chip model-${modelMode}`}>{modelMode === "live" ? "LIVE MODEL" : modelMode === "fallback" ? "SAFE FALLBACK" : "MODEL READY"}</span></div><div className="agent-legend"><span><b>☀</b><small>WATCH</small> Weather & risk</span><span><b>!</b><small>RESPONSE</small> Incident guidance</span></div><div className="chat-scroll" ref={scrollRef}>{chat.map((message,i) => <div key={i} className={`chat-message ${message.role}`}><small>{message.agent || "YOU"}</small><p>{message.text}</p></div>)}{chatBusy && <div className="chat-message"><small>RESPONSE</small><p className="thinking">Reading approved camera context…</p></div>}</div>{activeAlert && <div className="resolve-actions"><button className="primary-button" onClick={() => resolveAlert("confirmed")}>✓ Confirm incident</button><button className="ghost-button danger" onClick={() => resolveAlert("false_alarm")}>False alarm</button></div>}<button className="risk-button" disabled={weatherLoading} onClick={() => void refreshWeatherRisk()}>{weatherLoading ? "↻ Synchronizing weather…" : "↻ Refresh synchronized weather & risk"}</button><form className="chat-form" onSubmit={submitChat}><input value={chatInput} disabled={chatBusy} onChange={e => setChatInput(e.target.value)} placeholder={activeAlert ? "Ask about location, contacts, or a draft…" : "Ask Watch about the scene…"} /><button disabled={chatBusy} aria-label="Send">↑</button></form></div><div className="panel settings-panel"><div className="panel-title"><span><Icon>≡</Icon> Detection controls</span><button onClick={() => { setSmokeThreshold(40); setFireThreshold(40); setConfirmationFrames(1); setSpeed(1200); }}>RESET</button></div><label><span>Smoke confidence <b>{smokeThreshold}%</b></span><input type="range" min="5" max="95" step="5" value={smokeThreshold} onChange={e => setSmokeThreshold(Number(e.target.value))} /></label><label><span>Fire confidence <b>{fireThreshold}%</b></span><input type="range" min="5" max="95" step="5" value={fireThreshold} onChange={e => setFireThreshold(Number(e.target.value))} /></label><div className="settings-row"><label><span>Confirm frames (N)</span><input type="number" min="1" max="10" value={confirmationFrames} onChange={e => setConfirmationFrames(Number(e.target.value))} /></label><label><span>Speed</span><select value={speed} onChange={e => setSpeed(Number(e.target.value))}><option value="2000">Slow</option><option value="1200">Normal</option><option value="650">Fast</option></select></label></div><p>Playback uses this camera’s prepared YOLO11s outputs. Fire timeline markers appear only after a qualifying fire detection has been observed. Chat uses the same synchronized weather as the map.</p></div><div className="ops-spacer" aria-hidden="true" /></aside>
+            <div className="left-stage"><div className="panel camera-live"><div className="panel-title"><span><span className="live-dot" /> {cameraConfig.shortName}</span><span className="status-chip">{activeAlert ? "ALERT" : "VERIFIED YOLO11s OUTPUT"}</span></div><CameraFrame config={cameraConfig} frame={frame} detections={currentDetections} /><div className="playback"><button onClick={() => { setPlaying(false); setFrame(f => Math.max(0,f-1)); }} disabled={frame === 0}>‹</button><button className="play-main" onClick={() => setPlaying(p => !p)}>{playing ? "Ⅱ" : "▶"}</button><button onClick={() => { setPlaying(false); setFrame(f => Math.min(totalFrames-1,f+1)); }} disabled={frame === totalFrames-1}>›</button><div className="timeline"><i style={{ width: `${((frame + 1) / totalFrames) * 100}%` }} />{revealedFireFrames.map(index => <span key={index} style={{ left: `${(index / Math.max(1, totalFrames - 1)) * 100}%` }} />)}</div><small>{String(frame+1).padStart(2,"0")} / {totalFrames}</small></div></div><div className="panel live-map-card"><div className="panel-title"><span><Icon>⌖</Icon> Live operational map</span><small>Hybrid satellite · synchronized live wind</small></div><LiveMap camera={camera} cameraName={cameraConfig.name} cameraShortName={cameraConfig.shortName} anchors={anchors} incident={!!activeAlert} incidentLocation={cameraConfig.incidentLocation} incidentZone={cameraConfig.incidentZone} fov={calibratedFov} showWind={showWind} windObservation={weatherObservation} /></div></div>
+            <aside className="ops-column"><div className="panel chat-panel"><div className="panel-title"><span><Icon>✦</Icon> Ops chat</span><span className={`status-chip model-${modelMode}`}>{modelMode === "live" ? "LIVE AGENT" : modelMode === "fallback" ? "SAFE FALLBACK" : "AGENT READY"}</span></div><div className="agent-legend"><span><b>☀</b><small>WATCH</small> Weather & risk</span><span><b>!</b><small>RESPONSE</small> Incident guidance</span></div><div className="chat-scroll" ref={scrollRef}>{chat.map((message,i) => <div key={i} className={`chat-message ${message.role}`}><small>{message.agent || "YOU"}</small><p>{message.text}</p></div>)}{chatBusy && <div className="chat-message"><small>RESPONSE</small><p className="thinking">Reading approved camera context…</p></div>}</div>{activeAlert && <div className="resolve-actions"><button className="primary-button" onClick={() => resolveAlert("confirmed")}>✓ Confirm incident</button><button className="ghost-button danger" onClick={() => resolveAlert("false_alarm")}>False alarm</button></div>}<button className="risk-button" disabled={weatherLoading} onClick={() => void refreshWeatherRisk()}>{weatherLoading ? "↻ Synchronizing weather…" : "↻ Refresh synchronized weather & risk"}</button><form className="chat-form" onSubmit={submitChat}><input value={chatInput} disabled={chatBusy} onChange={e => setChatInput(e.target.value)} placeholder={activeAlert ? "Ask about location, contacts, or a draft…" : "Ask Watch about the scene…"} /><button disabled={chatBusy} aria-label="Send">↑</button></form></div><div className="panel settings-panel"><div className="panel-title"><span><Icon>≡</Icon> Detection controls</span><button onClick={() => { setSmokeThreshold(40); setFireThreshold(40); setConfirmationFrames(1); setSpeed(1200); }}>RESET</button></div><label><span>Smoke confidence <b>{smokeThreshold}%</b></span><input type="range" min="5" max="95" step="5" value={smokeThreshold} onChange={e => setSmokeThreshold(Number(e.target.value))} /></label><label><span>Fire confidence <b>{fireThreshold}%</b></span><input type="range" min="5" max="95" step="5" value={fireThreshold} onChange={e => setFireThreshold(Number(e.target.value))} /></label><div className="settings-row"><label><span>Confirm frames (N)</span><input type="number" min="1" max="10" value={confirmationFrames} onChange={e => setConfirmationFrames(Number(e.target.value))} /></label><label><span>Speed</span><select value={speed} onChange={e => setSpeed(Number(e.target.value))}><option value="2000">Slow</option><option value="1200">Normal</option><option value="650">Fast</option></select></label></div><p>Playback uses verified offline outputs from the selected YOLO11s checkpoint ({cameraConfig.detector.checkpointSha256.slice(0, 12)}…). Sliders filter authentic candidates collected at {Math.round(cameraConfig.detector.collectionConfidence * 100)}%; they do not rerun inference. Fire markers appear only after a qualifying model detection has been observed.</p></div><div className="ops-spacer" aria-hidden="true" /></aside>
           </div>
         </section>}
 

@@ -1,41 +1,574 @@
 {
   "fingerprint": {
-    "version": 1,
+    "version": 2,
     "camera_id": "HT1",
     "model": "YOLO11s",
-    "smoke_threshold": 0.4,
-    "fire_threshold": 0.4,
+    "output_kind": "verified-ultralytics-inference",
+    "checkpoint": "models/yolo11s_dfire_best.pt",
+    "checkpoint_sha256": "6AA0C7DCD60E3572F85F02EDC05293266822F9394944479337BEBB8D178B6903",
+    "checkpoint_bytes": 19151514,
+    "classes": {
+      "0": "smoke",
+      "1": "fire"
+    },
+    "imgsz": 640,
+    "collection_confidence": 0.05,
+    "iou": 0.5,
+    "max_det": 50,
+    "device": "cpu",
+    "python_version": "3.13.13",
+    "ultralytics_version": "8.4.60",
+    "torch_version": "2.12.0+cpu",
     "n_frames": 28,
-    "prepared_utc": "2026-07-15"
+    "frame_set_sha256": "38A0E9EA808765DBDACFBD3982CE86E6BA121DBC6553134C9734470D7FBC73E8",
+    "generated_utc": "2026-07-16T06:49:07Z"
   },
   "frames": [
-    { "name": "frame_00.jpg", "source": "1783963258.000000000.jpg", "detections": [] },
-    { "name": "frame_01.jpg", "source": "1783963288.000000000.jpg", "detections": [] },
-    { "name": "frame_02.jpg", "source": "1783963303.000000000.jpg", "detections": [] },
-    { "name": "frame_03.jpg", "source": "1783963364.000000000.jpg", "detections": [] },
-    { "name": "frame_04.jpg", "source": "1783963409.000000000.jpg", "detections": [] },
-    { "name": "frame_05.jpg", "source": "1783963424.000000000.jpg", "detections": [] },
-    { "name": "frame_06.jpg", "source": "1783963439.000000000.jpg", "detections": [] },
-    { "name": "frame_07.jpg", "source": "1783963500.000000000.jpg", "detections": [] },
-    { "name": "frame_08.jpg", "source": "1783963515.000000000.jpg", "detections": [] },
-    { "name": "frame_09.jpg", "source": "1783963560.000000000.jpg", "detections": [] },
-    { "name": "frame_10.jpg", "source": "1783963606.000000000.jpg", "detections": [] },
-    { "name": "frame_11.jpg", "source": "1783963636.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.24, "bbox_norm": [0.47, 0.655, 0.025, 0.055] }] },
-    { "name": "frame_12.jpg", "source": "1783963651.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.30, "bbox_norm": [0.468, 0.65, 0.032, 0.065] }] },
-    { "name": "frame_13.jpg", "source": "1783963681.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.36, "bbox_norm": [0.465, 0.645, 0.04, 0.08] }] },
-    { "name": "frame_14.jpg", "source": "1783963729.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.43, "bbox_norm": [0.46, 0.64, 0.055, 0.095] }] },
-    { "name": "frame_15.jpg", "source": "1783963744.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.51, "bbox_norm": [0.455, 0.635, 0.07, 0.11] }, { "class": "fire", "confidence": 0.34, "bbox_norm": [0.47, 0.704, 0.055, 0.025] }] },
-    { "name": "frame_16.jpg", "source": "1783963774.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.59, "bbox_norm": [0.45, 0.63, 0.09, 0.13] }, { "class": "fire", "confidence": 0.44, "bbox_norm": [0.465, 0.705, 0.075, 0.028] }] },
-    { "name": "frame_17.jpg", "source": "1783963804.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.67, "bbox_norm": [0.445, 0.625, 0.12, 0.15] }, { "class": "fire", "confidence": 0.52, "bbox_norm": [0.455, 0.706, 0.10, 0.032] }] },
-    { "name": "frame_18.jpg", "source": "1783963864.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.74, "bbox_norm": [0.435, 0.62, 0.16, 0.17] }, { "class": "fire", "confidence": 0.61, "bbox_norm": [0.445, 0.707, 0.14, 0.036] }] },
-    { "name": "frame_19.jpg", "source": "1783963894.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.79, "bbox_norm": [0.425, 0.615, 0.19, 0.18] }, { "class": "fire", "confidence": 0.69, "bbox_norm": [0.435, 0.708, 0.17, 0.04] }] },
-    { "name": "frame_20.jpg", "source": "1783963909.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.82, "bbox_norm": [0.415, 0.61, 0.22, 0.19] }, { "class": "fire", "confidence": 0.73, "bbox_norm": [0.425, 0.709, 0.20, 0.043] }] },
-    { "name": "frame_21.jpg", "source": "1783963924.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.84, "bbox_norm": [0.405, 0.605, 0.24, 0.20] }, { "class": "fire", "confidence": 0.76, "bbox_norm": [0.415, 0.71, 0.22, 0.045] }] },
-    { "name": "frame_22.jpg", "source": "1783963999.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.86, "bbox_norm": [0.395, 0.60, 0.26, 0.21] }, { "class": "fire", "confidence": 0.79, "bbox_norm": [0.405, 0.711, 0.24, 0.047] }] },
-    { "name": "frame_23.jpg", "source": "1783964014.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.87, "bbox_norm": [0.39, 0.595, 0.275, 0.215] }, { "class": "fire", "confidence": 0.81, "bbox_norm": [0.40, 0.712, 0.255, 0.048] }] },
-    { "name": "frame_24.jpg", "source": "1783964044.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.89, "bbox_norm": [0.385, 0.59, 0.29, 0.22] }, { "class": "fire", "confidence": 0.84, "bbox_norm": [0.395, 0.712, 0.27, 0.05] }] },
-    { "name": "frame_25.jpg", "source": "1783964105.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.90, "bbox_norm": [0.38, 0.585, 0.30, 0.225] }, { "class": "fire", "confidence": 0.86, "bbox_norm": [0.39, 0.713, 0.285, 0.052] }] },
-    { "name": "frame_26.jpg", "source": "1783964120.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.91, "bbox_norm": [0.375, 0.58, 0.31, 0.23] }, { "class": "fire", "confidence": 0.88, "bbox_norm": [0.385, 0.714, 0.295, 0.054] }] },
-    { "name": "frame_27.jpg", "source": "1783964135.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.92, "bbox_norm": [0.37, 0.575, 0.32, 0.235] }, { "class": "fire", "confidence": 0.90, "bbox_norm": [0.38, 0.715, 0.305, 0.055] }] }
+    {
+      "name": "frame_00.jpg",
+      "source": "1783963258.000000000.jpg",
+      "sha256": "A9CD662443D77C8A5D2FE56230FB10D6A18D4B59FF0E55F512C1DC7475CF35FB",
+      "inference_ms": 178.474,
+      "detections": []
+    },
+    {
+      "name": "frame_01.jpg",
+      "source": "1783963288.000000000.jpg",
+      "sha256": "FC1A3B15C0D43EBCC151D79974C993D392FEAD99CF28A028239C94F3281E8543",
+      "inference_ms": 178.474,
+      "detections": []
+    },
+    {
+      "name": "frame_02.jpg",
+      "source": "1783963303.000000000.jpg",
+      "sha256": "AC6F0646F7FFD29024A0ED176022B45497146399E4E1C84886EAA3E94EF20638",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.118269,
+          "bbox_norm": [
+            0.812799,
+            0.42392,
+            0.023972,
+            0.041412
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_03.jpg",
+      "source": "1783963364.000000000.jpg",
+      "sha256": "5B03AF6843C8C70D7B58D97D65BFEB5C27B8A2C2E067A762F2A6B631711F2E9E",
+      "inference_ms": 178.474,
+      "detections": []
+    },
+    {
+      "name": "frame_04.jpg",
+      "source": "1783963409.000000000.jpg",
+      "sha256": "DF8291FEA3692B0D7607263E6A9ED472DAC5340AFAA671FE3C623DF4C6233B5C",
+      "inference_ms": 178.474,
+      "detections": []
+    },
+    {
+      "name": "frame_05.jpg",
+      "source": "1783963424.000000000.jpg",
+      "sha256": "0D1E4968EDC931243A0403B3F38381B15D63E2C20F2D6B4518E1CC5BF790A15A",
+      "inference_ms": 178.474,
+      "detections": []
+    },
+    {
+      "name": "frame_06.jpg",
+      "source": "1783963439.000000000.jpg",
+      "sha256": "1A130DB68E3FD10760965CE364A9DEE96D6826997613EF72AC9A72215349665D",
+      "inference_ms": 178.474,
+      "detections": []
+    },
+    {
+      "name": "frame_07.jpg",
+      "source": "1783963500.000000000.jpg",
+      "sha256": "159C15E67197B0F90E8131E609B8F37036D7949D5B1E7E09C5558A5822F50578",
+      "inference_ms": 178.474,
+      "detections": []
+    },
+    {
+      "name": "frame_08.jpg",
+      "source": "1783963515.000000000.jpg",
+      "sha256": "17E24F94A7A5C3486E4584CC01473783A3DCE92F97CF688D63A1C9E627A8E3D7",
+      "inference_ms": 178.474,
+      "detections": []
+    },
+    {
+      "name": "frame_09.jpg",
+      "source": "1783963560.000000000.jpg",
+      "sha256": "CD037969E5551ECD7C2058C48F7780B549A9FD8511B6D7AF684CE32845DE2F35",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.067097,
+          "bbox_norm": [
+            0.519588,
+            0.439793,
+            0.03129,
+            0.036041
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_10.jpg",
+      "source": "1783963606.000000000.jpg",
+      "sha256": "FBD51CD57E7B82E9CF74672C0F19FED97184F1A21410A22B970947B5C5A7C653",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.247338,
+          "bbox_norm": [
+            0.467218,
+            0.706388,
+            0.023535,
+            0.033946
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_11.jpg",
+      "source": "1783963636.000000000.jpg",
+      "sha256": "0BA42F56D3D3506358E877C0FBFC013EC52009CCCEC37A9B7F8E724A57BA538B",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.591761,
+          "bbox_norm": [
+            0.462885,
+            0.694868,
+            0.034185,
+            0.053561
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_12.jpg",
+      "source": "1783963651.000000000.jpg",
+      "sha256": "2E89ABB183296F526F678025BA65EB4756AD22CF61BB0D39164CBC24528F8694",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.584207,
+          "bbox_norm": [
+            0.463003,
+            0.69491,
+            0.03431,
+            0.053795
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_13.jpg",
+      "source": "1783963681.000000000.jpg",
+      "sha256": "25CA7DF8847802CA755CB34EF257BEAAD0C44BE2AAC8C4524D8811C3348EED06",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.606932,
+          "bbox_norm": [
+            0.46285,
+            0.694494,
+            0.034422,
+            0.054709
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_14.jpg",
+      "source": "1783963729.000000000.jpg",
+      "sha256": "59A9654E890F872BA0577B0AD8006E76D6518F7967FBADFF9BFA478DDB537E07",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.600383,
+          "bbox_norm": [
+            0.462851,
+            0.694619,
+            0.034182,
+            0.054545
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_15.jpg",
+      "source": "1783963744.000000000.jpg",
+      "sha256": "13A83380246BA6DEF344CB5272206DF05BAB63AC49881DF24AFBEF1CE9DA5361",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.59805,
+          "bbox_norm": [
+            0.462828,
+            0.694491,
+            0.034331,
+            0.054478
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_16.jpg",
+      "source": "1783963774.000000000.jpg",
+      "sha256": "0431CC7C52B29877C4509D4E77E6E46EBB9C654F9A871792AF5AF32AA096CF7D",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.604143,
+          "bbox_norm": [
+            0.462853,
+            0.694406,
+            0.034471,
+            0.054824
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_17.jpg",
+      "source": "1783963804.000000000.jpg",
+      "sha256": "E5A59DE91939A82622DBD588A114EF4CC310DFE59C4924966C9500F691C525EA",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.608282,
+          "bbox_norm": [
+            0.462732,
+            0.69444,
+            0.034489,
+            0.054812
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_18.jpg",
+      "source": "1783963864.000000000.jpg",
+      "sha256": "36D54E3073828E3ECA23DCE2E2607EFD309374088A6DA4EFE01CE8994B1561A6",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.53779,
+          "bbox_norm": [
+            0.439309,
+            0.64774,
+            0.078998,
+            0.124771
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.051214,
+          "bbox_norm": [
+            0.42691,
+            0.701463,
+            0.011891,
+            0.021303
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_19.jpg",
+      "source": "1783963894.000000000.jpg",
+      "sha256": "7052D9E53FDCF9792BB9ECA7A1CF58435186336A35B7312CFC231C330DA0D144",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.522861,
+          "bbox_norm": [
+            0.439168,
+            0.648399,
+            0.079786,
+            0.125619
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.073522,
+          "bbox_norm": [
+            0.426853,
+            0.7015,
+            0.011999,
+            0.021047
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.068133,
+          "bbox_norm": [
+            0.488872,
+            0.717313,
+            0.017166,
+            0.01579
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_20.jpg",
+      "source": "1783963909.000000000.jpg",
+      "sha256": "C425D3990744A83CF53FC7BD9D71AD28770D074BBB9E93E8EA11627D6EAB6DE7",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.531672,
+          "bbox_norm": [
+            0.438897,
+            0.648074,
+            0.080239,
+            0.125927
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.074956,
+          "bbox_norm": [
+            0.426833,
+            0.70152,
+            0.012012,
+            0.02095
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.070068,
+          "bbox_norm": [
+            0.488279,
+            0.717288,
+            0.018718,
+            0.01596
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.050702,
+          "bbox_norm": [
+            0.812855,
+            0.421922,
+            0.025215,
+            0.044155
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_21.jpg",
+      "source": "1783963924.000000000.jpg",
+      "sha256": "7B0751E1B78CD0E0969ECCA63AF5688368DB00DEC58EB50F3ADDEBACE2A7927E",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.537283,
+          "bbox_norm": [
+            0.439088,
+            0.647997,
+            0.079954,
+            0.125847
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.069631,
+          "bbox_norm": [
+            0.426845,
+            0.701531,
+            0.011963,
+            0.020889
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.065715,
+          "bbox_norm": [
+            0.488256,
+            0.71725,
+            0.018651,
+            0.015921
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_22.jpg",
+      "source": "1783963999.000000000.jpg",
+      "sha256": "5EAACA8AD5B015BE3F022C1494B365B16A86D0F6AD32D89CBA5E4229B7E600AB",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.532764,
+          "bbox_norm": [
+            0.439468,
+            0.648458,
+            0.07912,
+            0.125237
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.059292,
+          "bbox_norm": [
+            0.426851,
+            0.701478,
+            0.011918,
+            0.021016
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_23.jpg",
+      "source": "1783964014.000000000.jpg",
+      "sha256": "AFB7C7998EF854CC20B40C25FC5CCA513B5351D73F12D37F88B8DCE51ED06D98",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.412957,
+          "bbox_norm": [
+            0.814777,
+            0.4287,
+            0.02004,
+            0.037366
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.13294,
+          "bbox_norm": [
+            0.404089,
+            0.64935,
+            0.203412,
+            0.159374
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_24.jpg",
+      "source": "1783964044.000000000.jpg",
+      "sha256": "33BD7AC20B001115CC32A459CAFB09933C8DD3D30FE792925D897A055E16CF2F",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.340333,
+          "bbox_norm": [
+            0.405262,
+            0.644381,
+            0.208918,
+            0.15842
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.065616,
+          "bbox_norm": [
+            0.236038,
+            0.443186,
+            0.026385,
+            0.037072
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_25.jpg",
+      "source": "1783964105.000000000.jpg",
+      "sha256": "A97CCAD94426CC0788637F871CE056CC9CA092C6DD345B9B07E123635203F9C2",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.385474,
+          "bbox_norm": [
+            0.412536,
+            0.64371,
+            0.215108,
+            0.159458
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.053199,
+          "bbox_norm": [
+            0.422319,
+            0.740239,
+            0.015802,
+            0.016031
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_26.jpg",
+      "source": "1783964120.000000000.jpg",
+      "sha256": "CA277F96B5A135BA3C9A2ED302ED43D1E72C42A6D98172747375F7F9A39A11BF",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.393146,
+          "bbox_norm": [
+            0.404094,
+            0.642014,
+            0.204985,
+            0.158357
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.057408,
+          "bbox_norm": [
+            0.421682,
+            0.740648,
+            0.015844,
+            0.016232
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_27.jpg",
+      "source": "1783964135.000000000.jpg",
+      "sha256": "21F941AFD2CF0BEBFEEB53B898420E2D558276C3DE72E339D3CD8710E9F6AF14",
+      "inference_ms": 178.474,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.472858,
+          "bbox_norm": [
+            0.408302,
+            0.644518,
+            0.207775,
+            0.156106
+          ]
+        }
+      ]
+    }
   ]
 }

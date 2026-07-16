@@ -1,11 +1,20 @@
 import hangingTreeMapping from "./data/hanging-tree-camera.json";
 import hangingTreeResults from "./data/hanging-tree-yolo11s-results.json";
+import thunderValleyResults from "./data/thunder-valley-yolo11s-results.json";
 
 export type CameraId = "hanging-tree-1" | "thunder-valley-west";
 export type Priority = "high" | "medium" | "low";
 export type Detection = { kind: "smoke" | "fire"; confidence: number; box: [number, number, number, number] };
 export type Anchor = { id: string; name: string; x: number; y: number; mapLat: number; mapLon: number };
 export type Zone = { id: string; name: string; priority: Priority; points: [number, number][]; referencePoint?: [number, number] };
+export type DetectorProvenance = {
+  model: "YOLO11s";
+  mode: "verified-offline";
+  checkpointSha256: string;
+  collectionConfidence: number;
+  imgsz: number;
+  generatedUtc: string;
+};
 
 export type CameraConfig = {
   id: CameraId;
@@ -25,7 +34,49 @@ export type CameraConfig = {
   incidentLocation: [number, number];
   incidentZone: string;
   fov: [number, number][];
+  detector: DetectorProvenance;
 };
+
+type ResultFile = {
+  fingerprint: {
+    model: string;
+    output_kind: string;
+    checkpoint_sha256: string;
+    collection_confidence: number;
+    imgsz: number;
+    generated_utc: string;
+  };
+  frames: Array<{
+    detections: Array<{ class: string; confidence: number; bbox_norm: number[] }>;
+  }>;
+};
+
+const detectorFromResults = (results: ResultFile): DetectorProvenance => {
+  if (results.fingerprint.model !== "YOLO11s" || results.fingerprint.output_kind !== "verified-ultralytics-inference") {
+    throw new Error("Camera results are not verified YOLO11s checkpoint outputs");
+  }
+  return {
+    model: "YOLO11s",
+    mode: "verified-offline",
+    checkpointSha256: results.fingerprint.checkpoint_sha256,
+    collectionConfidence: results.fingerprint.collection_confidence,
+    imgsz: results.fingerprint.imgsz,
+    generatedUtc: results.fingerprint.generated_utc,
+  };
+};
+
+const detectionsFromResults = (results: ResultFile): Record<number, Detection[]> => Object.fromEntries(
+  results.frames
+    .map((frame, index) => [
+      index,
+      frame.detections.map(detection => ({
+        kind: detection.class as Detection["kind"],
+        confidence: detection.confidence,
+        box: detection.bbox_norm as Detection["box"],
+      })),
+    ] as const)
+    .filter(([, frameDetections]) => frameDetections.length > 0),
+);
 
 const thunderAnchors: Anchor[] = [
   { id: "a1", name: "1", x: 20.1, y: 81.4, mapLat: 38.84304, mapLon: -121.316998 },
@@ -72,18 +123,8 @@ const hangingTreeZones: Zone[] = hangingTreeMapping.image_zones
       : undefined,
   }));
 
-const hangingTreeDetections: Record<number, Detection[]> = Object.fromEntries(
-  hangingTreeResults.frames
-    .map((frame, index) => [
-      index,
-      frame.detections.map(detection => ({
-        kind: detection.class as Detection["kind"],
-        confidence: detection.confidence,
-        box: detection.bbox_norm as Detection["box"],
-      })),
-    ] as const)
-    .filter(([, frameDetections]) => frameDetections.length > 0),
-);
+const hangingTreeDetections = detectionsFromResults(hangingTreeResults);
+const thunderValleyDetections = detectionsFromResults(thunderValleyResults);
 
 export const CAMERAS: Record<CameraId, CameraConfig> = {
   "hanging-tree-1": {
@@ -97,13 +138,14 @@ export const CAMERAS: Record<CameraId, CameraConfig> = {
     frameSize: "1920 × 1080",
     referenceUrl: "/cameras/hanging-tree-1/reference.jpg",
     frameBase: "/cameras/hanging-tree-1/frames",
-    frameCount: 28,
+    frameCount: hangingTreeResults.frames.length,
     detections: hangingTreeDetections,
     anchors: hangingTreeAnchors,
     zones: hangingTreeZones,
     incidentLocation: [35.574384, -120.671347],
     incidentZone: "North Hill near the farm",
     fov: [[35.573555, -120.667035], [35.5688, -120.6945], [35.5782, -120.679]],
+    detector: detectorFromResults(hangingTreeResults),
   },
   "thunder-valley-west": {
     id: "thunder-valley-west",
@@ -116,24 +158,14 @@ export const CAMERAS: Record<CameraId, CameraConfig> = {
     frameSize: "1920 × 1080",
     referenceUrl: "/reference.jpg",
     frameBase: "/frames",
-    frameCount: 26,
-    detections: {
-      3: [{ kind: "smoke", confidence: 0.634, box: [0.2842, 0.6919, 0.0421, 0.1113] }],
-      4: [{ kind: "smoke", confidence: 0.634, box: [0.2842, 0.6919, 0.0421, 0.1113] }],
-      5: [
-        { kind: "fire", confidence: 0.435, box: [0.2119, 0.7329, 0.0757, 0.0282] },
-        { kind: "smoke", confidence: 0.402, box: [0.238, 0.6356, 0.1176, 0.2037] },
-      ],
-      6: [
-        { kind: "fire", confidence: 0.435, box: [0.2119, 0.7329, 0.0757, 0.0282] },
-        { kind: "smoke", confidence: 0.402, box: [0.238, 0.6356, 0.1176, 0.2037] },
-      ],
-    },
+    frameCount: thunderValleyResults.frames.length,
+    detections: thunderValleyDetections,
     anchors: thunderAnchors,
     zones: thunderZones,
     incidentLocation: [38.84304, -121.316998],
     incidentZone: "Isolated house",
     fov: [[38.840335705966275, -121.3152325466259], [38.8623, -121.3275], [38.8623, -121.3028]],
+    detector: detectorFromResults(thunderValleyResults),
   },
 };
 
