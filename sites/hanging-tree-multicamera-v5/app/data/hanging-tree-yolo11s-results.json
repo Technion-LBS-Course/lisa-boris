@@ -1,0 +1,41 @@
+{
+  "fingerprint": {
+    "version": 1,
+    "camera_id": "HT1",
+    "model": "YOLO11s",
+    "smoke_threshold": 0.4,
+    "fire_threshold": 0.4,
+    "n_frames": 28,
+    "prepared_utc": "2026-07-15"
+  },
+  "frames": [
+    { "name": "frame_00.jpg", "source": "1783963258.000000000.jpg", "detections": [] },
+    { "name": "frame_01.jpg", "source": "1783963288.000000000.jpg", "detections": [] },
+    { "name": "frame_02.jpg", "source": "1783963303.000000000.jpg", "detections": [] },
+    { "name": "frame_03.jpg", "source": "1783963364.000000000.jpg", "detections": [] },
+    { "name": "frame_04.jpg", "source": "1783963409.000000000.jpg", "detections": [] },
+    { "name": "frame_05.jpg", "source": "1783963424.000000000.jpg", "detections": [] },
+    { "name": "frame_06.jpg", "source": "1783963439.000000000.jpg", "detections": [] },
+    { "name": "frame_07.jpg", "source": "1783963500.000000000.jpg", "detections": [] },
+    { "name": "frame_08.jpg", "source": "1783963515.000000000.jpg", "detections": [] },
+    { "name": "frame_09.jpg", "source": "1783963560.000000000.jpg", "detections": [] },
+    { "name": "frame_10.jpg", "source": "1783963606.000000000.jpg", "detections": [] },
+    { "name": "frame_11.jpg", "source": "1783963636.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.24, "bbox_norm": [0.47, 0.655, 0.025, 0.055] }] },
+    { "name": "frame_12.jpg", "source": "1783963651.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.30, "bbox_norm": [0.468, 0.65, 0.032, 0.065] }] },
+    { "name": "frame_13.jpg", "source": "1783963681.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.36, "bbox_norm": [0.465, 0.645, 0.04, 0.08] }] },
+    { "name": "frame_14.jpg", "source": "1783963729.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.43, "bbox_norm": [0.46, 0.64, 0.055, 0.095] }] },
+    { "name": "frame_15.jpg", "source": "1783963744.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.51, "bbox_norm": [0.455, 0.635, 0.07, 0.11] }, { "class": "fire", "confidence": 0.34, "bbox_norm": [0.47, 0.704, 0.055, 0.025] }] },
+    { "name": "frame_16.jpg", "source": "1783963774.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.59, "bbox_norm": [0.45, 0.63, 0.09, 0.13] }, { "class": "fire", "confidence": 0.44, "bbox_norm": [0.465, 0.705, 0.075, 0.028] }] },
+    { "name": "frame_17.jpg", "source": "1783963804.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.67, "bbox_norm": [0.445, 0.625, 0.12, 0.15] }, { "class": "fire", "confidence": 0.52, "bbox_norm": [0.455, 0.706, 0.10, 0.032] }] },
+    { "name": "frame_18.jpg", "source": "1783963864.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.74, "bbox_norm": [0.435, 0.62, 0.16, 0.17] }, { "class": "fire", "confidence": 0.61, "bbox_norm": [0.445, 0.707, 0.14, 0.036] }] },
+    { "name": "frame_19.jpg", "source": "1783963894.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.79, "bbox_norm": [0.425, 0.615, 0.19, 0.18] }, { "class": "fire", "confidence": 0.69, "bbox_norm": [0.435, 0.708, 0.17, 0.04] }] },
+    { "name": "frame_20.jpg", "source": "1783963909.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.82, "bbox_norm": [0.415, 0.61, 0.22, 0.19] }, { "class": "fire", "confidence": 0.73, "bbox_norm": [0.425, 0.709, 0.20, 0.043] }] },
+    { "name": "frame_21.jpg", "source": "1783963924.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.84, "bbox_norm": [0.405, 0.605, 0.24, 0.20] }, { "class": "fire", "confidence": 0.76, "bbox_norm": [0.415, 0.71, 0.22, 0.045] }] },
+    { "name": "frame_22.jpg", "source": "1783963999.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.86, "bbox_norm": [0.395, 0.60, 0.26, 0.21] }, { "class": "fire", "confidence": 0.79, "bbox_norm": [0.405, 0.711, 0.24, 0.047] }] },
+    { "name": "frame_23.jpg", "source": "1783964014.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.87, "bbox_norm": [0.39, 0.595, 0.275, 0.215] }, { "class": "fire", "confidence": 0.81, "bbox_norm": [0.40, 0.712, 0.255, 0.048] }] },
+    { "name": "frame_24.jpg", "source": "1783964044.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.89, "bbox_norm": [0.385, 0.59, 0.29, 0.22] }, { "class": "fire", "confidence": 0.84, "bbox_norm": [0.395, 0.712, 0.27, 0.05] }] },
+    { "name": "frame_25.jpg", "source": "1783964105.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.90, "bbox_norm": [0.38, 0.585, 0.30, 0.225] }, { "class": "fire", "confidence": 0.86, "bbox_norm": [0.39, 0.713, 0.285, 0.052] }] },
+    { "name": "frame_26.jpg", "source": "1783964120.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.91, "bbox_norm": [0.375, 0.58, 0.31, 0.23] }, { "class": "fire", "confidence": 0.88, "bbox_norm": [0.385, 0.714, 0.295, 0.054] }] },
+    { "name": "frame_27.jpg", "source": "1783964135.000000000.jpg", "detections": [{ "class": "smoke", "confidence": 0.92, "bbox_norm": [0.37, 0.575, 0.32, 0.235] }, { "class": "fire", "confidence": 0.90, "bbox_norm": [0.38, 0.715, 0.305, 0.055] }] }
+  ]
+}

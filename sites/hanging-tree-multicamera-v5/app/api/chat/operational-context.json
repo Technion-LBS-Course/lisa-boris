@@ -1,0 +1,252 @@
+{
+  "context_id": "thunder_valley_live_ops_v1",
+  "context_type": "operational_context",
+  "version": "0.1",
+  "created_utc": "2026-07-11T00:00:00Z",
+  "status": "initial_draft",
+  "intended_runtime_use": [
+    "enrich confirmed fire/smoke incident context",
+    "help the incident assistant generate concise first messages",
+    "support deterministic spatial reasoning before LLM summarization"
+  ],
+  "do_not_use_for": [
+    "YOLO model training",
+    "changing image zone metadata",
+    "replacing live_ops_camera.json",
+    "claiming exact geolocation accuracy"
+  ],
+  "camera_context": {
+    "camera_id": "20260709",
+    "camera_name": "ThunderValleyWest",
+    "customer_id": "ThunderValley",
+    "site_id": "ThunderValley",
+    "camera_mount_description": "User-provided: mounted on the roof of Thunder Valley Casino Resort.",
+    "view_direction_description": "User-provided: looking north toward Lincoln Crossing.",
+    "known_camera_location": {
+      "latitude": 38.840335705966275,
+      "longitude": -121.3152325466259,
+      "source": "live_ops_camera.json"
+    },
+    "camera_height_m": 70.0,
+    "location_confidence": "configured_demo"
+  },
+  "primary_site_context": {
+    "name": "Thunder Valley Casino Resort",
+    "address": "1200 Athens Avenue, Lincoln, CA 95648",
+    "official_phone": "877-468-8777",
+    "role": "camera host / populated resort area",
+    "operational_relevance": "If smoke/fire moves toward the resort or visible parking/venue areas, treat as potentially high operational sensitivity."
+  },
+  "farm_owner_site": {
+    "name": "Farm owner site",
+    "location": {
+      "latitude": 38.843771,
+      "longitude": -121.317149
+    },
+    "address_context": "Placer County, California, USA",
+    "maps_link": "https://maps.app.goo.gl/h2P76mNrkSe8h3yG8",
+    "provided_by_user": true,
+    "role": "likely property/farm owner reference site",
+    "contact_status": "unknown",
+    "operational_relevance": "If a detection is close to this site or moving toward it, the assistant may suggest preparing a property-owner/site-operator update, but must not invent a person name or phone number."
+  },
+  "nearby_operational_landmarks": [
+    {
+      "name": "Lincoln Crossing",
+      "type": "residential_community",
+      "source_status": "public_web",
+      "known_facts": [
+        "Located in Lincoln, California.",
+        "Community association source says it encompasses over 40 acres and close to 3000 single-family homes."
+      ],
+      "direction_from_camera": "north / northeast in the camera context",
+      "sensitivity": "high",
+      "recommended_action_hint": "If smoke/fire is inside, near, or moving toward Lincoln Crossing, suggest notifying the relevant local authority or local emergency contact."
+    },
+    {
+      "name": "Wetland / slough / ponds northwest of the camera view",
+      "type": "water_wetland",
+      "source_status": "user_screenshot_observed",
+      "known_facts": [
+        "The provided satellite screenshot shows wetland/water features northwest of the farm-owner site.",
+        "The map label 'Ingram Slough' appears in the screenshot, but it should be treated as screenshot-observed unless separately verified."
+      ],
+      "sensitivity": "low_to_medium",
+      "recommended_action_hint": "Fire detected only over water/wetland may be lower priority, but smoke movement toward homes, roads, or structures can still raise priority."
+    },
+    {
+      "name": "Industrial Avenue / Twelve Bridges Drive corridor",
+      "type": "road_access_corridor",
+      "source_status": "public_web_and_screenshot_observed",
+      "known_facts": [
+        "The City of Lincoln speed ordinance search result identifies Twelve Bridges Drive and Industrial Avenue as local road names."
+      ],
+      "sensitivity": "medium",
+      "recommended_action_hint": "If smoke/fire threatens road visibility or access/evacuation routes, suggest notifying relevant local authority."
+    },
+    {
+      "name": "Twelve Bridges High School",
+      "type": "school",
+      "source_status": "public_web",
+      "address": "2360 Fieldstone Drive, Lincoln, CA 95648",
+      "phone": "916-409-2631",
+      "sensitivity": "high",
+      "recommended_action_hint": "Use only when projected map location or downwind movement is plausibly toward the school area. If relevant, suggest notifying the school or relevant local authority."
+    },
+    {
+      "name": "Ferrari RCFE / senior care facility",
+      "type": "senior_care",
+      "source_status": "screenshot_observed_and_unverified_web_search",
+      "sensitivity": "high",
+      "recommended_action_hint": "Treat as a sensitive receptor only after verifying relevance to the projected incident area. Do not use any unverified phone/email in live messages."
+    }
+  ],
+  "authorities_and_contacts": [
+    {
+      "name": "Emergency services",
+      "type": "emergency",
+      "contact": "911",
+      "source_status": "official_public_safety_pages",
+      "usage_rule": "For immediate danger to life/property, emergency message can recommend calling 911."
+    },
+    {
+      "name": "Lincoln Fire Department",
+      "type": "fire_non_emergency",
+      "contact": "916-645-4040",
+      "source_status": "official_city_page",
+      "usage_rule": "Use as non-emergency fire contact; for active emergency, recommend 911."
+    },
+    {
+      "name": "Lincoln Police Department",
+      "type": "police_non_emergency",
+      "contact": "916-645-4040",
+      "source_status": "official_city_page",
+      "usage_rule": "Use as non-emergency police/local authority contact; for active emergency, recommend 911."
+    },
+    {
+      "name": "Placer County Office of Emergency Services",
+      "type": "county_emergency_management",
+      "contact": "530-886-5300",
+      "toll_free": "800-488-4308 ext. 5300",
+      "source_status": "official_county_page",
+      "usage_rule": "Use for county emergency management context, preparedness/coordination, not as first substitute for 911."
+    },
+    {
+      "name": "Farm owner / site operator",
+      "type": "property_contact",
+      "contact": null,
+      "source_status": "missing",
+      "usage_rule": "Do not invent. If needed, ask the user to provide it or ask whether to search."
+    },
+    {
+      "name": "Lincoln Crossing association/contact",
+      "type": "community_contact",
+      "contact": null,
+      "source_status": "not_added_to_runtime_context",
+      "usage_rule": "Do not invent. If needed, ask the user whether to search/verify the current contact."
+    }
+  ],
+  "incident_reasoning_policy": {
+    "first_message_style": [
+      "short",
+      "operational",
+      "action-oriented",
+      "do not expose raw reasoning unless asked"
+    ],
+    "include_in_first_message_when_available": [
+      "camera/site name",
+      "fire/smoke label",
+      "nearest operational place name",
+      "downwind/movement direction if relevant",
+      "one recommended action question"
+    ],
+    "do_not_include_in_first_message_by_default": [
+      "raw confidence",
+      "pixel coordinates",
+      "all weather telemetry",
+      "full distance calculations",
+      "all reasoning steps"
+    ],
+    "risk_rules": [
+      {
+        "condition": "inside_or_near_high_priority_zone",
+        "effect": "raise urgency"
+      },
+      {
+        "condition": "moving_downwind_toward_residential_or_sensitive_landmark",
+        "effect": "raise urgency and suggest relevant local authority/contact"
+      },
+      {
+        "condition": "only near water/wetland and moving away from structures",
+        "effect": "lower urgency but continue monitoring"
+      },
+      {
+        "condition": "contact_missing",
+        "effect": "use generic relevant local authority/site operator, or ask whether to search"
+      }
+    ],
+    "uncertainty_rule": "All map/geolocation outputs are approximate. Never claim exact physical spread prediction."
+  },
+  "recommended_first_message_examples": [
+    "ThunderValleyWest detected smoke near Lincoln Crossing, drifting north. Do you want me to notify the relevant local authority?",
+    "Smoke was detected near the farm owner site and appears to be moving toward Lincoln Crossing. Should I prepare a response update?",
+    "Possible fire detected near the wetland area. It appears lower priority unless it spreads toward nearby structures. Should I keep monitoring?",
+    "Smoke was detected outside the marked zones, but near a sensitive area and moving in that direction. Should I notify the relevant local authority?"
+  ],
+  "implementation_notes": {
+    "preferred_loading": "Load this JSON as optional operational context in the Live Ops incident context builder.",
+    "fallback_behavior": "If missing, continue using live_ops_camera.json, zones, reference points, and weather only.",
+    "separate_markdown_context": "A companion Markdown file can be used as human-readable/LLM-readable context, but deterministic code should read this JSON."
+  },
+  "source_links": [
+    {
+      "title": "Thunder Valley Casino Resort official site",
+      "url": "https://www.thundervalleyresort.com/",
+      "facts_used": [
+        "address",
+        "toll-free phone"
+      ]
+    },
+    {
+      "title": "City of Lincoln Fire Department",
+      "url": "https://www.lincolnca.gov/living-here/police-and-fire/fire-department/",
+      "facts_used": [
+        "non-emergency fire phone",
+        "City Hall hours"
+      ]
+    },
+    {
+      "title": "City of Lincoln Police Department",
+      "url": "https://www.lincolnca.gov/living-here/police-and-fire/police-department/",
+      "facts_used": [
+        "police non-emergency contact",
+        "dispatch context"
+      ]
+    },
+    {
+      "title": "Placer County Office of Emergency Services",
+      "url": "https://www.placer.ca.gov/1371/Office-of-Emergency-Services",
+      "facts_used": [
+        "OES role",
+        "phone",
+        "emergency phone",
+        "toll-free phone"
+      ]
+    },
+    {
+      "title": "Lincoln Crossing Community Association",
+      "url": "https://mylincolncrossing.org/page/16445~1054442",
+      "facts_used": [
+        "community scale / residential context"
+      ]
+    },
+    {
+      "title": "Twelve Bridges High School official site",
+      "url": "https://tbhs.wpusd.org/",
+      "facts_used": [
+        "school address",
+        "phone"
+      ]
+    }
+  ]
+}
