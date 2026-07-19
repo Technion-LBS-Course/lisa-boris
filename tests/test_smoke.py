@@ -5,6 +5,7 @@ return expected values. No ML models or datasets required.
 """
 
 import io
+import re
 import tempfile
 from pathlib import Path
 
@@ -80,9 +81,14 @@ def _make_test_df() -> pd.DataFrame:
 
 # ── Package ────────────────────────────────────────────────────────────────────
 
-def test_package_version():
+def test_package_version_is_a_valid_dotted_version():
+    # Guard the shape, not a frozen literal: __version__ must exist and be a
+    # dotted numeric string (e.g. "0.1.0"), so an empty/malformed version is
+    # caught without forcing a lockstep edit every release.
     assert hasattr(src, "__version__")
-    assert src.__version__ == "0.1.0"
+    version = src.__version__
+    assert isinstance(version, str) and version
+    assert re.fullmatch(r"\d+(\.\d+)+", version), version
 
 
 # ── src.data ───────────────────────────────────────────────────────────────────
@@ -96,12 +102,15 @@ def test_primary_dataset_is_dfire():
     assert "human" not in info["classes"]
 
 
-def test_expected_dataset_columns_not_empty():
+def test_expected_dataset_columns_are_the_full_schema():
+    # Assert the whole expected schema (not just "non-empty"), so a dropped or
+    # renamed field is caught rather than silently passing.
     cols = list_expected_dataset_columns()
-    assert isinstance(cols, list)
-    assert len(cols) > 0
-    assert "name" in cols
-    assert "source_url" in cols
+    assert cols == [
+        "dataset_id", "name", "source_url", "num_images",
+        "classes", "split_info", "license", "role",
+    ]
+    assert len(cols) == len(set(cols))  # no duplicates
 
 
 # ── src.model ──────────────────────────────────────────────────────────────────
@@ -159,6 +168,23 @@ def test_detection_result_rejects_invalid_class():
         )
 
 
+def test_detection_result_rejects_out_of_range_confidence():
+    # Confidence is a probability and must stay within [0, 1]; a valid class
+    # alone is not enough to construct the record.
+    for bad_conf in (1.5, -0.1):
+        with pytest.raises(ValueError, match="Confidence"):
+            DetectionResult(
+                timestamp="2026-05-17T10:00:00Z",
+                camera_id="cam_001",
+                class_name="fire",
+                confidence=bad_conf,
+                bbox=(0.5, 0.5, 0.2, 0.3),
+            )
+    # Boundary values are accepted.
+    assert DetectionResult("t", "c", "fire", 0.0, (0.5, 0.5, 0.1, 0.1)).confidence == 0.0
+    assert DetectionResult("t", "c", "smoke", 1.0, (0.5, 0.5, 0.1, 0.1)).confidence == 1.0
+
+
 # ── src.tracking ───────────────────────────────────────────────────────────────
 
 def test_confirmed_detection_true():
@@ -194,9 +220,19 @@ def test_estimate_direction_upper_right():
 
 # ── src.mapping ────────────────────────────────────────────────────────────────
 
-def test_mapping_modes_count():
+def test_mapping_modes_are_the_expected_unique_set():
+    # Assert the actual mode names (and uniqueness), not just the count — a
+    # renamed or duplicated mode would slip past a length-only check.
     modes = get_mapping_modes()
-    assert len(modes) == 6
+    assert set(modes) == {
+        "responsibility zone definition",
+        "named polygon creation",
+        "image-to-map polygon linking",
+        "camera GPS setup",
+        "camera metadata setup",
+        "reference-point mapping",
+    }
+    assert len(modes) == len(set(modes)) == 6
 
 
 def test_format_approximate_location_with_name_and_coords():
@@ -293,6 +329,17 @@ def test_load_dfire_metadata_raises_if_missing():
         load_dfire_metadata("/nonexistent/path/metadata.csv")
 
 
+def test_load_dfire_metadata_rejects_csv_missing_required_columns():
+    # A CSV that exists but lacks required schema columns must fail loudly with a
+    # ValueError naming what's missing, not load a malformed DataFrame.
+    partial = pd.DataFrame([{"image_id": "img_001", "split": "train"}])
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+        partial.to_csv(f, index=False)
+        tmp_path = f.name
+    with pytest.raises(ValueError, match="missing required columns"):
+        load_dfire_metadata(tmp_path)
+
+
 def test_clean_dfire_metadata_dtypes():
     df = _make_test_df()
     # Make has_fire a string to simulate CSV round-trip
@@ -312,6 +359,16 @@ def test_clean_dfire_metadata_removes_duplicates():
     assert len(dup) == 5
     cleaned = clean_dfire_metadata(dup)
     assert len(cleaned) == 4
+
+
+def test_clean_dfire_metadata_normalizes_valid_split_to_val():
+    # D-Fire downloads label the split "valid"; the app standardizes it to "val".
+    df = _make_test_df()
+    df.loc[df["image_id"] == "img_003", "split"] = "valid"
+    cleaned = clean_dfire_metadata(df)
+    splits = set(cleaned["split"])
+    assert "valid" not in splits
+    assert "val" in splits
 
 
 def test_get_dfire_summary_keys():
@@ -375,14 +432,38 @@ def test_compute_summary_metrics():
     assert metrics["fire_images"] == 2  # fire_only + fire_and_smoke
 
 
-def test_get_primary_eda_insight_returns_string():
+def test_get_primary_eda_insight_reflects_computed_aggregates():
+    # The insight must be data-driven: the 4-image fixture has 1 background image
+    # (25%) and one image each of fire_only / smoke_only / fire_and_smoke. Assert
+    # those computed values appear, so a stubbed/static string would fail.
     df = clean_dfire_metadata(_make_test_df())
     insight = get_primary_eda_insight(df)
     assert isinstance(insight, str)
-    assert len(insight) > 10
+    assert "4" in insight                       # total image count
+    assert "25%" in insight                     # background share (1 of 4)
+    assert "background images (1)" in insight
+    assert "fire-only=1" in insight and "smoke-only=1" in insight and "fire+smoke=1" in insight
 
 
 def test_get_primary_eda_insight_empty_df():
     df = pd.DataFrame(columns=_make_test_df().columns)
     insight = get_primary_eda_insight(df)
     assert "No data" in insight
+
+
+def test_compute_bbox_stats_uses_only_labeled_images():
+    # Only rows with boxes feed the stats; the background image (0 boxes) is
+    # excluded, so a stat over all rows would give different numbers.
+    df = clean_dfire_metadata(_make_test_df())
+    stats = compute_bbox_stats(df)
+    assert stats["mean_area"] == pytest.approx((0.05 + 0.03 + 0.06) / 3)
+    assert stats["median_area"] == pytest.approx(0.05)
+    assert stats["max_area"] == pytest.approx(0.08)
+    assert stats["mean_aspect_ratio"] == pytest.approx((1.2 + 0.9 + 1.0) / 3)
+
+
+def test_compute_bbox_stats_empty_when_no_labeled_boxes():
+    df = clean_dfire_metadata(_make_test_df())
+    background_only = df[df["image_category"] == "background"]
+    stats = compute_bbox_stats(background_only)
+    assert stats == {"mean_area": 0.0, "median_area": 0.0, "max_area": 0.0}

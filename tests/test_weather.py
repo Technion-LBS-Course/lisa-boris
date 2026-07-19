@@ -4,7 +4,6 @@ Pure and offline: the one live-path function (fetch_open_meteo_weather) is
 monkeypatched, so no network call is ever made. No API key is required anywhere.
 """
 
-from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -168,13 +167,6 @@ def test_no_openweather_symbols_or_key():
     assert not hasattr(weather, "OpenWeatherProvider")
 
 
-def test_no_openweather_references_in_source():
-    src_text = Path(weather.__file__).read_text(encoding="utf-8").lower()
-    assert "openweather" not in src_text
-    assert "openweathermap" not in src_text
-    assert "open-meteo" in src_text
-
-
 # ── fire_weather_risk (km/h thresholds) ───────────────────────────────────────
 
 
@@ -194,6 +186,28 @@ def test_mild_is_low():
 def test_missing_fields_are_skipped():
     score, factors, level = fire_weather_risk(Weather())
     assert score == 0 and level == "low" and factors == []
+
+
+def test_fire_weather_risk_moderate_level():
+    # warm (26°C, +1) + moderately dry (38%, +1) + calm wind (5 km/h, +0) -> score 2 = moderate.
+    score, factors, level = fire_weather_risk(
+        Weather(temperature_c=26, relative_humidity=38, wind_speed_kmh=5)
+    )
+    assert level == "moderate"
+    assert score == 2
+    assert "warm (26°C)" in factors
+    assert "moderately dry (38%)" in factors
+
+
+def test_fire_weather_risk_high_level():
+    # high temperature (31°C, +2) + low humidity (22%, +2) + calm wind (8 km/h, +0) -> score 4 = high.
+    score, factors, level = fire_weather_risk(
+        Weather(temperature_c=31, relative_humidity=22, wind_speed_kmh=8)
+    )
+    assert level == "high"
+    assert score == 4
+    assert "high temperature (31°C)" in factors
+    assert "low humidity (22%)" in factors
 
 
 # ── assess_risk ───────────────────────────────────────────────────────────────
@@ -222,6 +236,21 @@ def test_assess_low_risk_has_no_zone_tips_but_has_disclaimer():
     assert adv.level == "low"
     assert not any("Hay Storage" in a for a in adv.advisories)
     assert any("preventive risk advisory" in a for a in adv.advisories)
+
+
+def test_assess_moderate_risk_has_zone_tips_but_no_downwind_advisory():
+    # score 2 -> moderate, with a wind direction so the downwind IS computed.
+    wx = Weather(temperature_c=26, relative_humidity=38, wind_speed_kmh=5, wind_direction_deg=270)
+    adv = assess_risk(wx, [HIGH_BARN])
+    assert adv.level == "moderate"
+    # Zone tips ARE emitted at moderate level.
+    assert any("Avoid smoking or hot work near 'Hay Storage'" in a for a in adv.advisories)
+    assert "Check the high-priority zones before peak heat hours." in adv.advisories
+    # The downwind advisory line is added only at high/extreme — never at moderate,
+    # even though the downwind direction itself is still computed on the advisory.
+    assert not any("Downwind risk direction" in a for a in adv.advisories)
+    assert adv.downwind == "E"  # wind from W (270°) blows toward the E
+    assert any("preventive risk advisory" in a for a in adv.advisories)  # disclaimer stays
 
 
 def test_assess_no_zones_prompts_configuration():

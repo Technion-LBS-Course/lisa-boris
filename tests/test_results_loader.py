@@ -25,6 +25,8 @@ from src.results_loader import (
     load_operational_result,
     is_selectable_operational,
     select_operational_winner,
+    build_operational_candidates,
+    _rank_candidates,
     status_label,
 )
 
@@ -230,3 +232,48 @@ def test_detection_and_operational_files_do_not_cross_contaminate(tmp_path):
     # detection metrics carry no operational keys and vice versa
     assert "hazard_recall" not in det_loaded["data"]["metrics"]
     assert "map50" not in op_loaded["data"]["operational_metrics"]
+
+
+# ── 7. A bad detection file never blocks the operational candidate row ───────────
+
+def test_operational_candidate_survives_bad_detection_file(tmp_path):
+    # The operational row must load and stay selectable even when its supporting
+    # detection file is missing or malformed; only the detection-only tiebreak
+    # metrics (detection_recall, map50) come back as None.
+    op = _write(tmp_path / "yolo11s_operational_metrics.json", _operational_doc("YOLO11s"))
+    missing_det = tmp_path / "missing_detection.json"  # never created
+    bad_det = tmp_path / "baseline_yolo11s.json"
+    bad_det.write_text("{ not valid json ]", encoding="utf-8")
+
+    for det_path in (missing_det, bad_det):
+        candidates = build_operational_candidates(
+            [("YOLO11s", op)], detection_items=[("YOLO11s", det_path)]
+        )
+        assert len(candidates) == 1
+        c = candidates[0]
+        assert c["model"] == "YOLO11s"
+        assert c["selectable"] is True        # bad detection file never blocks the row
+        assert c["alert_f2"] == 0.94          # operational metric intact
+        assert c["detection_recall"] is None  # detection tiebreak metrics simply omitted
+        assert c["map50"] is None
+
+    # It still wins with only the operational file usable.
+    assert select_operational_winner(
+        [("YOLO11s", op)], detection_items=[("YOLO11s", missing_det)]
+    ) == "YOLO11s"
+
+
+def test_rank_tiebreak_uses_map50_after_recall():
+    # Third ranking tier: equal Alert F2-score AND equal detection recall → the
+    # higher mAP@0.5 wins. The first two tiers are deliberately tied here so only
+    # map50 can decide.
+    candidates = [
+        {"model": "A", "selectable": True, "alert_f2": 0.94,
+         "detection_recall": 0.70, "map50": 0.71, "inference_ms": None},
+        {"model": "B", "selectable": True, "alert_f2": 0.94,
+         "detection_recall": 0.70, "map50": 0.80, "inference_ms": None},
+    ]
+    assert _rank_candidates(candidates) == "B"
+    # Order-independent — guards against a stable-sort coincidence rather than the
+    # map50 tier genuinely deciding.
+    assert _rank_candidates(list(reversed(candidates))) == "B"

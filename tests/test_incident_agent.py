@@ -229,6 +229,20 @@ def test_recommendations_smoke_verifies_source():
     assert any("dispatches automatically" in r.lower() for r in recs)
 
 
+def test_recommendations_hot_dry_and_shareable_location():
+    # WEATHER is 33°C / RH 25% (temp >= 30 and RH <= 30 → hot/dry line), and the
+    # reference points project a map point → the shareable-location line appears.
+    recs = recommend_actions(_ctx(refs=_square_reference_points()))
+    assert "Hot / dry conditions raise risk — keep water and suppression tools ready." in recs
+    assert "An estimated location is available to share with responders." in recs
+
+
+def test_recommendations_no_shareable_location_without_map_point():
+    # No refs → no projected map point → the shareable-location line is absent.
+    recs = recommend_actions(_ctx(zones=(), centroid=(0.1, 0.1)))
+    assert not any("estimated location is available to share" in r for r in recs)
+
+
 # ── conversation ──────────────────────────────────────────────────────────────
 
 
@@ -278,11 +292,15 @@ def test_initial_message_outside_zones_uses_nearest_zone():
     assert "East Grove" in msg
 
 
-def test_initial_message_low_priority_smoke_suggests_monitoring():
-    zone = {**CENTER_ZONE, "priority_label": "low", "priority": 2}
-    ctx = _ctx(zones=(zone,), cls="smoke", weather=None)
+def test_initial_message_smoke_unknown_area_suggests_monitoring():
+    # Smoke with no matched zone and no nearby zone (unknown area, no refs) →
+    # known_area is False → the opener offers to keep monitoring rather than to
+    # prepare a response update. (With a matched zone the code instead asks
+    # "Should I prepare a response update?".)
+    ctx = _ctx(zones=(), refs=[], cls="smoke", centroid=(0.9, 0.9), weather=None)
     msg = format_initial_incident_message(ctx)
     assert "smoke" in msg.lower()
+    assert "Should I keep monitoring, or prepare a notification?" in msg
     assert msg.strip().endswith("?")
 
 
@@ -420,6 +438,32 @@ def test_contact_guidance_without_context_offers_search_no_invention():
     assert "relevant local authority" in text.lower()
     assert "search" in text.lower()
     assert "916-645-4040" not in text  # nothing invented
+
+
+def test_preferred_contact_prefers_fire_department_over_emergency():
+    # OP_CONTEXT has BOTH Emergency services (911) and Lincoln Fire Department
+    # (916-645-4040). Default prefer=("fire", "emergency") must rank fire first.
+    ctx = _ctx_with_context()
+    best = ia._preferred_contact(ctx)
+    assert best is not None
+    assert best["name"] == "Lincoln Fire Department"
+    assert best["contact"] == "916-645-4040"   # the fire-dept number, not 911
+    # The fire-department summary surfaces that same preferred number, never 911.
+    summary = ia.prepare_fire_department_summary(ctx)
+    assert "Suggested contact: Lincoln Fire Department (916-645-4040)" in summary
+    assert "911" not in summary
+
+
+def test_contact_clause_names_verified_phone_then_offers_search():
+    # With a verified contact, the clause names the authority + its phone number.
+    assert ia.contact_clause(_ctx_with_context()) == "Lincoln Fire Department (916-645-4040)"
+    # Without operational context it stays generic and offers to search the web —
+    # and never claims to contact anyone automatically.
+    fallback = ia.contact_clause(_ctx())
+    assert "relevant local authority" in fallback.lower()
+    assert "search the web" in fallback.lower()
+    assert "916-645-4040" not in fallback          # nothing invented
+    assert "automatic" not in fallback.lower()      # never claims auto-contact
 
 
 def test_deterministic_reply_contact_question_uses_verified_contacts(monkeypatch):
@@ -581,6 +625,15 @@ def test_firedept_summary_includes_coords_when_available():
     assert "confidence" not in fd.lower()
     assert "giloCAM" not in fd
     assert "km/h" not in fd and "°C" not in fd
+
+
+def test_fire_department_summary_coordinate_line_exact_format():
+    # The fire department is the one audience allowed approximate coordinates; the
+    # zone reference point projects to ~1.00000, 1.00000 with the square refs.
+    ctx = _ctx(refs=_square_reference_points())
+    summary = ia.prepare_fire_department_summary(ctx)
+    assert summary.startswith("Fire-department summary")
+    assert "- Approximate coordinates: ~1.00000, 1.00000 (confirm on arrival)" in summary
 
 
 def test_neighbor_draft_is_short_without_coords():

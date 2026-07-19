@@ -16,7 +16,9 @@ from src.mapping import (
     estimate_horizon_y_norm,
     estimate_map_position,
     find_zone_for_detection,
+    format_approximate_location,
     generate_zone_map_estimates,
+    image_quadrant,
     normalize_image_point,
     normalize_polygon_vertices,
     point_in_polygon,
@@ -371,6 +373,46 @@ def test_point_in_polygon_triangle_outside():
     assert point_in_polygon(0.9, 0.9, triangle) is False
 
 
+# ── image_quadrant (fallback when no named polygon covers the detection) ───────
+
+
+def test_image_quadrant_four_corners():
+    assert image_quadrant(0.2, 0.2) == "upper-left"
+    assert image_quadrant(0.8, 0.2) == "upper-right"
+    assert image_quadrant(0.2, 0.8) == "lower-left"
+    assert image_quadrant(0.8, 0.8) == "lower-right"
+
+
+def test_image_quadrant_center_boundary_is_lower_right():
+    # The 0.5 boundary is inclusive on the right/lower side (uses >= 0.5).
+    assert image_quadrant(0.5, 0.5) == "lower-right"
+    assert image_quadrant(0.49, 0.49) == "upper-left"
+
+
+# ── format_approximate_location ───────────────────────────────────────────────
+
+
+def test_format_approximate_location_name_and_coords():
+    text = format_approximate_location("East Barn", 32.1234, 34.8765)
+    assert "East Barn" in text
+    assert "32.1234" in text and "34.8765" in text
+    assert "Approximate" in text
+
+
+def test_format_approximate_location_coords_only_no_name():
+    # lat/lon present but no polygon name: coordinate-only branch, still flagged
+    # approximate and never claiming a precise fix.
+    text = format_approximate_location(None, 32.1234, 34.8765)
+    assert "32.1234" in text and "34.8765" in text
+    assert text.startswith("Approximate location:")
+    assert "camera metadata" in text
+
+
+def test_format_approximate_location_unknown_when_nothing_configured():
+    text = format_approximate_location(None, None, None)
+    assert "unknown" in text.lower()
+
+
 # ── find_zone_for_detection ───────────────────────────────────────────────────
 
 
@@ -475,6 +517,15 @@ def test_build_camera_mapping_config_returns_dict():
     assert "image_zones" in config
 
 
+def test_build_camera_mapping_config_rejects_non_serializable_content():
+    # A zone carrying a non-JSON value (a set) must raise ValueError rather than
+    # produce a config that would later fail to export/import.
+    cam = {"camera_id": "cam_001"}
+    zones = [{"zone_id": "z1", "enabled": True, "tags": {"east", "barn"}}]
+    with pytest.raises(ValueError, match="not JSON-serializable"):
+        build_camera_mapping_config(cam, [], zones)
+
+
 # ── compute_homography / apply_homography ─────────────────────────────────────
 
 
@@ -517,6 +568,14 @@ def test_compute_and_apply_homography_translation():
     assert pv == pytest.approx(20.5, abs=1e-6)
 
 
+def test_apply_homography_returns_none_for_degenerate_denominator():
+    # A matrix whose last row is all zeros projects every point to w=0
+    # (the point maps "to infinity") -> the projection is undefined, not a
+    # silently-wrong finite coordinate.
+    degenerate = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]]
+    assert apply_homography(degenerate, (0.3, 0.7)) is None
+
+
 # ── estimate_map_position ─────────────────────────────────────────────────────
 
 
@@ -553,6 +612,29 @@ def test_estimate_map_position_ignores_disabled():
     pts = _square_reference_points()
     pts[0]["enabled"] = False  # only 3 usable -> not enough
     assert estimate_map_position(pts, (0.5, 0.5)) is None
+
+
+def test_estimate_map_position_skips_malformed_reference_points():
+    # A reference point missing a required field is silently skipped, not crashed
+    # on. Removing map_lat from one of four points leaves only 3 usable -> None.
+    pts = _square_reference_points()
+    del pts[0]["map_lat"]
+    assert estimate_map_position(pts, (0.5, 0.5)) is None
+
+
+def test_estimate_map_position_recovers_when_enough_points_remain_after_skip():
+    # Five points, one malformed: the four valid (non-collinear) corners still
+    # solve the homography, so the malformed point is skipped without losing the fix.
+    pts = _square_reference_points()  # 4 valid corners -> center maps to (1, 1)
+    pts.append({
+        "point_id": "bad", "image_x_norm": "not-a-number", "image_y_norm": 0.5,
+        "map_lat": 1.0, "map_lon": 1.0, "enabled": True,
+    })
+    result = estimate_map_position(pts, (0.5, 0.5))
+    assert result is not None
+    lat, lon = result
+    assert lat == pytest.approx(1.0, abs=1e-6)
+    assert lon == pytest.approx(1.0, abs=1e-6)
 
 
 # ── zone_reference_point_norm ─────────────────────────────────────────────────

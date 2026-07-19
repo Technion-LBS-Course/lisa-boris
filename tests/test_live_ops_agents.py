@@ -19,9 +19,10 @@ def _ctx():
 
 
 def test_agent_identities():
-    assert agents.WATCH == "Watch"
-    assert agents.RESPONSE == "Response"
-    assert agents.AGENT_ICON[agents.WATCH] and agents.AGENT_ICON[agents.RESPONSE]
+    # AGENT_ICON must have an icon for exactly the two agent identities — a missing
+    # key (or an extra one) would be caught by this set comparison.
+    assert set(agents.AGENT_ICON) == {agents.WATCH, agents.RESPONSE}
+    assert all(agents.AGENT_ICON[key] for key in agents.AGENT_ICON)  # every icon non-empty
 
 
 def test_routine_status_text_from_weather_and_advisory():
@@ -35,7 +36,18 @@ def test_routine_status_text_from_weather_and_advisory():
 
 
 def test_routine_status_text_handles_missing_weather():
-    assert isinstance(agents.routine_status_text(None, None), str)
+    # No weather and no advisory → the exact no-data status line.
+    assert agents.routine_status_text(None, None) == "No weather available for a risk status right now."
+
+
+def test_routine_status_text_includes_downwind_line():
+    # When the advisory carries a downwind direction, the Watch status surfaces it.
+    wx = weather.Weather(temperature_c=34.0, relative_humidity=18.0, wind_speed_kmh=25.0,
+                         wind_direction_deg=270.0, source="Mock weather", is_live=False)
+    adv = weather.assess_risk(wx, [])
+    assert adv.downwind == "E"  # wind from W (270°) blows toward the E
+    text = agents.routine_status_text(wx, adv)
+    assert "Downwind risk toward E." in text
 
 
 def test_emergency_open_text_deterministic_fallback(monkeypatch):
@@ -77,5 +89,9 @@ def test_agent_reply_delegates(monkeypatch):
     assert captured["message"] == "who should I call?"
 
 
-def test_uses_llm_returns_bool():
-    assert isinstance(agents.uses_llm(), bool)
+def test_uses_llm_delegates_to_incident_agent(monkeypatch):
+    # uses_llm() must reflect incident_agent.conversation_uses_llm(), not a constant.
+    monkeypatch.setattr(incident_agent, "conversation_uses_llm", lambda: True)
+    assert agents.uses_llm() is True
+    monkeypatch.setattr(incident_agent, "conversation_uses_llm", lambda: False)
+    assert agents.uses_llm() is False

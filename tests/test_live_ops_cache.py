@@ -95,15 +95,53 @@ def test_build_runs_detect_per_frame_and_keeps_small_fields():
     assert "annotated_png" not in per_frame[0]  # only small fields persisted
 
 
+def test_build_handles_detect_fn_returning_none():
+    # detect_fn may return None for a frame (e.g. an upstream decode failure); the
+    # `or {}` guard must yield an empty, zero-count summary rather than crashing on
+    # None.get(...).
+    per_frame = lc.build([{"name": "a.jpg", "bytes": b"a"}], lambda _b: None)
+    assert per_frame[0]["name"] == "a.jpg"
+    assert per_frame[0]["detections"] == []
+    assert per_frame[0]["smoke_count"] == 0
+    assert per_frame[0]["fire_count"] == 0
+    assert per_frame[0]["max_confidence"] is None
+
+
 # ── annotate / result_from_summary (PIL) ───────────────────────────────────────
 
 
 def test_annotate_returns_png_bytes():
-    pytest.importorskip("PIL")
-    frame = _png_bytes()
+    Image = pytest.importorskip("PIL.Image")
+    frame = _png_bytes(size=(60, 40))
     dets = [{"class": "fire", "confidence": 0.6, "bbox_norm": [0.5, 0.5, 0.4, 0.4]}]
     out = lc.annotate(frame, dets)
     assert isinstance(out, bytes) and out[:8] == b"\x89PNG\r\n\x1a\n"
+
+    # Prove a box is actually drawn: annotating with a detection must change the
+    # image relative to annotating with none (a deleted draw loop would make the two
+    # pixel-identical), and the exact fire box colour must appear (PNG is lossless).
+    drawn_px = list(Image.open(io.BytesIO(out)).convert("RGB").getdata())
+    blank_px = list(Image.open(io.BytesIO(lc.annotate(frame, []))).convert("RGB").getdata())
+    assert drawn_px != blank_px
+    assert lc._CLASS_COLORS["fire"] in drawn_px
+    assert lc._CLASS_COLORS["fire"] not in blank_px
+
+
+def test_annotate_skips_malformed_detections():
+    Image = pytest.importorskip("PIL.Image")
+    frame = _png_bytes(size=(60, 40))
+    dets = [
+        {"class": "fire", "confidence": 0.6, "bbox_norm": [0.5, 0.5, 0.4, 0.4]},  # valid
+        {"class": "smoke", "confidence": 0.5},                                     # no bbox_norm
+        {"class": "smoke", "confidence": 0.5, "bbox_norm": [0.1, 0.1]},            # wrong length
+        {"class": "smoke", "confidence": 0.5, "bbox_norm": None},                  # None
+    ]
+    out = lc.annotate(frame, dets)
+    assert out[:8] == b"\x89PNG\r\n\x1a\n"  # malformed entries don't crash the draw loop
+
+    px = set(Image.open(io.BytesIO(out)).convert("RGB").getdata())
+    assert lc._CLASS_COLORS["fire"] in px       # the one valid box is drawn ...
+    assert lc._CLASS_COLORS["smoke"] not in px  # ... every malformed smoke entry is skipped
 
 
 def test_result_from_summary_shape():

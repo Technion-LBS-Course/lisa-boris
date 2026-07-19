@@ -8,6 +8,7 @@ verify the cheap, pure-Python guards around the demo:
     * availability detection reflects which checkpoints are present.
 """
 
+import io
 from pathlib import Path
 
 import pytest
@@ -70,6 +71,50 @@ def test_load_detector_missing_checkpoint_raises_filenotfound(tmp_path, monkeypa
         inference.load_detector("YOLO11s")
 
 
+def _install_fake_ultralytics(monkeypatch, names):
+    """Inject a fake ``ultralytics.YOLO`` whose model exposes ``names``.
+
+    Lets us exercise ``load_detector`` past the lazy ``from ultralytics import
+    YOLO`` without installing ultralytics or reading real weights.
+    """
+    import sys
+    import types
+
+    class _FakeYOLO:
+        def __init__(self, path):
+            self.path = path
+            self.names = names
+
+    module = types.ModuleType("ultralytics")
+    module.YOLO = _FakeYOLO
+    monkeypatch.setitem(sys.modules, "ultralytics", module)
+    return _FakeYOLO
+
+
+def test_load_detector_accepts_finetuned_fire_smoke_checkpoint(tmp_path, monkeypatch):
+    ckpt = tmp_path / "yolo11s_dfire_best.pt"
+    ckpt.write_bytes(b"present but never parsed")  # presence only; YOLO is faked
+    monkeypatch.setitem(inference.CHECKPOINTS, "YOLO11s", ckpt)
+    fake_cls = _install_fake_ultralytics(monkeypatch, {0: "smoke", 1: "fire"})
+
+    model = inference.load_detector("YOLO11s")
+    assert isinstance(model, fake_cls)
+    # Loaded from the fine-tuned checkpoint path, never a pretrained substitute.
+    assert model.path == str(ckpt)
+
+
+def test_load_detector_rejects_checkpoint_exposing_wrong_classes(tmp_path, monkeypatch):
+    ckpt = tmp_path / "yolo11s_dfire_best.pt"
+    ckpt.write_bytes(b"present but never parsed")
+    monkeypatch.setitem(inference.CHECKPOINTS, "YOLO11s", ckpt)
+    # A checkpoint whose classes are not exactly {fire, smoke} must be rejected,
+    # never silently used — PyroFinder is a strict two-class detector.
+    _install_fake_ultralytics(monkeypatch, {0: "person", 1: "car", 2: "fire"})
+
+    with pytest.raises(ValueError, match="fire and smoke"):
+        inference.load_detector("YOLO11s")
+
+
 def test_checkpoint_exists_and_available_detectors(tmp_path, monkeypatch):
     present = tmp_path / "yolo11n_dfire_best.pt"
     present.write_bytes(b"not a real checkpoint")  # presence only; never loaded
@@ -81,9 +126,18 @@ def test_checkpoint_exists_and_available_detectors(tmp_path, monkeypatch):
     assert inference.available_detectors() == ["YOLO11n"]
 
 
-def test_missing_yolo11s_message_is_actionable():
-    assert "models/yolo11s_dfire_best.pt" in inference.MISSING_YOLO11S_MESSAGE
-    assert "in progress" in inference.MISSING_YOLO11S_MESSAGE.lower()
+def test_missing_yolo11s_message_names_the_real_checkpoint_and_next_step():
+    # Tie the operator-facing message to the actual checkpoint the loader looks
+    # for: if the checkpoint filename ever changes, this fails so the message is
+    # kept in sync (rather than mirroring a hardcoded literal that would drift).
+    msg = inference.MISSING_YOLO11S_MESSAGE
+    checkpoint_name = inference.checkpoint_path("YOLO11s").name
+    assert checkpoint_name == "yolo11s_dfire_best.pt"  # guards the D-Fire naming
+    assert checkpoint_name in msg
+    # It must tell the operator what to do, not just that something is wrong.
+    assert "add" in msg.lower()
+    # And it must not leak a machine-specific absolute path.
+    assert "C:\\" not in msg and "/home/" not in msg
 
 
 # ── detection result helpers (pure — no model needed) ─────────────────────────
@@ -270,3 +324,60 @@ def test_run_detection_single_conf_unchanged_behavior():
     assert out["smoke_count"] == 1
     assert out["fire_count"] == 1
     assert model.last_conf == pytest.approx(0.4)
+
+
+class _IndexableFakeResult(_FakeResult):
+    """A Results-like object that supports index-list selection (``result[keep]``).
+
+    Ultralytics ``Results`` objects accept a list of kept indices; this lets us
+    drive ``run_detection``'s pre-plot overlay-filtering branch, which the plain
+    (non-indexable) ``_FakeResult`` deliberately skips. The filtered sub-result
+    carries a visually distinct overlay so the test can prove the annotated PNG
+    was rendered from the FILTERED boxes, not the original ones.
+    """
+
+    def __init__(self, names, boxes, plot_arr):
+        super().__init__(names, boxes, plot_arr)
+        self.indexed_with = None
+
+    def __getitem__(self, keep_idx):
+        import numpy as np
+
+        kept = list(keep_idx)
+        filtered = _FakeBoxes(
+            cls=[self.boxes.cls._data[i] for i in kept],
+            conf=[self.boxes.conf._data[i] for i in kept],
+            xywhn=[self.boxes.xywhn._data[i] for i in kept],
+        )
+        distinct_overlay = np.full((4, 4, 3), 200, dtype=np.uint8)
+        sub = _IndexableFakeResult(self.names, filtered, distinct_overlay)
+        self.indexed_with = kept
+        return sub
+
+
+def test_run_detection_prefilters_overlay_when_results_are_indexable():
+    import numpy as np
+    from PIL import Image
+
+    boxes = _FakeBoxes(
+        cls=[0, 1],                       # 0=smoke, 1=fire
+        conf=[0.45, 0.42],
+        xywhn=[[0.2, 0.2, 0.1, 0.1], [0.6, 0.6, 0.2, 0.2]],
+    )
+    original_overlay = np.zeros((4, 4, 3), dtype=np.uint8)  # distinct from filtered (200)
+    result = _IndexableFakeResult({0: "smoke", 1: "fire"}, boxes, original_overlay)
+    model = _FakeModel(result)
+
+    out = inference.run_detection(
+        model, Image.new("RGB", (8, 8)),
+        conf=min(0.5, 0.4), conf_by_class={"smoke": 0.5, "fire": 0.4},
+    )
+
+    # smoke 0.45 < 0.5 dropped, fire 0.42 ≥ 0.4 kept → the index-select branch ran
+    # with exactly the surviving box index.
+    assert result.indexed_with == [1]
+    assert out["smoke_count"] == 0 and out["fire_count"] == 1
+    # The annotated overlay must come from the FILTERED sub-result (all 200s),
+    # not the original (all 0s) — i.e. the overlay matches the counted detections.
+    annotated = np.array(Image.open(io.BytesIO(out["annotated_png"])).convert("RGB"))
+    assert int(annotated.min()) == 200 and int(annotated.max()) == 200

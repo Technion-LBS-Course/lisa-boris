@@ -207,6 +207,23 @@ def test_alert_f2_matches_closed_form_from_confusion():
     assert m["alert_f2"] == pytest.approx(expected, abs=1e-4)
 
 
+def test_alert_f1_is_equal_weight_harmonic_mean_and_below_f2_when_recall_leads():
+    # tp=3, fn=1, fp=3 → precision 0.5, recall 0.75 (recall > precision), so F1
+    # and F2 diverge and the test actually pins down alert_f1 (not just F2).
+    m = compute_operational_alert_metrics(
+        ["fire", "fire", "fire", "fire", "background", "background", "background"],
+        ["fire", "fire", "fire", "background", "smoke", "smoke", "smoke"],
+    )
+    assert (m["tp_alert"], m["fn_alert"], m["fp_alert"]) == (3, 1, 3)
+    p, r = 0.5, 0.75
+    assert m["alert_precision"] == pytest.approx(p)
+    assert m["hazard_recall"] == pytest.approx(r)
+    # alert_f1 is the equal-weight harmonic mean of precision and recall.
+    assert m["alert_f1"] == pytest.approx(2 * p * r / (p + r))  # 0.6
+    # F2 weights recall higher, so with recall > precision it strictly exceeds F1.
+    assert m["alert_f2"] > m["alert_f1"]
+
+
 def test_hazard_recall_and_precision_values():
     # 3 hazards, 2 detected -> recall 2/3 ; 2 TP + 1 FP -> precision 2/3
     y_true = ["fire", "smoke", "fire", "background"]
@@ -317,6 +334,16 @@ def test_bbox_iou_disjoint_boxes_is_zero():
     assert bbox_iou((0.1, 0.1, 0.1, 0.1), (0.9, 0.9, 0.1, 0.1)) == 0.0
 
 
+def test_bbox_iou_partial_overlap_matches_analytic_value():
+    # Two equal 0.2×0.2 boxes offset by 0.1 in x (same y).
+    #   a: x∈[0.4,0.6]  b: x∈[0.5,0.7]  → overlap 0.1 wide, 0.2 tall = 0.02 area
+    #   union = 0.04 + 0.04 − 0.02 = 0.06 → IoU = 1/3
+    # Without this, a stub returning "1.0 if boxes equal else 0.0" would still
+    # pass the identical/disjoint cases above.
+    iou = bbox_iou((0.5, 0.5, 0.2, 0.2), (0.6, 0.5, 0.2, 0.2))
+    assert iou == pytest.approx(1.0 / 3.0)
+
+
 def test_best_iou_fire_match_picks_highest_overlap():
     gt = [(0.5, 0.5, 0.2, 0.2)]
     preds = [(0.9, 0.9, 0.2, 0.2), (0.51, 0.51, 0.2, 0.2)]
@@ -344,3 +371,16 @@ def test_fire_location_error_same_box_zero_error_same_cell():
 def test_fire_location_error_none_when_no_predicted_fire():
     # GT has fire but the detector predicted no fire box -> no numeric location error
     assert fire_location_error([(0.5, 0.5, 0.2, 0.2)], []) is None
+
+
+def test_fire_location_error_matched_but_separated_boxes():
+    # Both sides have a fire box, so a location IS computed (result is not None),
+    # but the boxes are far apart -> non-zero error, different grid cell, IoU 0.
+    # Complements the same-box/zero-error case so a stub returning zeros fails.
+    gt = (0.2, 0.2, 0.1, 0.1)     # bottom-center anchor (0.20, 0.25) -> cell (0,0)
+    pred = (0.8, 0.8, 0.1, 0.1)   # bottom-center anchor (0.80, 0.85) -> cell (2,2)
+    result = fire_location_error([gt], [pred])
+    assert result is not None
+    assert result["error"] == pytest.approx(math.hypot(0.6, 0.6))
+    assert result["grid_hit"] is False
+    assert result["iou"] == 0.0

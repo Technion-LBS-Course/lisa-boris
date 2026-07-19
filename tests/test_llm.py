@@ -4,6 +4,9 @@ Pure and offline: no network, no real Groq call. `src.llm` must import even when
 the optional `groq` package is not installed (it is imported lazily).
 """
 import importlib.util
+import os
+import subprocess
+import sys
 
 import src.llm as llm
 from src.llm import parse_box_norm, sanitize_zone_records
@@ -11,12 +14,56 @@ from src.llm import parse_box_norm, sanitize_zone_records
 ALLOWED = ["barn", "field", "road", "fence", "parking", "forest_edge", "custom"]
 
 
-def test_llm_imports_without_groq_and_exposes_vision_model():
-    # Importing the module must not require the groq package (lazy import in get_client).
-    assert hasattr(llm, "extract_zones")
-    assert hasattr(llm, "extract_operational_zones")
-    assert hasattr(llm, "detect_zone_boxes")
-    assert llm.GROQ_VISION_MODEL == "meta-llama/llama-4-scout-17b-16e-instruct"
+def _fake_client_returning(content):
+    """A minimal stand-in for the cached Groq client whose one completion returns
+    ``content`` as the assistant message — no package, key, or network required."""
+
+    class _Msg:
+        def __init__(self):
+            self.content = content
+
+    class _Choice:
+        def __init__(self):
+            self.message = _Msg()
+
+    class _Resp:
+        def __init__(self):
+            self.choices = [_Choice()]
+
+    class _Completions:
+        @staticmethod
+        def create(*args, **kwargs):
+            return _Resp()
+
+    class _Chat:
+        completions = _Completions()
+
+    class _Client:
+        chat = _Chat()
+
+    return _Client()
+
+
+def test_importing_llm_does_not_import_groq():
+    # Lazy-import contract: importing src.llm must NOT import the optional `groq`
+    # package (it is imported only inside get_client()). Verified in a CLEAN child
+    # interpreter so no in-process import state or monkeypatching can mask a
+    # regression — if someone moved `from groq import Groq` to module top this fails.
+    # groq_available() (find_spec based) must also stay import-free and return a bool.
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    code = (
+        "import sys, importlib; "
+        "m = importlib.import_module('src.llm'); "
+        "assert isinstance(m.groq_available(), bool); "
+        "sys.exit(1 if 'groq' in sys.modules else 0)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, cwd=repo_root
+    )
+    assert result.returncode == 0, (
+        "importing src.llm must not import the groq package (lazy import expected):\n"
+        + result.stderr
+    )
 
 
 def test_groq_available_reflects_package(monkeypatch):
@@ -62,6 +109,86 @@ def test_chat_returns_reply_from_client(monkeypatch):
     monkeypatch.setattr(llm, "get_client", lambda: _Client())
     out = llm.chat([{"role": "system", "content": "rules"}, {"role": "user", "content": "hi"}])
     assert out == "operational reply"
+
+
+def test_ask_returns_reply_from_client(monkeypatch):
+    # Mirror the chat() fake-client test for the single-prompt ask() wrapper.
+    class _Msg:
+        content = "single-shot reply"
+
+    class _Choice:
+        message = _Msg()
+
+    class _Resp:
+        choices = [_Choice()]
+
+    class _Completions:
+        @staticmethod
+        def create(model, messages):
+            # ask() wraps the prompt as one user message; no temperature/response_format.
+            assert messages == [{"role": "user", "content": "hello there"}]
+            return _Resp()
+
+    class _Chat:
+        completions = _Completions()
+
+    class _Client:
+        chat = _Chat()
+
+    monkeypatch.setattr(llm, "get_client", lambda: _Client())
+    assert llm.ask("hello there") == "single-shot reply"
+
+
+# ── extract_zones / extract_operational_zones (parse + sanitize the model JSON) ─
+
+
+def test_extract_zones_parses_and_sanitizes(monkeypatch):
+    content = (
+        '{"zones": [{"zone_name": "White Building", "zone_type": "building", "priority": 9},'
+        ' {"zone_name": "East Barn", "zone_type": "barn", "priority": 3}]}'
+    )
+    monkeypatch.setattr(llm, "get_client", lambda: _fake_client_returning(content))
+    out = llm.extract_zones("two areas", ALLOWED)
+    assert [z["zone_name"] for z in out] == ["White Building", "East Barn"]
+    assert out[0]["zone_type"] == "custom"   # unknown 'building' -> custom
+    assert out[1]["zone_type"] == "barn"     # known type preserved
+    assert out[0]["priority"] == 9
+    assert out[0]["alert_label"] == "White Building"  # defaults to the name
+
+
+def test_extract_zones_malformed_json_returns_empty(monkeypatch):
+    monkeypatch.setattr(llm, "get_client", lambda: _fake_client_returning("this is not json"))
+    assert llm.extract_zones("something", ALLOWED) == []
+
+
+def test_extract_operational_zones_returns_raw_list(monkeypatch):
+    content = '{"zones": [{"object_to_find": "hay storage", "zone_name": "Hay Storage", "priority": "high"}]}'
+    monkeypatch.setattr(llm, "get_client", lambda: _fake_client_returning(content))
+    out = llm.extract_operational_zones("hay storage area", ALLOWED)
+    # Unlike extract_zones, this returns the raw list from the JSON (the caller sanitizes).
+    assert out == [{"object_to_find": "hay storage", "zone_name": "Hay Storage", "priority": "high"}]
+
+
+def test_extract_operational_zones_malformed_json_returns_empty(monkeypatch):
+    monkeypatch.setattr(llm, "get_client", lambda: _fake_client_returning("<<not json>>"))
+    assert llm.extract_operational_zones("hay storage", ALLOWED) == []
+
+
+# ── _loads_json_object (tolerant parser: strips code fences / surrounding prose) ─
+
+
+def test_loads_json_object_strips_code_fence_and_prose():
+    fenced = '```json\n{"zones": [{"zone_name": "A"}]}\n```'
+    assert llm._loads_json_object(fenced) == {"zones": [{"zone_name": "A"}]}
+    prose = 'Sure! Here it is: {"zone_name": "East Grove", "priority": 9} — hope that helps.'
+    assert llm._loads_json_object(prose) == {"zone_name": "East Grove", "priority": 9}
+
+
+def test_loads_json_object_plain_object_and_failures():
+    assert llm._loads_json_object('{"a": 1}') == {"a": 1}
+    assert llm._loads_json_object("no json here") == {}      # no braces at all
+    assert llm._loads_json_object("[1, 2, 3]") == {}          # valid JSON but not an object
+    assert llm._loads_json_object("{ not: valid json }") == {}  # braces present but unparseable
 
 
 def test_unknown_type_maps_to_custom():

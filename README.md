@@ -2,8 +2,9 @@
 
 **Real-time fire and smoke detection that turns cameras a site already owns into an automated monitoring layer — no new hardware.**
 
-- **Live app:** https://pyrofinder.streamlit.app/
-- **Presented Sites demo:** https://pyrofinder-hanging-tree-v5.lisaborisclark.chatgpt.site
+- **▶ Interactive demo (no install)** — see how the system works end-to-end: https://pyrofinder-hanging-tree-v5.lisaborisclark.chatgpt.site
+  A hosted walkthrough of the full operator flow on the *Hanging Tree* site: place the camera on a map, calibrate image↔map anchors, watch a simulated fire get **confirmed across frames**, and draft the incident response in the ops chat.
+- **Live Streamlit app:** https://pyrofinder.streamlit.app/
 - **Run locally:** `streamlit run app.py`
 
 Course project for Technion 016833 — Location-Based Services: Data Science (team: Lisa & Boris).

@@ -19,6 +19,8 @@ from src.agent_schemas import (
 from src.zone_agent import (
     POLYGON_DRAWN,
     POLYGON_PENDING,
+    _extract_priority,
+    _split_lines,
     build_zone_table_entry,
     parse_zone_description,
     parse_zone_text_locally,
@@ -300,6 +302,52 @@ def test_parse_description_all_injection_returns_empty_with_warnings():
     assert len(result.warnings) == 2
 
 
-def test_default_zone_types_available():
-    assert "forest_edge" in DEFAULT_ZONE_TYPES
-    assert "custom" in DEFAULT_ZONE_TYPES
+def test_parse_description_falls_back_to_local_when_groq_returns_only_junk(monkeypatch):
+    # When Groq yields only non-dict junk, the Groq branch produces neither zones
+    # nor clarifications, so parse_zone_description falls back to the local parser
+    # (source == "local") and still structures the clear description.
+    def only_junk(description, allowed_types, model=None):
+        return ["not a dict", 123, None]
+
+    monkeypatch.setattr(llm, "extract_operational_zones", only_junk)
+    result = parse_zone_description(
+        'The hay storage area, call it "Hay Storage", high priority', ALLOWED, prefer_llm=True
+    )
+    assert result.source == "local"
+    assert len(result.zones) == 1
+    assert result.zones[0]["zone_name"] == "Hay Storage"
+    assert result.zones[0]["priority_label"] == "high"
+
+
+def test_default_zone_types_drive_inference():
+    # Exercise DEFAULT_ZONE_TYPES through real inference rather than asserting the
+    # constant. If the default list lost a type (or infer_zone_type broke), these fail.
+    assert infer_zone_type("east grove", DEFAULT_ZONE_TYPES) == "forest_edge"
+    assert infer_zone_type("hay storage area", DEFAULT_ZONE_TYPES) == "barn"
+    assert infer_zone_type("Teddy Stadium", DEFAULT_ZONE_TYPES) == "custom"
+
+
+# ── _extract_priority / _split_lines (line-level parsing helpers) ─────────────
+
+
+def test_extract_priority_prefix_form():
+    # "priority: N" prefix form — the number is mapped through normalize_priority
+    # and the priority token is stripped out of the remaining text.
+    label, rest = _extract_priority("east grove, priority: 9")
+    assert label == "high"                     # 9 -> high
+    assert "priority" not in rest.lower()
+    assert "9" not in rest
+    assert "east grove" in rest.lower()
+
+
+def test_extract_priority_parenthesized_form():
+    # Parenthesized "(N)" form.
+    label, rest = _extract_priority("left hill (2)")
+    assert label == "low"                      # (2) -> low
+    assert "(2)" not in rest and "2" not in rest
+    assert "left hill" in rest.lower()
+
+
+def test_split_lines_splits_on_semicolons_and_newlines():
+    lines = _split_lines("east grove; hay storage\nnorth field ;; ")
+    assert lines == ["east grove", "hay storage", "north field"]

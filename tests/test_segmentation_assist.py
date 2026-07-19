@@ -29,8 +29,15 @@ def test_module_has_no_heavy_top_level_imports():
     assert not any(m and m.split(".")[0] in heavy for m in top_imports), top_imports
 
 
-def test_backend_available_is_boolean_and_does_not_raise():
-    assert isinstance(seg.segmentation_backend_available(), bool)
+def test_backend_available_matches_real_cv2_presence():
+    # Must report the REAL backend availability, not a hardcoded True/False:
+    # a stub returning a constant would diverge from find_spec in some env.
+    import importlib.util
+
+    expected = importlib.util.find_spec("cv2") is not None
+    result = seg.segmentation_backend_available()
+    assert isinstance(result, bool)
+    assert result == expected
 
 
 # ── 2. validate_roi_box: clamp + reorder + degenerate ─────────────────────────
@@ -104,6 +111,11 @@ def test_polygon_to_pixel_vertices():
     assert px == [[0.0, 0.0], [320.0, 120.0], [640.0, 480.0]]
 
 
+def test_polygon_to_pixel_vertices_empty_or_none_returns_empty():
+    assert seg.polygon_to_pixel_vertices([], 640, 480) == []
+    assert seg.polygon_to_pixel_vertices(None, 640, 480) == []
+
+
 # ── 4 & 5. mask_to_polygon (real OpenCV path) ─────────────────────────────────
 
 
@@ -134,32 +146,84 @@ def test_mask_to_polygon_non_2d_returns_empty():
     assert seg.mask_to_polygon(np.zeros((0,), dtype="uint8"), 10, 10) == []
 
 
+def test_mask_to_polygon_falls_back_to_raw_contour_when_simplification_collapses():
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("cv2")
+    mask = np.zeros((100, 100), dtype="uint8")
+    mask[20:80, 30:70] = 1
+    # A huge epsilon makes approxPolyDP collapse the shape to < 3 points; the
+    # function must then keep the raw contour and still return a usable polygon.
+    poly = seg.mask_to_polygon(mask, 100, 100, simplify_tolerance=100000.0)
+    assert len(poly) >= 3
+    for v in poly:
+        assert 0.0 <= v["x"] <= 1.0 and 0.0 <= v["y"] <= 1.0
+
+
+# ── _image_to_rgb_array: PIL / bytes / grayscale / bad-shape branches ─────────
+
+
+def test_image_to_rgb_array_decodes_png_bytes():
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("PIL")
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.fromarray(np.full((6, 8, 3), 128, dtype="uint8"), "RGB").save(buf, format="PNG")
+    arr = seg._image_to_rgb_array(buf.getvalue())
+    assert arr.shape == (6, 8, 3)
+    assert arr.dtype == np.dtype("uint8")
+
+
+def test_image_to_rgb_array_expands_grayscale_2d_to_three_channels():
+    np = pytest.importorskip("numpy")
+    arr = seg._image_to_rgb_array(np.full((5, 7), 40, dtype="uint8"))
+    assert arr.shape == (5, 7, 3)
+    assert (arr[:, :, 0] == arr[:, :, 1]).all() and (arr[:, :, 1] == arr[:, :, 2]).all()
+    assert int(arr[0, 0, 0]) == 40
+
+
+def test_image_to_rgb_array_rejects_unsupported_shape():
+    np = pytest.importorskip("numpy")
+    with pytest.raises(ValueError):
+        seg._image_to_rgb_array(np.zeros((4, 4, 2), dtype="uint8"))  # only 2 channels
+
+
 # ── refine_box_to_mask: real segmentation + controlled failure ────────────────
 
 
-def test_refine_box_to_mask_result_is_well_formed():
+def test_refine_box_to_mask_segments_a_high_contrast_block():
     np = pytest.importorskip("numpy")
     pytest.importorskip("cv2")
     pytest.importorskip("PIL")
     from PIL import Image
 
-    # High-contrast frame: light background with a solid dark block near the centre.
+    # Light background (220) with a solid dark block (30) over the image centre;
+    # the block spans ~[0.35, 0.70] in both axes.
     arr = np.full((200, 200, 3), 220, dtype="uint8")
     arr[70:140, 70:140] = 30
     img = Image.fromarray(arr, "RGB")
 
-    result = seg.refine_box_to_mask(img, {"x_min": 0.25, "y_min": 0.25, "x_max": 0.75, "y_max": 0.75})
+    result = seg.refine_box_to_mask(
+        img, {"x_min": 0.25, "y_min": 0.25, "x_max": 0.75, "y_max": 0.75}
+    )
     assert set(result) == {"ok", "backend", "polygon", "box_norm", "message"}
     assert result["box_norm"] == {"x_min": 0.25, "y_min": 0.25, "x_max": 0.75, "y_max": 0.75}
-    if result["ok"]:
-        assert result["backend"] == seg.SEG_BACKEND
-        assert len(result["polygon"]) >= 3
-        for v in result["polygon"]:
-            assert 0.0 <= v["x"] <= 1.0 and 0.0 <= v["y"] <= 1.0
-    else:
-        # A non-crash outcome is acceptable, but must be controlled and empty.
-        assert result["backend"] in {"empty-mask", "error"}
-        assert result["polygon"] == []
+    # A stub that always returned a failure result would fail here: GrabCut on a
+    # clean high-contrast block must actually segment a region.
+    assert result["ok"] is True, result["message"]
+    assert result["backend"] == seg.SEG_BACKEND
+    poly = result["polygon"]
+    assert len(poly) >= 3
+    for v in poly:
+        assert 0.0 <= v["x"] <= 1.0 and 0.0 <= v["y"] <= 1.0
+    xs = [v["x"] for v in poly]
+    ys = [v["y"] for v in poly]
+    # The polygon must enclose the block's centre and span a real area — not a
+    # collapsed point or a near-empty mask.
+    assert min(xs) <= 0.5 <= max(xs) and min(ys) <= 0.5 <= max(ys)
+    assert (max(xs) - min(xs)) >= 0.2 and (max(ys) - min(ys)) >= 0.2
 
 
 def test_refine_box_to_mask_degenerate_box_raises():

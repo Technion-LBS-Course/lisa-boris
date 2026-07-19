@@ -170,11 +170,19 @@ def test_central_control_has_segmentation_refiner():
     assert not any(m and m.split(".")[0] == "cv2" for m in top_imports), top_imports
 
 
-def test_segmentation_assist_imports_without_cv2_or_numpy_at_load():
-    # The helper module must import even where cv2/numpy are only used lazily.
+def test_segmentation_assist_pure_helpers_run_without_cv2():
+    # The helper module imports with cv2/numpy lazy, and its pure box→polygon
+    # helpers must produce correct results without any segmentation backend.
     import importlib
 
     mod = importlib.import_module("src.segmentation_assist")
-    for fn in ("validate_roi_box", "polygon_from_box_fallback", "mask_to_polygon",
-               "refine_box_to_mask", "segmentation_backend_available"):
-        assert callable(getattr(mod, fn))
+    # validate_roi_box reorders reversed corners and clamps out-of-range values.
+    assert mod.validate_roi_box([0.8, 0.9, 0.2, 0.3]) == {
+        "x_min": 0.2, "y_min": 0.3, "x_max": 0.8, "y_max": 0.9,
+    }
+    # polygon_from_box_fallback returns the 4 clockwise corners of the box.
+    poly = mod.polygon_from_box_fallback({"x_min": 0.2, "y_min": 0.3, "x_max": 0.6, "y_max": 0.7})
+    assert poly == [
+        {"x": 0.2, "y": 0.3}, {"x": 0.6, "y": 0.3},
+        {"x": 0.6, "y": 0.7}, {"x": 0.2, "y": 0.7},
+    ]
