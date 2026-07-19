@@ -3,6 +3,7 @@
 **Real-time fire and smoke detection that turns cameras a site already owns into an automated monitoring layer — no new hardware.**
 
 - **Live app:** https://pyrofinder.streamlit.app/
+- **Presented Sites demo:** https://pyrofinder-hanging-tree-v5.lisaborisclark.chatgpt.site
 - **Run locally:** `streamlit run app.py`
 
 Course project for Technion 016833 — Location-Based Services: Data Science (team: Lisa & Boris).
@@ -82,7 +83,14 @@ results/                measured metric JSON/CSV
 models/                 committed fine-tuned YOLO11n/YOLO11s checkpoints
 docs/                   data/EDA, results summary, agent system, market/literature
 tests/                  pytest suite (pure helpers; no weights required)
+sites/                  isolated web demos; not imported by Streamlit
 ```
+
+The presentation version of the Hanging Tree demo is stored separately at
+[`sites/pyrofinder-hanging-tree-live/`](sites/pyrofinder-hanging-tree-live/).
+The older [`sites/hanging-tree-multicamera-v5/`](sites/hanging-tree-multicamera-v5/)
+snapshot is archive-only. See [`sites/README.md`](sites/README.md) for the update
+and isolation rules.
 
 Full module-by-module map: [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) and [`CLAUDE.md`](CLAUDE.md).
 
