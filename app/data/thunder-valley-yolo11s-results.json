@@ -1,0 +1,1076 @@
+{
+  "fingerprint": {
+    "version": 2,
+    "camera_id": "TVW",
+    "model": "YOLO11s",
+    "output_kind": "verified-ultralytics-inference",
+    "checkpoint": "models/yolo11s_dfire_best.pt",
+    "checkpoint_sha256": "6AA0C7DCD60E3572F85F02EDC05293266822F9394944479337BEBB8D178B6903",
+    "checkpoint_bytes": 19151514,
+    "classes": {
+      "0": "smoke",
+      "1": "fire"
+    },
+    "imgsz": 640,
+    "collection_confidence": 0.05,
+    "iou": 0.5,
+    "max_det": 50,
+    "device": "cpu",
+    "python_version": "3.13.13",
+    "ultralytics_version": "8.4.60",
+    "torch_version": "2.12.0+cpu",
+    "n_frames": 26,
+    "frame_set_sha256": "0CA452E9FD97FFF093BB33CF72AE323586CCF0A0CD43E84E1CF9DD9A32F3E4B2",
+    "generated_utc": "2026-07-16T06:49:25Z"
+  },
+  "frames": [
+    {
+      "name": "frame_00.jpg",
+      "source": "frame_00.jpg",
+      "sha256": "7FDEB963AEE593DAA9A61CF146DCD7CD14042CD3223B82A6D88C79F5E92DB4D8",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.256683,
+          "bbox_norm": [
+            0.990495,
+            0.449628,
+            0.018537,
+            0.068892
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_01.jpg",
+      "source": "frame_01.jpg",
+      "sha256": "21A94FAD5E786FC4F602F15C43993BE1F9A9C5A402DD1DD6C08E937CDB5F29CC",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.184263,
+          "bbox_norm": [
+            0.989198,
+            0.449997,
+            0.021024,
+            0.072243
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.152683,
+          "bbox_norm": [
+            0.415034,
+            0.487288,
+            0.030214,
+            0.042647
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.063144,
+          "bbox_norm": [
+            0.76626,
+            0.488789,
+            0.038165,
+            0.029449
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_02.jpg",
+      "source": "frame_02.jpg",
+      "sha256": "EB4B0F22FF800DDC9F4F1376970460785880EF9D3AECAA62A52C43ADAA610F66",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.293579,
+          "bbox_norm": [
+            0.989918,
+            0.449265,
+            0.019669,
+            0.070421
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.230397,
+          "bbox_norm": [
+            0.764734,
+            0.486467,
+            0.041719,
+            0.036198
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_03.jpg",
+      "source": "frame_03.jpg",
+      "sha256": "E44968F8E40E1446B370BA4905A66522186D4736288DD12EC7CB5D4B8CA6F4A7",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.583384,
+          "bbox_norm": [
+            0.284178,
+            0.693212,
+            0.040911,
+            0.105418
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.259412,
+          "bbox_norm": [
+            0.421858,
+            0.492502,
+            0.043835,
+            0.039077
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.223796,
+          "bbox_norm": [
+            0.990183,
+            0.448467,
+            0.019162,
+            0.067831
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.122303,
+          "bbox_norm": [
+            0.416485,
+            0.449437,
+            0.052417,
+            0.123523
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_04.jpg",
+      "source": "frame_04.jpg",
+      "sha256": "E44968F8E40E1446B370BA4905A66522186D4736288DD12EC7CB5D4B8CA6F4A7",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.583384,
+          "bbox_norm": [
+            0.284178,
+            0.693212,
+            0.040911,
+            0.105418
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.259412,
+          "bbox_norm": [
+            0.421858,
+            0.492502,
+            0.043835,
+            0.039077
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.223797,
+          "bbox_norm": [
+            0.990183,
+            0.448467,
+            0.019162,
+            0.067831
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.122303,
+          "bbox_norm": [
+            0.416485,
+            0.449437,
+            0.052417,
+            0.123523
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_05.jpg",
+      "source": "frame_05.jpg",
+      "sha256": "FADC21741A9EA986CCEEF470146BB3AE736D56C1445E2A2032BA5A22F74324E1",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.389003,
+          "bbox_norm": [
+            0.237939,
+            0.633999,
+            0.11653,
+            0.203018
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.384126,
+          "bbox_norm": [
+            0.211881,
+            0.732279,
+            0.075862,
+            0.027366
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.355487,
+          "bbox_norm": [
+            0.184634,
+            0.737287,
+            0.021082,
+            0.015926
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.345485,
+          "bbox_norm": [
+            0.229084,
+            0.729037,
+            0.040993,
+            0.021716
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.248557,
+          "bbox_norm": [
+            0.411033,
+            0.49055,
+            0.025143,
+            0.03837
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.218561,
+          "bbox_norm": [
+            0.651173,
+            0.488091,
+            0.019672,
+            0.024361
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.146969,
+          "bbox_norm": [
+            0.987722,
+            0.449124,
+            0.024121,
+            0.06715
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.127515,
+          "bbox_norm": [
+            0.223938,
+            0.666465,
+            0.077281,
+            0.140972
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.115742,
+          "bbox_norm": [
+            0.416556,
+            0.483163,
+            0.0378,
+            0.057328
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.099329,
+          "bbox_norm": [
+            0.823794,
+            0.467938,
+            0.021487,
+            0.041753
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.070493,
+          "bbox_norm": [
+            0.159878,
+            0.831742,
+            0.069963,
+            0.071939
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.065292,
+          "bbox_norm": [
+            0.64849,
+            0.484099,
+            0.038524,
+            0.034112
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_06.jpg",
+      "source": "frame_06.jpg",
+      "sha256": "FADC21741A9EA986CCEEF470146BB3AE736D56C1445E2A2032BA5A22F74324E1",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.389003,
+          "bbox_norm": [
+            0.237939,
+            0.633999,
+            0.11653,
+            0.203018
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.384126,
+          "bbox_norm": [
+            0.211881,
+            0.732279,
+            0.075862,
+            0.027366
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.355487,
+          "bbox_norm": [
+            0.184634,
+            0.737287,
+            0.021082,
+            0.015926
+          ]
+        },
+        {
+          "class": "fire",
+          "confidence": 0.345485,
+          "bbox_norm": [
+            0.229084,
+            0.729037,
+            0.040993,
+            0.021716
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.248557,
+          "bbox_norm": [
+            0.411033,
+            0.49055,
+            0.025143,
+            0.03837
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.218561,
+          "bbox_norm": [
+            0.651173,
+            0.488091,
+            0.019672,
+            0.024361
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.146969,
+          "bbox_norm": [
+            0.987722,
+            0.449124,
+            0.024121,
+            0.06715
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.127515,
+          "bbox_norm": [
+            0.223938,
+            0.666465,
+            0.077281,
+            0.140972
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.115742,
+          "bbox_norm": [
+            0.416556,
+            0.483163,
+            0.0378,
+            0.057328
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.099329,
+          "bbox_norm": [
+            0.823794,
+            0.467938,
+            0.021487,
+            0.041753
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.070493,
+          "bbox_norm": [
+            0.159878,
+            0.831742,
+            0.069963,
+            0.071939
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.065292,
+          "bbox_norm": [
+            0.64849,
+            0.484099,
+            0.038524,
+            0.034112
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_07.jpg",
+      "source": "frame_07.jpg",
+      "sha256": "4FF58E3FD9712940AE1F64C18482A754DBA9BA3DBB9A1AD0E2FD8B479E4D6BCC",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.244251,
+          "bbox_norm": [
+            0.416086,
+            0.490723,
+            0.028692,
+            0.0343
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.130883,
+          "bbox_norm": [
+            0.990276,
+            0.448711,
+            0.018922,
+            0.070991
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.086566,
+          "bbox_norm": [
+            0.764309,
+            0.487151,
+            0.042185,
+            0.031158
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.053078,
+          "bbox_norm": [
+            0.254013,
+            0.486354,
+            0.02201,
+            0.034588
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_08.jpg",
+      "source": "frame_08.jpg",
+      "sha256": "052EE57E2F2C00AB930BB72B56C95FCDC1531200D14AD2E54FC9D7C3D594CFD2",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.255282,
+          "bbox_norm": [
+            0.253941,
+            0.488382,
+            0.01981,
+            0.031862
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.193385,
+          "bbox_norm": [
+            0.989498,
+            0.449052,
+            0.02037,
+            0.071067
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.099179,
+          "bbox_norm": [
+            0.418256,
+            0.484277,
+            0.036606,
+            0.048371
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.054555,
+          "bbox_norm": [
+            0.771473,
+            0.488126,
+            0.047507,
+            0.031383
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_09.jpg",
+      "source": "frame_09.jpg",
+      "sha256": "C13230D1DDF412CB9B41CB6CDD4C07315351BAAFB61D0F7390FE1E33539024FC",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.164178,
+          "bbox_norm": [
+            0.99054,
+            0.447861,
+            0.018325,
+            0.07283
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.137197,
+          "bbox_norm": [
+            0.761812,
+            0.484519,
+            0.045672,
+            0.031489
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_10.jpg",
+      "source": "frame_10.jpg",
+      "sha256": "ECD62989A42CE7702DEEA97FD2A0E56E332702D34A86A384CAD93E030609CA71",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.211515,
+          "bbox_norm": [
+            0.990094,
+            0.448524,
+            0.019273,
+            0.07248
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.166791,
+          "bbox_norm": [
+            0.416399,
+            0.490971,
+            0.027549,
+            0.033502
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.096045,
+          "bbox_norm": [
+            0.255067,
+            0.486114,
+            0.022518,
+            0.035519
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.059988,
+          "bbox_norm": [
+            0.419304,
+            0.480004,
+            0.037021,
+            0.056844
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_11.jpg",
+      "source": "frame_11.jpg",
+      "sha256": "C3A638575630099DC1D08A64EE0A5A1CE01590405251EFCCBD2BE9EC1B0D672A",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.12725,
+          "bbox_norm": [
+            0.415518,
+            0.483031,
+            0.026808,
+            0.048986
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.111974,
+          "bbox_norm": [
+            0.989937,
+            0.451369,
+            0.019605,
+            0.064578
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.054632,
+          "bbox_norm": [
+            0.25716,
+            0.490018,
+            0.021866,
+            0.031642
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.052472,
+          "bbox_norm": [
+            0.977631,
+            0.451585,
+            0.044502,
+            0.066691
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_12.jpg",
+      "source": "frame_12.jpg",
+      "sha256": "9700BFD093AF79D0FF4228E46501D07FD55BD2EBC1ECF2C85F29D568AA76B699",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.193416,
+          "bbox_norm": [
+            0.989727,
+            0.448566,
+            0.019919,
+            0.07304
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.179897,
+          "bbox_norm": [
+            0.420168,
+            0.488528,
+            0.040544,
+            0.045346
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_13.jpg",
+      "source": "frame_13.jpg",
+      "sha256": "01168249232F15680698B0A7C52D0DEDC70E70AE6D05FDCE015A2056F7B770E5",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.222983,
+          "bbox_norm": [
+            0.98942,
+            0.448808,
+            0.020515,
+            0.070745
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.145238,
+          "bbox_norm": [
+            0.75941,
+            0.485608,
+            0.036107,
+            0.030773
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.082967,
+          "bbox_norm": [
+            0.414211,
+            0.487706,
+            0.025028,
+            0.040908
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_14.jpg",
+      "source": "frame_14.jpg",
+      "sha256": "76DFBEA83282073DDC08C4208579B0584D3290A6B8E7443ABF9F8842C2647AC1",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.292288,
+          "bbox_norm": [
+            0.986892,
+            0.449354,
+            0.025365,
+            0.067661
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_15.jpg",
+      "source": "frame_15.jpg",
+      "sha256": "CD05CAFFBB7137B9F23CF30B845E3FDA2405C142984FE23012F155361BF9D4B4",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.156098,
+          "bbox_norm": [
+            0.98947,
+            0.447882,
+            0.02033,
+            0.072234
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.117449,
+          "bbox_norm": [
+            0.760615,
+            0.483516,
+            0.042769,
+            0.032664
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_16.jpg",
+      "source": "frame_16.jpg",
+      "sha256": "DE1E0493B95523ED476BBA76EF6EC40A5323BB2103D27B1E0471A60C54F6E689",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.196429,
+          "bbox_norm": [
+            0.989709,
+            0.449259,
+            0.020061,
+            0.071129
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.071489,
+          "bbox_norm": [
+            0.762855,
+            0.483743,
+            0.043038,
+            0.030958
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_17.jpg",
+      "source": "frame_17.jpg",
+      "sha256": "75E3C962806B5D3942145BD7E41177705D9861035463F26D87FC33C2567C738C",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.288592,
+          "bbox_norm": [
+            0.98959,
+            0.449957,
+            0.020262,
+            0.067441
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_18.jpg",
+      "source": "frame_18.jpg",
+      "sha256": "E287A49B8F756578666DD69850FB4F13B88AF3BA1639A2BE0A50A8D4CD9469B6",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.163347,
+          "bbox_norm": [
+            0.990162,
+            0.448166,
+            0.019022,
+            0.069732
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.070009,
+          "bbox_norm": [
+            0.416792,
+            0.489998,
+            0.024923,
+            0.036011
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.058203,
+          "bbox_norm": [
+            0.41145,
+            0.444879,
+            0.046535,
+            0.124702
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.051035,
+          "bbox_norm": [
+            0.760513,
+            0.484945,
+            0.032514,
+            0.026215
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_19.jpg",
+      "source": "frame_19.jpg",
+      "sha256": "4AE4EDCFFB3CCEF681E8EC3F85C2FB2601E4535F957C81A1D563098034096B66",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.252562,
+          "bbox_norm": [
+            0.990416,
+            0.44787,
+            0.018527,
+            0.069618
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.056623,
+          "bbox_norm": [
+            0.417609,
+            0.488775,
+            0.028872,
+            0.038816
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_20.jpg",
+      "source": "frame_20.jpg",
+      "sha256": "0070AE2B51AA7C24EFAF4A895D97155895AB10BDD8078764E857191CD3FDEF10",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.296353,
+          "bbox_norm": [
+            0.989341,
+            0.448197,
+            0.020675,
+            0.071669
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.083711,
+          "bbox_norm": [
+            0.620043,
+            0.727852,
+            0.064162,
+            0.068655
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.062377,
+          "bbox_norm": [
+            0.416671,
+            0.487118,
+            0.028043,
+            0.040542
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_21.jpg",
+      "source": "frame_21.jpg",
+      "sha256": "68774013075099CC5BA30A62F091F251FD9FF4021382911236839ABF2BCD8B39",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.275491,
+          "bbox_norm": [
+            0.99047,
+            0.448026,
+            0.01854,
+            0.071054
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.062342,
+          "bbox_norm": [
+            0.417161,
+            0.488435,
+            0.028665,
+            0.039844
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_22.jpg",
+      "source": "frame_22.jpg",
+      "sha256": "FBF1FAAC203D8DA88E9BF9CF447EA2CEBF2F51C5AC3499E1F7AAF26939CE2D01",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.210392,
+          "bbox_norm": [
+            0.990615,
+            0.449097,
+            0.018266,
+            0.068731
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_23.jpg",
+      "source": "frame_23.jpg",
+      "sha256": "A8FF5377E08619F27F351CCB8237FE3816E42A6C1DC0C949422732A4FE9DBE33",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.331375,
+          "bbox_norm": [
+            0.990061,
+            0.45074,
+            0.019423,
+            0.065763
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_24.jpg",
+      "source": "frame_24.jpg",
+      "sha256": "034A0F7C5C8F61F8D517CA5707278D648D4A536A1B2A2B2327D5953B5008560A",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.225118,
+          "bbox_norm": [
+            0.989447,
+            0.45098,
+            0.020726,
+            0.070844
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.209528,
+          "bbox_norm": [
+            0.822136,
+            0.471028,
+            0.021967,
+            0.041378
+          ]
+        }
+      ]
+    },
+    {
+      "name": "frame_25.jpg",
+      "source": "frame_25.jpg",
+      "sha256": "97B504AB35113BE6162F0AEFFFEC2FA128C4646BDD329DB34758E325CD096C3C",
+      "inference_ms": 259.028,
+      "detections": [
+        {
+          "class": "smoke",
+          "confidence": 0.13113,
+          "bbox_norm": [
+            0.990776,
+            0.452727,
+            0.018292,
+            0.062818
+          ]
+        },
+        {
+          "class": "smoke",
+          "confidence": 0.054212,
+          "bbox_norm": [
+            0.013529,
+            0.460154,
+            0.027059,
+            0.092516
+          ]
+        }
+      ]
+    }
+  ]
+}
