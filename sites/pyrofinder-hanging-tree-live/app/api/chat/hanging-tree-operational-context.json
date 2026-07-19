@@ -1,0 +1,415 @@
+{
+  "context_id": "hanging_tree_gold_medal_equestrian_live_ops_v1",
+  "context_type": "operational_context",
+  "version": "0.1",
+  "created_utc": "2026-07-14T10:39:03Z",
+  "status": "initial_draft",
+  "intended_runtime_use": [
+    "enrich detected fire/smoke incident context",
+    "help the incident assistant generate concise first messages",
+    "support deterministic spatial reasoning before LLM summarization",
+    "support simulated outbound calls and messages during the demo"
+  ],
+  "do_not_use_for": [
+    "YOLO model training",
+    "changing image zone metadata",
+    "replacing the camera mapping configuration",
+    "claiming exact fire spread prediction"
+  ],
+  "camera_context": {
+    "camera_id": "HT1",
+    "camera_name": "Hanging Tree 1",
+    "alertcalifornia_camera_id": "2005",
+    "customer_id": "Gold Medal Equestrian",
+    "site_id": "HTR1",
+    "camera_mount_description": "Configured outdoor camera at the Gold Medal Equestrian / Rohan Ridge Ranch area.",
+    "view_description": "Wide rural view across dry grassland, ranch and equestrian facilities, scattered residences, vineyards/agricultural parcels, and distant hills.",
+    "known_camera_location": {
+      "latitude": 35.573555,
+      "longitude": -120.667035,
+      "source": "camera_mapping_config"
+    },
+    "camera_height_m": 5.0,
+    "location_confidence": "configured_demo",
+    "public_camera_page": "https://ops.alertcalifornia.org/cam-console/2005"
+  },
+  "primary_site_context": {
+    "name": "Gold Medal Equestrian",
+    "alternate_site_name": "Rohan Ridge Ranch",
+    "address": "765 Concho Way, Templeton, CA 93465",
+    "official_phone": "805-610-0879",
+    "official_email": "ginamiles@msn.com",
+    "official_contact_name": "Gina Miles",
+    "role": "customer site / equestrian facility / livestock-sensitive property",
+    "published_business_description": "Full-service equestrian business offering riding instruction and programs in eventing, dressage, and show jumping.",
+    "published_hours": null,
+    "operational_relevance": [
+      "Treat fire or dense smoke near barns, arenas, paddocks, trailers, hay/feed storage, access roads, or occupied ranch buildings as high sensitivity.",
+      "Horses and other animals may require earlier preparation and more time to relocate than people.",
+      "Smoke can create animal welfare, visibility, and evacuation-loading risks before flames reach structures."
+    ]
+  },
+  "scene_character": {
+    "summary": "A rural Central Coast landscape where equestrian operations, dry seasonal grass, agricultural parcels, vineyards, scattered homes, and winding local roads share the same fire environment.",
+    "dominant_exposure_types": [
+      "dry grass and brush",
+      "barns and ranch structures",
+      "horses and livestock",
+      "hay, bedding, feed, fencing, and trailers",
+      "scattered residences",
+      "vineyards and agricultural land",
+      "local road access and smoke visibility"
+    ],
+    "seasonal_note": "The camera image shows dry grassland conditions. Treat fast-moving grass fire and wind-driven smoke as plausible operational scenarios."
+  },
+  "nearby_operational_landmarks": [
+    {
+      "name": "Gold Medal Equestrian barns, arena, paddocks, and ranch buildings",
+      "type": "equestrian_facility",
+      "source_status": "user_provided_and_public_web",
+      "sensitivity": "critical",
+      "priority": 10,
+      "recommended_action_hint": "For detected fire or dense smoke near the facility, contact the site operator immediately and prepare animal relocation, trailer access, gate control, and responder access."
+    },
+    {
+      "name": "Farm House image zone",
+      "type": "residential_ranch_zone",
+      "source_status": "camera_mapping_config",
+      "sensitivity": "high",
+      "priority": 9,
+      "recommended_action_hint": "Treat detections inside or moving toward this zone as a direct property and occupant notification case."
+    },
+    {
+      "name": "North Hill image zone",
+      "type": "dry_hillside",
+      "source_status": "camera_mapping_config",
+      "sensitivity": "high",
+      "priority": 9,
+      "recommended_action_hint": "A fire on the dry hillside may spread quickly through grass. Raise urgency when wind or slope carries risk toward ranch structures, homes, or roads."
+    },
+    {
+      "name": "Residence image zone",
+      "type": "residential_cluster",
+      "source_status": "camera_mapping_config",
+      "sensitivity": "medium_to_high",
+      "priority": 5,
+      "recommended_action_hint": "Notify the relevant property contact when detected fire or smoke is near or moving toward occupied buildings."
+    },
+    {
+      "name": "Distant ridge and mountain zone",
+      "type": "distant_wildland",
+      "source_status": "camera_mapping_config",
+      "sensitivity": "low_to_medium",
+      "priority": 2,
+      "recommended_action_hint": "Monitor and verify. Escalate when the plume grows, moves toward developed land, or affects access routes."
+    },
+    {
+      "name": "Concho Way and local ranch access roads",
+      "type": "road_access_corridor",
+      "source_status": "address_and_map_context",
+      "sensitivity": "high",
+      "priority": 8,
+      "recommended_action_hint": "Preserve access for fire apparatus and horse trailers. Escalate if smoke reduces visibility or fire threatens the only practical exit route."
+    },
+    {
+      "name": "Winifred Pifer Elementary School",
+      "type": "school",
+      "source_status": "official_school_site",
+      "address": "1350 Creston Road, Paso Robles, CA 93446",
+      "phone": "805-769-1300",
+      "published_hours": null,
+      "sensitivity": "high",
+      "priority": 8,
+      "recommended_action_hint": "Use only when projected smoke or fire movement is plausibly toward the Creston Road school area. During school hours, recommend school or district notification through the official number."
+    },
+    {
+      "name": "Georgia Brown Dual Immersion",
+      "type": "school",
+      "source_status": "official_school_site",
+      "address": "900 Creston Road, Paso Robles, CA 93446",
+      "phone": "805-769-1200",
+      "published_hours": null,
+      "sensitivity": "high",
+      "priority": 8,
+      "recommended_action_hint": "Use when the projected incident or smoke corridor plausibly affects the Creston Road area."
+    },
+    {
+      "name": "Adventist Health Twin Cities",
+      "type": "hospital_emergency_department",
+      "source_status": "official_hospital_site",
+      "address": "1100 Las Tablas Road, Templeton, CA 93465",
+      "phone": "805-434-3500",
+      "operating_hours": "Emergency department staffed 24/7",
+      "sensitivity": "critical",
+      "priority": 10,
+      "recommended_action_hint": "Treat as a medical continuity and smoke-sensitive facility only when the incident is plausibly moving toward Templeton or affecting regional access."
+    }
+  ],
+  "authorities_and_contacts": [
+    {
+      "name": "Emergency services",
+      "type": "emergency",
+      "contact": "911",
+      "availability": "24/7",
+      "source_status": "official_emergency_standard",
+      "usage_rule": "Use for immediate danger to life, animals, structures, or property."
+    },
+    {
+      "name": "Templeton Fire & Emergency Services",
+      "type": "fire_department",
+      "contact": "805-434-4911",
+      "address": "206 5th Street, Templeton, CA 93465",
+      "availability": "24/7 staffed emergency services reported by the district",
+      "source_status": "official_templeton_csd",
+      "usage_rule": "Use as the local fire department business/station contact. For an active emergency, call 911."
+    },
+    {
+      "name": "CAL FIRE / San Luis Obispo County Fire",
+      "type": "county_fire_non_emergency",
+      "contact": "805-543-4244",
+      "source_status": "official_county_emergency_phone_list",
+      "usage_rule": "Use for county fire coordination or non-emergency contact; use 911 for an active emergency."
+    },
+    {
+      "name": "San Luis Obispo County Office of Emergency Services",
+      "type": "county_emergency_management",
+      "contact": "805-781-5678",
+      "source_status": "official_county_page",
+      "usage_rule": "Use for emergency-management coordination, preparedness, public warning context, and AlertSLO information."
+    },
+    {
+      "name": "San Luis Obispo County Sheriff — Templeton station",
+      "type": "law_enforcement_non_emergency",
+      "contact": "805-434-4290",
+      "address": "356 N. Main Street, Templeton, CA",
+      "source_status": "official_county_emergency_phone_list",
+      "usage_rule": "Use for non-emergency law-enforcement support, access control, or road/security coordination. Use 911 for immediate danger."
+    },
+    {
+      "name": "Gold Medal Equestrian / Gina Miles",
+      "type": "customer_site_operator",
+      "contact": "805-610-0879",
+      "email": "ginamiles@msn.com",
+      "source_status": "official_business_site",
+      "usage_rule": "Primary customer contact for the demo when the incident threatens the equestrian facility, horses, ranch structures, or access routes."
+    }
+  ],
+  "demo_fictional_contacts": [
+    {
+      "name": "Evan Brooks",
+      "role": "Ranch operations manager",
+      "phone": "+1-805-555-0142",
+      "property": "Gold Medal Equestrian operations",
+      "fictional": true,
+      "usage_rule": "Demo-only contact for gate access, trailer staging, horse count, and staff coordination."
+    },
+    {
+      "name": "Maya Chen",
+      "role": "Neighboring vineyard manager",
+      "phone": "+1-805-555-0168",
+      "property": "East Ridge Vineyard",
+      "fictional": true,
+      "usage_rule": "Demo-only contact when smoke or fire approaches vineyard blocks, workers, equipment, or the east access road."
+    },
+    {
+      "name": "Daniel Ruiz",
+      "role": "Nearby residence owner",
+      "phone": "+1-805-555-0184",
+      "property": "North Hill Residence",
+      "fictional": true,
+      "usage_rule": "Demo-only contact when the projected incident is near the residence or its evacuation route."
+    },
+    {
+      "name": "Sophie Bennett",
+      "role": "Horse transport coordinator",
+      "phone": "+1-805-555-0197",
+      "property": "Regional equine transport",
+      "fictional": true,
+      "usage_rule": "Demo-only contact for simulated trailer mobilization and animal relocation support."
+    }
+  ],
+  "operational_assets_and_dependencies": [
+    {
+      "asset": "horses and livestock",
+      "risk": "smoke exposure, panic, delayed loading, fencing constraints",
+      "action_hint": "Prepare halters, lead ropes, identification, destination, handlers, and trailers early."
+    },
+    {
+      "asset": "horse trailers and towing vehicles",
+      "risk": "blocked access, insufficient turnaround space, congestion",
+      "action_hint": "Keep Concho Way and internal gates clear; stage vehicles facing outward when escalation begins."
+    },
+    {
+      "asset": "hay, bedding, feed, and barn materials",
+      "risk": "high combustible load and prolonged smoldering",
+      "action_hint": "Treat smoke or heat near storage as high urgency and report it explicitly."
+    },
+    {
+      "asset": "water supply and hydrant/tank access",
+      "risk": "limited rural firefighting water availability",
+      "action_hint": "Ask the site operator to confirm accessible water points without blocking responders."
+    },
+    {
+      "asset": "power and communications",
+      "risk": "camera or gate loss during outage",
+      "action_hint": "Maintain a phone-based fallback contact tree and manual gate access plan."
+    }
+  ],
+  "incident_reasoning_policy": {
+    "first_message_style": [
+      "short",
+      "operational",
+      "action-oriented",
+      "state the affected place or asset",
+      "offer one concrete communication or coordination action"
+    ],
+    "include_in_first_message_when_available": [
+      "camera/site name",
+      "fire/smoke label",
+      "nearest operational place or image zone",
+      "whether horses, structures, road access, school, or hospital are in the risk direction",
+      "downwind movement direction",
+      "one recommended action question"
+    ],
+    "do_not_include_in_first_message_by_default": [
+      "raw confidence",
+      "pixel coordinates",
+      "all weather telemetry",
+      "full distance calculations",
+      "all reasoning steps"
+    ],
+    "risk_rules": [
+      {
+        "condition": "inside_or_near_equestrian_facility_or_barn",
+        "effect": "critical urgency; contact site operator and prepare animal relocation"
+      },
+      {
+        "condition": "moving_toward_horses_barns_hay_storage_or_only_access_road",
+        "effect": "raise urgency and recommend immediate site coordination"
+      },
+      {
+        "condition": "inside_or_near_high_priority_image_zone",
+        "effect": "raise urgency"
+      },
+      {
+        "condition": "moving_downwind_toward_residence_school_hospital_or_populated_area",
+        "effect": "raise urgency and suggest relevant official contact"
+      },
+      {
+        "condition": "distant_ridge_detection_without_growth_or_downwind_receptor",
+        "effect": "monitor and verify before broad notification"
+      },
+      {
+        "condition": "demo_contact_relevant",
+        "effect": "the assistant may simulate sending a message or placing a call and record the intended recipient and message"
+      }
+    ],
+    "simulated_communications_policy": {
+      "enabled": true,
+      "allowed_actions": [
+        "simulate phone call",
+        "simulate SMS",
+        "simulate site-operator update",
+        "simulate animal relocation request",
+        "simulate authority notification"
+      ],
+      "message_requirements": [
+        "identify PyroFinder and Hanging Tree 1",
+        "state fire or smoke and the nearest operational location",
+        "state the requested action",
+        "avoid unsupported certainty about exact spread"
+      ]
+    }
+  },
+  "recommended_first_message_examples": [
+    "Hanging Tree 1 detected smoke near the Gold Medal Equestrian ranch area, moving toward the barns. Should I call the site operator and start the horse-relocation contact tree?",
+    "Possible fire detected on North Hill. The current risk direction is toward ranch structures and Concho Way. Should I notify Templeton Fire and the ranch operations manager?",
+    "Smoke was detected near the Farm House zone. Should I message the property contact and keep the access road clear for responders?",
+    "A distant smoke plume is visible beyond the residence zone. It is not yet near the ranch, but it is growing. Should I continue monitoring and prepare a status update?",
+    "Smoke may affect the Creston Road corridor. Should I prepare notifications for the relevant school contact and local authority?"
+  ],
+  "implementation_notes": {
+    "preferred_loading": "Load this JSON as optional operational context in the Live Ops incident context builder.",
+    "fallback_behavior": "If missing, continue using camera mapping configuration, zones, reference points, detections, and weather.",
+    "separate_markdown_context": "Use the companion Markdown file for human-readable and LLM-readable context. Deterministic code should read this JSON.",
+    "geometry_source_of_truth": "The uploaded camera mapping configuration remains the source of truth for camera coordinates, reference points, and image-zone polygons."
+  },
+  "source_links": [
+    {
+      "title": "ALERTCalifornia — Hanging Tree 1",
+      "url": "https://ops.alertcalifornia.org/cam-console/2005",
+      "facts_used": [
+        "camera name",
+        "camera page"
+      ]
+    },
+    {
+      "title": "Gold Medal Equestrian official contact page",
+      "url": "https://goldmedalequestrian.com/new-page-41",
+      "facts_used": [
+        "address",
+        "phone",
+        "email",
+        "contact name"
+      ]
+    },
+    {
+      "title": "Gold Medal Equestrian official site",
+      "url": "https://goldmedalequestrian.com/",
+      "facts_used": [
+        "business role",
+        "riding lessons and horsemanship"
+      ]
+    },
+    {
+      "title": "Templeton Fire & Emergency Services",
+      "url": "https://templetoncsd.org/255/Fire-Emergency-Services",
+      "facts_used": [
+        "station phone",
+        "department contact"
+      ]
+    },
+    {
+      "title": "San Luis Obispo County emergency phone list",
+      "url": "https://www.slocounty.ca.gov/departments/slo-health/behavioral-health/forms-documents/quality-support-team/technical-center-documents/lobby-compliance-center-forms/emergency-phone-list-specific-to-site",
+      "facts_used": [
+        "CAL FIRE county phone",
+        "Sheriff Templeton phone",
+        "hospital and fire contacts"
+      ]
+    },
+    {
+      "title": "San Luis Obispo County Office of Emergency Services",
+      "url": "https://www.slocounty.ca.gov/departments/administrative-office/office-of-emergency-services",
+      "facts_used": [
+        "OES role",
+        "phone"
+      ]
+    },
+    {
+      "title": "Adventist Health Twin Cities",
+      "url": "https://www.adventisthealth.org/central-coast/locations/twin-cities-community-hospital/",
+      "facts_used": [
+        "address",
+        "phone",
+        "24/7 emergency department"
+      ]
+    },
+    {
+      "title": "Winifred Pifer Elementary",
+      "url": "https://wp.pasoschools.org/",
+      "facts_used": [
+        "address",
+        "phone"
+      ]
+    },
+    {
+      "title": "Georgia Brown Dual Immersion",
+      "url": "https://gbdi.pasoschools.org/",
+      "facts_used": [
+        "address",
+        "phone"
+      ]
+    }
+  ]
+}
