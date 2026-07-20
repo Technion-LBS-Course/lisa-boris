@@ -1,8 +1,11 @@
-"""Smoke tests for the Live Ops dashboard + its page entry.
+"""Import-safety guards for the Live Ops dashboard + its page entry.
 
-Verifies the renderer imports cleanly, exposes render(), and — importantly — that
-importing it pulls in NO heavy ML/vision libraries (ultralytics/torch/groq/cv2) at
-module import time. Detector/segmentation loading must stay lazy.
+Verifies the hard constraint that importing the renderer pulls in NO heavy ML/vision
+libraries (ultralytics/torch/groq/cv2) at module import time — detector/segmentation
+loading must stay lazy — and that the page entry wires set_page_config + render().
+
+That the Live Ops page actually renders is covered end-to-end in
+``test_e2e_streamlit_app.py``.
 """
 import ast
 import sys
@@ -11,12 +14,6 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("streamlit")
-
-
-def test_live_ops_imports_and_has_render():
-    from src.dashboards import live_ops
-
-    assert callable(live_ops.render)
 
 
 def test_import_does_not_pull_heavy_ml():

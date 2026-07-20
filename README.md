@@ -66,7 +66,42 @@ The two fine-tuned checkpoints (`models/yolo11s_dfire_best.pt`, `models/yolo11n_
 - **`GROQ_API_KEY`** (optional): powers the AI zone assistant and incident-chat wording. Without it, both fall back to deterministic local logic. Set it in `.streamlit/secrets.toml` or the environment; never commit it.
 - Weather uses **Open-Meteo** (no key, no signup); if live weather is unavailable it falls back to a labelled offline mock.
 
-Run the tests: `python -m pytest tests`
+Run the tests — the suite is layered **unit → integration → end-to-end**:
+
+```bash
+python -m pytest tests            # everything (unit + integration + e2e)
+python -m pytest -m "not e2e"     # fast inner loop: unit + integration only
+python -m pytest -m e2e           # end-to-end: renders the real Streamlit app
+```
+
+---
+
+## Using the app
+
+The app opens on **Live Ops** (the default landing page). Move between surfaces from the left sidebar.
+
+**Live Ops — watch a camera and resolve alerts**
+
+1. **Setup** — place the camera on the map, calibrate image↔map anchors, and mark detection zones (describe an area in the chat and click two corners; a local segmentation proposes a polygon, or draw it manually).
+2. **Live** — press play to autoplay the demo camera sequence. Adjust the separate **smoke** / **fire** confidence sliders and **Confirmation frames (N)** if you want. When fire or smoke is confirmed across frames the view freezes on the event — resolve it in the ops chat (**confirm** or **false alarm**).
+3. **History** — filter and review resolved events.
+
+**Classic dashboards** (sidebar → *Dashboard mode*): **M4 / M3 / M2**, **Operations & Learning** (dataset, EDA, inference, model comparison), and **Central Control** (camera metadata, mapping, zones, incident assistant, risk advisory).
+
+Note: locations are always **approximate**, and the incident assistant only **drafts and recommends** — it never contacts anyone or dispatches automatically.
+
+### Test your own image
+
+To run the detector on a single image of your own:
+
+1. In the sidebar, switch **Dashboard mode** to **M3 Dashboard** (the **Operations & Learning Dashboard** has the same tool).
+2. Open the **Demo** tab.
+3. Under **Detectors to run**, keep the default (all available — YOLO11s and YOLO11n) or pick one.
+4. At **Upload one image**, choose a `.jpg`, `.jpeg`, or `.png` file.
+5. *(Optional)* set the sidebar **Confidence threshold**.
+6. Click **Run demo**.
+
+You'll see your image with `fire` / `smoke` boxes drawn, plus per-class detection counts, the highest confidence, and the measured inference time. Detection runs locally on the committed fine-tuned checkpoints — no image leaves your machine.
 
 ---
 
@@ -94,9 +129,3 @@ snapshot is archive-only. See [`sites/README.md`](sites/README.md) for the updat
 and isolation rules.
 
 Full module-by-module map: [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) and [`CLAUDE.md`](CLAUDE.md).
-
----
-
-## Scope
-
-All locations are **approximate** (image polygon, quadrant, or camera-projected map point) — never precise geolocation. PyroFinder is **not** an early-warning system, does not predict physical fire spread, and never contacts anyone or dispatches automatically: the incident assistant only **drafts and recommends**. Classes are strictly `fire` and `smoke`.
